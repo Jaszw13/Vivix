@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============ 工業電力主題（深色 · 預設） ============ */
+:root,
+.dark {
+  /* 背景色 */
+  --bg-primary: #0A0A0B;
+  --bg-secondary: #1C1C1E;
+  --bg-card: #2C2C2E;
+
+  /* 文字 */
+  --text-primary: #FFFFFF;
+  --text-secondary: #8E8E93;
+  --text-muted: #6E6E73;
+
+  /* 強調色 */
+  --accent: #D4FF00;
+  --accent-soft: rgba(212, 255, 0, 0.15);
+
+  /* 輔助色 */
+  --auxiliary: #FF6B35;
+  --data-color: #D4FF00;
+
+  /* 邊框 */
+  --border-color: #3A3A3C;
+
+  /* 圓角 */
+  --radius-card: 4px;
+  --radius-button: 4px;
+
+  /* 陰影 */
+  --shadow-card: 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --shadow-button: inset 0 -2px 0 rgba(0, 0, 0, 0.25);
+
+  /* 字體 */
+  --font-display: "Bebas Neue", "Noto Sans TC", sans-serif;
+}
+
+/* ============ 高雅淺米白主題（淺色） ============ */
+.light {
+  /* 背景色 */
+  --bg-primary: #F8F5F0;
+  --bg-secondary: #F0ECE4;
+  --bg-card: #FFFFFF;
+
+  /* 文字 */
+  --text-primary: #2C2B28;
+  --text-secondary: #7A756D;
+  --text-muted: #A8A39A;
+
+  /* 強調色 */
+  --accent: #C9A96E;
+  --accent-soft: rgba(201, 169, 110, 0.12);
+
+  /* 輔助色 */
+  --auxiliary: #E8A87C;
+  --data-color: #4A7C7A;
+
+  /* 邊框 */
+  --border-color: #E5DFD4;
+
+  /* 圓角 */
+  --radius-card: 16px;
+  --radius-button: 12px;
+
+  /* 陰影 */
+  --shadow-card: 0 1px 3px rgba(44, 43, 40, 0.06), 0 1px 2px rgba(44, 43, 40, 0.04);
+  --shadow-button: 0 1px 2px rgba(201, 169, 110, 0.25);
+
+  /* 字體 */
+  --font-display: "Playfair Display", "Noto Sans TC", serif;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: "Noto Sans TC", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+/* 主題切換過渡 */
+.theme-transition * {
+  transition: background-color 200ms ease, color 200ms ease, border-color 200ms ease !important;
+}
+
+/* 自訂滾動條（深色主題） */
+.dark ::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+.light ::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* 隱藏滾動條但可滑動 */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* 文字選取色 */
+::selection {
+  background-color: var(--accent);
+  color: var(--bg-primary);
+}
+
+/* 輸入框樣式重置 */
+input,
+button,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+input:focus,
+button:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+}
+
+/* 數字字體 */
+.font-mono {
+  font-family: "JetBrains Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
