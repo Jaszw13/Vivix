@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1C1C1E"/>
+      <stop offset="100%" stop-color="#0A0A0B"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="512" height="512" fill="url(#bgGrad)"/>
+  <!-- 左側槓片 -->
+  <rect x="80" y="240" width="32" height="32" fill="#D4FF00" rx="4"/>
+  <rect x="112" y="244" width="12" height="24" fill="#D4FF00"/>
+  <!-- 槓桿 -->
+  <rect x="124" y="250" width="264" height="12" fill="#D4FF00" rx="2"/>
+  <!-- 右側槓片 -->
+  <rect x="388" y="244" width="12" height="24" fill="#D4FF00"/>
+  <rect x="400" y="240" width="32" height="32" fill="#D4FF00" rx="4"/>
+  <!-- 字樣 -->
+  <text x="256" y="340" font-family="Arial Black, sans-serif" font-size="64" font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="6">IRON</text>
+  <text x="256" y="400" font-family="Arial Black, sans-serif" font-size="64" font-weight="900" fill="#D4FF00" text-anchor="middle" letter-spacing="6">PULSE</text>
+</svg>
