@@ -37,150 +37,6 @@ interface WorkoutState {
   getWeeklyVolume: () => { week: string; volume: number }[];
 }
 
-// ============ 生成範例歷史資料 ============
-
-function buildSampleHistory(): WorkoutSession[] {
-  const now = Date.now();
-  const day = 86400000;
-  const sessions: WorkoutSession[] = [];
-
-  // 過去 8 週的範例資料（每週 3 次訓練）
-  const sampleWorkouts: { daysAgo: number; exercises: { id: string; name: string; sets: { w: number; r: number }[] }[]; planName: string; dayName: string }[] = [
-    { daysAgo: 56, planName: '5x5 力量基礎', dayName: 'A 日', exercises: [
-      { id: 'squat', name: '深蹲', sets: [{ w: 60, r: 5 }, { w: 60, r: 5 }, { w: 60, r: 5 }, { w: 60, r: 5 }, { w: 60, r: 5 }] },
-      { id: 'bench-press', name: '臥推', sets: [{ w: 40, r: 5 }, { w: 40, r: 5 }, { w: 40, r: 5 }, { w: 40, r: 5 }, { w: 40, r: 5 }] },
-      { id: 'barbell-row', name: '槓鈴划船', sets: [{ w: 40, r: 5 }, { w: 40, r: 5 }, { w: 40, r: 5 }, { w: 40, r: 5 }, { w: 40, r: 5 }] },
-    ] },
-    { daysAgo: 54, planName: '5x5 力量基礎', dayName: 'B 日', exercises: [
-      { id: 'squat', name: '深蹲', sets: [{ w: 62.5, r: 5 }, { w: 62.5, r: 5 }, { w: 62.5, r: 5 }, { w: 62.5, r: 5 }, { w: 62.5, r: 5 }] },
-      { id: 'overhead-press', name: '肩推', sets: [{ w: 25, r: 5 }, { w: 25, r: 5 }, { w: 25, r: 5 }, { w: 25, r: 5 }, { w: 25, r: 5 }] },
-      { id: 'deadlift', name: '硬舉', sets: [{ w: 60, r: 5 }] },
-    ] },
-    { daysAgo: 52, planName: '5x5 力量基礎', dayName: 'A 日', exercises: [
-      { id: 'squat', name: '深蹲', sets: [{ w: 65, r: 5 }, { w: 65, r: 5 }, { w: 65, r: 5 }, { w: 65, r: 5 }, { w: 65, r: 5 }] },
-      { id: 'bench-press', name: '臥推', sets: [{ w: 42.5, r: 5 }, { w: 42.5, r: 5 }, { w: 42.5, r: 5 }, { w: 42.5, r: 5 }, { w: 42.5, r: 5 }] },
-      { id: 'barbell-row', name: '槓鈴划船', sets: [{ w: 42.5, r: 5 }, { w: 42.5, r: 5 }, { w: 42.5, r: 5 }, { w: 42.5, r: 5 }, { w: 42.5, r: 5 }] },
-    ] },
-    { daysAgo: 49, planName: '5x5 力量基礎', dayName: 'B 日', exercises: [
-      { id: 'squat', name: '深蹲', sets: [{ w: 67.5, r: 5 }, { w: 67.5, r: 5 }, { w: 67.5, r: 5 }, { w: 67.5, r: 5 }, { w: 67.5, r: 5 }] },
-      { id: 'overhead-press', name: '肩推', sets: [{ w: 27.5, r: 5 }, { w: 27.5, r: 5 }, { w: 27.5, r: 5 }, { w: 27.5, r: 5 }, { w: 27.5, r: 5 }] },
-      { id: 'deadlift', name: '硬舉', sets: [{ w: 65, r: 5 }] },
-    ] },
-    { daysAgo: 47, planName: '5x5 力量基礎', dayName: 'A 日', exercises: [
-      { id: 'squat', name: '深蹲', sets: [{ w: 70, r: 5 }, { w: 70, r: 5 }, { w: 70, r: 5 }, { w: 70, r: 5 }, { w: 70, r: 5 }] },
-      { id: 'bench-press', name: '臥推', sets: [{ w: 45, r: 5 }, { w: 45, r: 5 }, { w: 45, r: 5 }, { w: 45, r: 5 }, { w: 45, r: 5 }] },
-      { id: 'barbell-row', name: '槓鈴划船', sets: [{ w: 45, r: 5 }, { w: 45, r: 5 }, { w: 45, r: 5 }, { w: 45, r: 5 }, { w: 45, r: 5 }] },
-    ] },
-    { daysAgo: 42, planName: '5x5 力量基礎', dayName: 'B 日', exercises: [
-      { id: 'squat', name: '深蹲', sets: [{ w: 72.5, r: 5 }, { w: 72.5, r: 5 }, { w: 72.5, r: 5 }, { w: 72.5, r: 5 }, { w: 72.5, r: 5 }] },
-      { id: 'overhead-press', name: '肩推', sets: [{ w: 30, r: 5 }, { w: 30, r: 5 }, { w: 30, r: 5 }, { w: 30, r: 5 }, { w: 30, r: 5 }] },
-      { id: 'deadlift', name: '硬舉', sets: [{ w: 70, r: 5 }] },
-    ] },
-    { daysAgo: 40, planName: '5x5 力量基礎', dayName: 'A 日', exercises: [
-      { id: 'squat', name: '深蹲', sets: [{ w: 75, r: 5 }, { w: 75, r: 5 }, { w: 75, r: 5 }, { w: 75, r: 5 }, { w: 75, r: 5 }] },
-      { id: 'bench-press', name: '臥推', sets: [{ w: 47.5, r: 5 }, { w: 47.5, r: 5 }, { w: 47.5, r: 5 }, { w: 47.5, r: 5 }, { w: 47.5, r: 5 }] },
-      { id: 'barbell-row', name: '槓鈴划船', sets: [{ w: 47.5, r: 5 }, { w: 47.5, r: 5 }, { w: 47.5, r: 5 }, { w: 47.5, r: 5 }, { w: 47.5, r: 5 }] },
-    ] },
-    { daysAgo: 35, planName: '5x5 力量基礎', dayName: 'B 日', exercises: [
-      { id: 'squat', name: '深蹲', sets: [{ w: 77.5, r: 5 }, { w: 77.5, r: 5 }, { w: 77.5, r: 5 }, { w: 77.5, r: 5 }, { w: 77.5, r: 5 }] },
-      { id: 'overhead-press', name: '肩推', sets: [{ w: 32.5, r: 5 }, { w: 32.5, r: 5 }, { w: 32.5, r: 5 }, { w: 32.5, r: 5 }, { w: 32.5, r: 5 }] },
-      { id: 'deadlift', name: '硬舉', sets: [{ w: 75, r: 5 }] },
-    ] },
-    { daysAgo: 33, planName: '5x5 力量基礎', dayName: 'A 日', exercises: [
-      { id: 'squat', name: '深蹲', sets: [{ w: 80, r: 5 }, { w: 80, r: 5 }, { w: 80, r: 5 }, { w: 80, r: 5 }, { w: 80, r: 5 }] },
-      { id: 'bench-press', name: '臥推', sets: [{ w: 50, r: 5 }, { w: 50, r: 5 }, { w: 50, r: 5 }, { w: 50, r: 5 }, { w: 50, r: 5 }] },
-      { id: 'barbell-row', name: '槓鈴划船', sets: [{ w: 50, r: 5 }, { w: 50, r: 5 }, { w: 50, r: 5 }, { w: 50, r: 5 }, { w: 50, r: 5 }] },
-    ] },
-    { daysAgo: 28, planName: '推拉腿 PPL', dayName: '推 Push', exercises: [
-      { id: 'bench-press', name: '臥推', sets: [{ w: 55, r: 6 }, { w: 55, r: 6 }, { w: 55, r: 6 }, { w: 55, r: 6 }] },
-      { id: 'overhead-press', name: '肩推', sets: [{ w: 35, r: 8 }, { w: 35, r: 8 }, { w: 35, r: 8 }] },
-      { id: 'tricep-pushdown', name: '三頭下壓', sets: [{ w: 25, r: 12 }, { w: 25, r: 12 }, { w: 25, r: 12 }, { w: 25, r: 12 }] },
-    ] },
-    { daysAgo: 26, planName: '推拉腿 PPL', dayName: '拉 Pull', exercises: [
-      { id: 'deadlift', name: '硬舉', sets: [{ w: 80, r: 5 }, { w: 80, r: 5 }, { w: 80, r: 5 }] },
-      { id: 'barbell-row', name: '槓鈴划船', sets: [{ w: 55, r: 8 }, { w: 55, r: 8 }, { w: 55, r: 8 }, { w: 55, r: 8 }] },
-      { id: 'barbell-curl', name: '槓鈴二頭彎舉', sets: [{ w: 30, r: 12 }, { w: 30, r: 12 }, { w: 30, r: 12 }, { w: 30, r: 12 }] },
-    ] },
-    { daysAgo: 24, planName: '推拉腿 PPL', dayName: '腿 Legs', exercises: [
-      { id: 'squat', name: '深蹲', sets: [{ w: 85, r: 6 }, { w: 85, r: 6 }, { w: 85, r: 6 }, { w: 85, r: 6 }] },
-      { id: 'romanian-deadlift', name: '羅馬尼亞硬舉', sets: [{ w: 60, r: 8 }, { w: 60, r: 8 }, { w: 60, r: 8 }] },
-    ] },
-    { daysAgo: 21, planName: '推拉腿 PPL', dayName: '推 Push', exercises: [
-      { id: 'bench-press', name: '臥推', sets: [{ w: 57.5, r: 6 }, { w: 57.5, r: 6 }, { w: 57.5, r: 6 }, { w: 57.5, r: 6 }] },
-      { id: 'overhead-press', name: '肩推', sets: [{ w: 37.5, r: 8 }, { w: 37.5, r: 8 }, { w: 37.5, r: 8 }] },
-    ] },
-    { daysAgo: 19, planName: '推拉腿 PPL', dayName: '拉 Pull', exercises: [
-      { id: 'deadlift', name: '硬舉', sets: [{ w: 85, r: 5 }, { w: 85, r: 5 }, { w: 85, r: 5 }] },
-      { id: 'barbell-row', name: '槓鈴划船', sets: [{ w: 57.5, r: 8 }, { w: 57.5, r: 8 }, { w: 57.5, r: 8 }, { w: 57.5, r: 8 }] },
-    ] },
-    { daysAgo: 17, planName: '推拉腿 PPL', dayName: '腿 Legs', exercises: [
-      { id: 'squat', name: '深蹲', sets: [{ w: 87.5, r: 6 }, { w: 87.5, r: 6 }, { w: 87.5, r: 6 }, { w: 87.5, r: 6 }] },
-      { id: 'leg-press', name: '腿推', sets: [{ w: 140, r: 12 }, { w: 140, r: 12 }, { w: 140, r: 12 }] },
-    ] },
-    { daysAgo: 14, planName: '推拉腿 PPL', dayName: '推 Push', exercises: [
-      { id: 'bench-press', name: '臥推', sets: [{ w: 60, r: 6 }, { w: 60, r: 6 }, { w: 60, r: 6 }, { w: 60, r: 6 }] },
-      { id: 'overhead-press', name: '肩推', sets: [{ w: 40, r: 8 }, { w: 40, r: 8 }, { w: 40, r: 8 }] },
-    ] },
-    { daysAgo: 12, planName: '推拉腿 PPL', dayName: '拉 Pull', exercises: [
-      { id: 'deadlift', name: '硬舉', sets: [{ w: 90, r: 5 }, { w: 90, r: 5 }, { w: 90, r: 5 }] },
-      { id: 'barbell-row', name: '槓鈴划船', sets: [{ w: 60, r: 8 }, { w: 60, r: 8 }, { w: 60, r: 8 }, { w: 60, r: 8 }] },
-    ] },
-    { daysAgo: 10, planName: '推拉腿 PPL', dayName: '腿 Legs', exercises: [
-      { id: 'squat', name: '深蹲', sets: [{ w: 90, r: 6 }, { w: 90, r: 6 }, { w: 90, r: 6 }, { w: 90, r: 6 }] },
-      { id: 'romanian-deadlift', name: '羅馬尼亞硬舉', sets: [{ w: 65, r: 8 }, { w: 65, r: 8 }, { w: 65, r: 8 }] },
-    ] },
-    { daysAgo: 7, planName: '推拉腿 PPL', dayName: '推 Push', exercises: [
-      { id: 'bench-press', name: '臥推', sets: [{ w: 62.5, r: 6 }, { w: 62.5, r: 6 }, { w: 62.5, r: 6 }, { w: 62.5, r: 6 }] },
-      { id: 'overhead-press', name: '肩推', sets: [{ w: 42.5, r: 8 }, { w: 42.5, r: 8 }, { w: 42.5, r: 8 }] },
-    ] },
-    { daysAgo: 5, planName: '推拉腿 PPL', dayName: '拉 Pull', exercises: [
-      { id: 'deadlift', name: '硬舉', sets: [{ w: 95, r: 5 }, { w: 95, r: 5 }, { w: 95, r: 5 }] },
-      { id: 'barbell-row', name: '槓鈴划船', sets: [{ w: 62.5, r: 8 }, { w: 62.5, r: 8 }, { w: 62.5, r: 8 }, { w: 62.5, r: 8 }] },
-    ] },
-    { daysAgo: 3, planName: '推拉腿 PPL', dayName: '腿 Legs', exercises: [
-      { id: 'squat', name: '深蹲', sets: [{ w: 92.5, r: 6 }, { w: 92.5, r: 6 }, { w: 92.5, r: 6 }, { w: 92.5, r: 6 }] },
-      { id: 'leg-press', name: '腿推', sets: [{ w: 150, r: 12 }, { w: 150, r: 12 }, { w: 150, r: 12 }] },
-    ] },
-    { daysAgo: 1, planName: '推拉腿 PPL', dayName: '推 Push', exercises: [
-      { id: 'bench-press', name: '臥推', sets: [{ w: 65, r: 6 }, { w: 65, r: 6 }, { w: 65, r: 6 }, { w: 65, r: 6 }] },
-      { id: 'overhead-press', name: '肩推', sets: [{ w: 45, r: 8 }, { w: 45, r: 8 }, { w: 45, r: 8 }] },
-      { id: 'tricep-pushdown', name: '三頭下壓', sets: [{ w: 30, r: 12 }, { w: 30, r: 12 }, { w: 30, r: 12 }, { w: 30, r: 12 }] },
-    ] },
-  ];
-
-  for (const sw of sampleWorkouts) {
-    const date = new Date(now - sw.daysAgo * day).toISOString();
-    const exercises: ExerciseLog[] = sw.exercises.map((ex) => {
-      const sets: SetLog[] = ex.sets.map((s, i) => ({
-        id: generateId('set'),
-        setNumber: i + 1,
-        weight: s.w,
-        reps: s.r,
-        completed: true,
-      }));
-      return {
-        id: generateId('ex'),
-        exerciseId: ex.id,
-        name: ex.name,
-        sets,
-      };
-    });
-    const session: WorkoutSession = {
-      id: generateId('session'),
-      date,
-      planName: sw.planName,
-      dayName: sw.dayName,
-      duration: 3000 + Math.floor(Math.random() * 1200),
-      totalVolume: 0,
-      exercises,
-    };
-    session.totalVolume = calculateTotalVolume(session);
-    sessions.push(session);
-  }
-
-  return sessions.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-}
-
 function computePRsFromSessions(sessions: WorkoutSession[]): PersonalRecord[] {
   const map = new Map<string, PersonalRecord>();
   for (const session of sessions) {
@@ -195,15 +51,13 @@ function computePRsFromSessions(sessions: WorkoutSession[]): PersonalRecord[] {
   return Array.from(map.values()).sort((a, b) => b.estimated1RM - a.estimated1RM);
 }
 
-const sampleSessions = buildSampleHistory();
-const samplePRs = computePRsFromSessions(sampleSessions);
-
 export const useWorkoutStore = create<WorkoutState>()(
   persist(
     (set, get) => ({
-      sessions: sampleSessions,
+      // 初始狀態為空，使用者自己的訓練資料會透過 finishSession 累積
+      sessions: [],
       activeSession: null,
-      personalRecords: samplePRs,
+      personalRecords: [],
 
       startSession: (planId, planName, day) => {
         const exercises: ExerciseLog[] = day.exercises.map((pe) =>
@@ -411,11 +265,27 @@ export const useWorkoutStore = create<WorkoutState>()(
     }),
     {
       name: 'ironpulse-workouts',
+      version: 2,
       // 不持久化 activeSession
       partialize: (state) => ({
         sessions: state.sessions,
         personalRecords: state.personalRecords,
       }),
+      // v1 含有開發時的範例資料（22 個 sample sessions），升級到 v2 時清空
+      migrate: (persistedState, version) => {
+        const state = (persistedState ?? {}) as Partial<WorkoutState>;
+        if (version < 2) {
+          // 舊版有 sample data，全部清空讓使用者從零開始
+          return {
+            sessions: [],
+            personalRecords: [],
+          } as Pick<WorkoutState, 'sessions' | 'personalRecords'>;
+        }
+        return {
+          sessions: state.sessions ?? [],
+          personalRecords: state.personalRecords ?? [],
+        } as Pick<WorkoutState, 'sessions' | 'personalRecords'>;
+      },
     }
   )
 );

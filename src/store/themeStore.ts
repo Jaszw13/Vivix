@@ -10,11 +10,11 @@ interface ThemeState {
 const STORAGE_KEY = 'ironpulse-theme';
 
 function getInitialTheme(): Theme {
-  if (typeof window === 'undefined') return 'dark';
+  if (typeof window === 'undefined') return 'light';
   const saved = localStorage.getItem(STORAGE_KEY) as Theme | null;
   if (saved === 'dark' || saved === 'light') return saved;
-  // 預設為工業電力深色主題
-  return 'dark';
+  // 預設為高雅米白淺色主題
+  return 'light';
 }
 
 function applyTheme(theme: Theme) {
