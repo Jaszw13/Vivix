@@ -169,7 +169,7 @@ export default function Dashboard() {
         >
           <SectionHeader title="上次訓練" />
           <Card className="p-4">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-4">
               <div>
                 <div className="font-display text-xl tracking-wide uppercase text-text-primary">
                   {lastSession.dayName ?? '訓練'}
@@ -180,7 +180,7 @@ export default function Dashboard() {
               </div>
               <Flame size={20} className="text-auxiliary" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 mb-4 pb-4 border-b border-border/40">
               <div>
                 <div className="text-[10px] uppercase tracking-widest text-text-secondary">
                   訓練量
@@ -198,6 +198,37 @@ export default function Dashboard() {
                   {lastSession.exercises.length}
                 </div>
               </div>
+            </div>
+            {/* 每個動作的上次組數 */}
+            <div className="flex flex-col gap-3">
+              {lastSession.exercises.map((ex) => {
+                const completedSets = ex.sets.filter((s) => s.completed);
+                const displaySets = completedSets.length > 0 ? completedSets : ex.sets;
+                return (
+                  <div key={ex.id} className="bg-bg-secondary rounded-button p-3 border border-border/30">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="text-sm font-bold text-text-primary">{ex.name}</div>
+                      <div className="text-[10px] uppercase tracking-widest text-text-secondary">
+                        {completedSets.length}/{ex.sets.length} 組
+                      </div>
+                    </div>
+                    {displaySets.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {displaySets.map((s) => (
+                          <span
+                            key={s.id}
+                            className="font-mono text-[11px] text-text-secondary bg-bg-card px-2 py-1 rounded-button border border-border/30"
+                          >
+                            {s.weight}kg × {s.reps}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-text-secondary/60">無已完成組數</div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </Card>
         </motion.div>

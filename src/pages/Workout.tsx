@@ -129,17 +129,17 @@ export default function Workout() {
         </div>
 
         {/* 底部操作 */}
-        <div className="sticky bottom-0 -mx-4 px-4 pt-4 pb-4 bg-gradient-to-t from-bg-primary via-bg-primary to-transparent">
-          <div className="flex gap-3 items-center">
-            <Button variant="secondary" size="md" onClick={() => setShowAddExercise(true)}>
-              <Plus size={16} />
+        <div className="sticky bottom-0 -mx-4 px-2 pt-3 pb-4 bg-gradient-to-t from-bg-primary via-bg-primary to-transparent">
+          <div className="flex gap-2 w-full">
+            <Button variant="secondary" className="flex-1 h-14 px-2" onClick={() => setShowAddExercise(true)}>
+              <Plus size={18} />
               <span className="text-xs">增加動作</span>
             </Button>
-            <Button variant="secondary" size="md" onClick={() => setShowTimer(true)}>
-              <Timer size={16} />
+            <Button variant="secondary" className="w-14 h-14 px-0 flex-shrink-0" onClick={() => setShowTimer(true)}>
+              <Timer size={18} />
             </Button>
-            <Button size="md" onClick={handleFinish}>
-              <Check size={16} />
+            <Button className="flex-1 h-14 px-2" onClick={handleFinish}>
+              <Check size={18} />
               <span className="text-xs">完成訓練</span>
             </Button>
           </div>
