@@ -24,8 +24,9 @@ export const useProfileStore = create<ProfileState>()(
       resetAllData: () => {
         localStorage.removeItem('ironpulse-workouts');
         localStorage.removeItem('ironpulse-profile');
+        localStorage.removeItem('ironpulse-theme');
         set({ profile: { ...defaultProfile, createdAt: new Date().toISOString() } });
-        // 重新載入以重置 workout store
+        // 重新載入以重置所有 store
         window.location.reload();
       },
     }),

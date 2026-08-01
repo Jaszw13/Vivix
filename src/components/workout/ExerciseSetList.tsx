@@ -1,5 +1,5 @@
-import { Check, Minus, Plus, Trash2 } from 'lucide-react';
-import type { ExerciseLog } from '@/types';
+import { Check, Minus, Plus, Trash2, History } from 'lucide-react';
+import type { ExerciseLog, SetLog } from '@/types';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
@@ -10,9 +10,10 @@ interface SetRowProps {
 }
 
 export function ExerciseSetList({ exercise, onSetCompleted }: SetRowProps) {
-  const { updateSet, addSet, removeSet, toggleSetCompleted, removeExercise } =
+  const { updateSet, addSet, removeSet, toggleSetCompleted, removeExercise, getLastSetsForExercise } =
     useWorkoutStore();
 
+  const lastSets = getLastSetsForExercise(exercise.exerciseId);
   const completedCount = exercise.sets.filter((s) => s.completed).length;
   const totalVolume = exercise.sets
     .filter((s) => s.completed)
@@ -44,6 +45,27 @@ export function ExerciseSetList({ exercise, onSetCompleted }: SetRowProps) {
           <Trash2 size={16} />
         </button>
       </div>
+
+      {/* 上一次訓練參考 */}
+      {lastSets && lastSets.length > 0 && (
+        <div className="mb-3 p-2.5 rounded-button bg-bg-secondary border border-border/40">
+          <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-text-secondary mb-1.5">
+            <History size={12} />
+            <span>上次訓練</span>
+          </div>
+          <div className="flex gap-1.5 flex-wrap">
+            {lastSets.map((s, i) => (
+              <span
+                key={s.id}
+                className="font-mono text-[11px] text-text-secondary bg-bg-card px-2 py-1 rounded-button border border-border/30"
+              >
+                {s.weight}kg × {s.reps}
+                {i < lastSets.length - 1 && <span className="text-text-secondary/40 ml-0.5">→</span>}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 標題列 */}
       <div className="grid grid-cols-[2rem_1fr_1fr_2.5rem] gap-2 px-1 mb-2 text-[9px] uppercase tracking-widest text-text-secondary">

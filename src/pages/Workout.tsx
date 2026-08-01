@@ -130,15 +130,17 @@ export default function Workout() {
 
         {/* 底部操作 */}
         <div className="sticky bottom-0 -mx-4 px-4 pt-4 pb-4 bg-gradient-to-t from-bg-primary via-bg-primary to-transparent">
-          <div className="flex gap-3">
-            <Button variant="secondary" size="lg" onClick={() => setShowAddExercise(true)}>
-              <Plus size={18} />
+          <div className="flex gap-3 items-center">
+            <Button variant="secondary" size="md" onClick={() => setShowAddExercise(true)}>
+              <Plus size={16} />
+              <span className="text-xs">增加動作</span>
             </Button>
-            <Button variant="secondary" size="lg" onClick={() => setShowTimer(true)}>
-              <Timer size={18} />
+            <Button variant="secondary" size="md" onClick={() => setShowTimer(true)}>
+              <Timer size={16} />
             </Button>
-            <Button size="lg" fullWidth onClick={handleFinish}>
-              <Check size={18} /> 完成訓練
+            <Button size="md" onClick={handleFinish}>
+              <Check size={16} />
+              <span className="text-xs">完成訓練</span>
             </Button>
           </div>
         </div>
@@ -180,7 +182,25 @@ interface AddExerciseSheetProps {
 
 function AddExerciseSheet({ onClose, onSelect }: AddExerciseSheetProps) {
   const [category, setCategory] = useState<ExerciseCategory | 'all'>('all');
-  const list = category === 'all' ? exercises : exercises.filter((e) => e.category === category);
+  const [customName, setCustomName] = useState('');
+  const { customExercises, addCustomExercise } = useWorkoutStore();
+
+  const list = category === 'all'
+    ? exercises
+    : exercises.filter((e) => e.category === category);
+
+  const handleAddCustom = () => {
+    const name = customName.trim();
+    if (!name) return;
+    const existing = customExercises.find((c) => c.name === name);
+    if (existing) {
+      onSelect(existing.id, existing.name);
+    } else {
+      const created = addCustomExercise(name);
+      onSelect(created.id, created.name);
+    }
+    setCustomName('');
+  };
 
   return (
     <motion.div
@@ -196,7 +216,7 @@ function AddExerciseSheet({ onClose, onSelect }: AddExerciseSheetProps) {
         exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[480px] h-[80vh] bg-bg-primary rounded-t-card flex flex-col"
+        className="w-full max-w-[480px] h-[85vh] bg-bg-primary rounded-t-card flex flex-col"
       >
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h3 className="font-display text-2xl tracking-wide uppercase text-text-primary">
@@ -209,6 +229,50 @@ function AddExerciseSheet({ onClose, onSelect }: AddExerciseSheetProps) {
             <X size={20} />
           </button>
         </div>
+
+        {/* 自訂動作輸入 */}
+        <div className="p-3 border-b border-border bg-bg-secondary/50">
+          <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-2">
+            找不到想要的動作？自行輸入
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={customName}
+              onChange={(e) => setCustomName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
+              placeholder="輸入動作名稱，例如：單手啞鈴划船"
+              className="flex-1 h-10 px-3 bg-bg-card rounded-button border border-border text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-accent focus:outline-none"
+            />
+            <button
+              onClick={handleAddCustom}
+              disabled={!customName.trim()}
+              className="h-10 px-4 bg-accent text-bg-primary rounded-button text-sm font-bold disabled:opacity-40 disabled:pointer-events-none"
+            >
+              加入
+            </button>
+          </div>
+          {/* 自訂動作快捷選項 */}
+          {customExercises.length > 0 && (
+            <div className="mt-3">
+              <div className="text-[9px] uppercase tracking-widest text-text-secondary/60 mb-1.5">
+                我的自訂動作
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {customExercises.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => onSelect(c.id, c.name)}
+                    className="px-2.5 py-1 text-[11px] rounded-button border border-accent/40 text-accent hover:bg-accent/10 transition-colors"
+                  >
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* 分類標籤 */}
         <div className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-hide border-b border-border">
           <CategoryChip
@@ -225,6 +289,7 @@ function AddExerciseSheet({ onClose, onSelect }: AddExerciseSheetProps) {
             />
           ))}
         </div>
+
         {/* 動作列表 */}
         <div className="flex-1 overflow-y-auto p-4">
           <div className="flex flex-col gap-2">

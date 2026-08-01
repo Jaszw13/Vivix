@@ -9,6 +9,12 @@ import {
   estimate1RM,
 } from '@/utils/workout';
 
+interface CustomExercise {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
 interface WorkoutState {
   // 歷史記錄
   sessions: WorkoutSession[];
@@ -16,11 +22,14 @@ interface WorkoutState {
   activeSession: WorkoutSession | null;
   // PR 紀錄（按動作分組）
   personalRecords: PersonalRecord[];
+  // 使用者自訂動作
+  customExercises: CustomExercise[];
 
   // 動作
   startSession: (planId: string, planName: string, day: PlanDay) => void;
   startEmptySession: () => void;
   addExerciseToActive: (ex: PlanExercise) => void;
+  addCustomExercise: (name: string) => CustomExercise;
   updateSet: (exerciseLogId: string, setId: string, patch: Partial<SetLog>) => void;
   addSet: (exerciseLogId: string) => void;
   removeSet: (exerciseLogId: string, setId: string) => void;
@@ -35,6 +44,8 @@ interface WorkoutState {
   getStreakDays: () => number;
   getExerciseProgress: (exerciseId: string) => { date: string; maxWeight: number; estimated1RM: number }[];
   getWeeklyVolume: () => { week: string; volume: number }[];
+  // 取得某動作上一次訓練的組數（只用於參考）
+  getLastSetsForExercise: (exerciseId: string) => SetLog[] | null;
 }
 
 function computePRsFromSessions(sessions: WorkoutSession[]): PersonalRecord[] {
@@ -58,6 +69,7 @@ export const useWorkoutStore = create<WorkoutState>()(
       sessions: [],
       activeSession: null,
       personalRecords: [],
+      customExercises: [],
 
       startSession: (planId, planName, day) => {
         const exercises: ExerciseLog[] = day.exercises.map((pe) =>
@@ -92,6 +104,16 @@ export const useWorkoutStore = create<WorkoutState>()(
         if (!active) return;
         const newEx = createExerciseLog(ex.exerciseId, ex.name, ex.targetSets || 3, ex.targetWeight);
         set({ activeSession: { ...active, exercises: [...active.exercises, newEx] } });
+      },
+
+      addCustomExercise: (name) => {
+        const custom: CustomExercise = {
+          id: generateId('custom'),
+          name: name.trim(),
+          createdAt: new Date().toISOString(),
+        };
+        set({ customExercises: [...get().customExercises, custom] });
+        return custom;
       },
 
       updateSet: (exerciseLogId, setId, patch) => {
@@ -262,29 +284,57 @@ export const useWorkoutStore = create<WorkoutState>()(
           .map(([week, volume]) => ({ week, volume: Math.round(volume / 1000) }))
           .slice(-8);
       },
+
+      getLastSetsForExercise: (exerciseId) => {
+        const sessions = get().sessions;
+        // 按日期降序排列，找第一個包含此動作的 session
+        const sorted = [...sessions].sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        for (const session of sorted) {
+          const ex = session.exercises.find((e) => e.exerciseId === exerciseId);
+          if (ex) {
+            // 只返回已完成的組數
+            const completedSets = ex.sets.filter((s) => s.completed);
+            if (completedSets.length > 0) return completedSets;
+            // 若無完成組，返回所有組
+            return ex.sets.length > 0 ? ex.sets : null;
+          }
+        }
+        return null;
+      },
     }),
     {
       name: 'ironpulse-workouts',
-      version: 2,
+      version: 3,
       // 不持久化 activeSession
       partialize: (state) => ({
         sessions: state.sessions,
         personalRecords: state.personalRecords,
+        customExercises: state.customExercises,
       }),
-      // v1 含有開發時的範例資料（22 個 sample sessions），升級到 v2 時清空
+      // v1 含 sample data；v2 清空 sample；v3 新增 customExercises
       migrate: (persistedState, version) => {
         const state = (persistedState ?? {}) as Partial<WorkoutState>;
         if (version < 2) {
-          // 舊版有 sample data，全部清空讓使用者從零開始
           return {
             sessions: [],
             personalRecords: [],
-          } as Pick<WorkoutState, 'sessions' | 'personalRecords'>;
+            customExercises: [],
+          } as Pick<WorkoutState, 'sessions' | 'personalRecords' | 'customExercises'>;
+        }
+        if (version < 3) {
+          return {
+            sessions: state.sessions ?? [],
+            personalRecords: state.personalRecords ?? [],
+            customExercises: [],
+          } as Pick<WorkoutState, 'sessions' | 'personalRecords' | 'customExercises'>;
         }
         return {
           sessions: state.sessions ?? [],
           personalRecords: state.personalRecords ?? [],
-        } as Pick<WorkoutState, 'sessions' | 'personalRecords'>;
+          customExercises: state.customExercises ?? [],
+        } as Pick<WorkoutState, 'sessions' | 'personalRecords' | 'customExercises'>;
       },
     }
   )
