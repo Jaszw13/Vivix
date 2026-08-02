@@ -29,8 +29,8 @@ export default defineConfig({
         scope: '/',
         display: 'standalone',
         orientation: 'portrait',
-        background_color: '#0A0A0B',
-        theme_color: '#0A0A0B',
+        background_color: '#F8F5F0',
+        theme_color: '#F8F5F0',
         lang: 'zh-Hant',
         categories: ['health', 'fitness', 'lifestyle'],
         icons: [
