@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lock, Unlock, Zap, AlertCircle } from 'lucide-react';
-import { useTrialStore, TRIAL_STAGES } from '@/store/trialStore';
+import { Lock, Unlock, Zap, AlertCircle, Smartphone } from 'lucide-react';
+import { useTrialStore, STANDARD_STAGES, DEV_STAGES } from '@/store/trialStore';
 
 interface TrialLockProps {
   children: React.ReactNode;
@@ -11,7 +11,6 @@ export function TrialLock({ children }: TrialLockProps) {
   const { isExpired, initTrial, installedAt } = useTrialStore();
   const [initialized, setInitialized] = useState(false);
 
-  // 確保 trial 已初始化
   if (!initialized) {
     if (!installedAt) {
       initTrial();
@@ -27,17 +26,23 @@ export function TrialLock({ children }: TrialLockProps) {
 }
 
 function LockedScreen() {
-  const { currentStage, getStageInfo, redeemCode } = useTrialStore();
+  const { currentStage, getStageInfo, getRemainingHuman, redeemCode, deviceId, devMode } =
+    useTrialStore();
   const [code, setCode] = useState('');
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const stageInfo = getStageInfo();
-  const nextStage = TRIAL_STAGES[currentStage + 1];
+  const stages = devMode ? DEV_STAGES : STANDARD_STAGES;
+  const nextStage = stages[currentStage + 1];
 
-  const handleRedeem = () => {
-    if (!code.trim()) return;
-    const res = redeemCode(code);
+  const handleRedeem = async () => {
+    if (!code.trim() || submitting) return;
+    setSubmitting(true);
+    setResult(null);
+    const res = await redeemCode(code);
     setResult(res);
+    setSubmitting(false);
     if (res.success) {
       setCode('');
     }
@@ -70,8 +75,28 @@ function LockedScreen() {
             試用已到期
           </h1>
           <p className="text-sm text-text-secondary mt-2 text-center">
-            {stageInfo.label} · 已結束
+            {stageInfo.label} · {getRemainingHuman()}
           </p>
+        </div>
+
+        {/* 裝置 ID */}
+        <div className="bg-bg-card rounded-card border border-border/40 p-3 mb-5">
+          <div className="flex items-center gap-2 mb-2">
+            <Smartphone size={14} className="text-text-secondary" />
+            <span className="text-[10px] uppercase tracking-widest text-text-secondary">
+              裝置 ID
+            </span>
+          </div>
+          <div
+            className="font-mono text-[13px] text-text-primary tracking-wider break-all select-all cursor-pointer"
+            onClick={() => deviceId && navigator.clipboard?.writeText(deviceId)}
+            title="點擊複製"
+          >
+            {deviceId || '—'}
+          </div>
+          <div className="text-[9px] text-text-secondary/60 mt-1">
+            向管理員索取續用碼時請提供此裝置 ID
+          </div>
         </div>
 
         {/* 階梯進度 */}
@@ -80,7 +105,7 @@ function LockedScreen() {
             試用進度
           </div>
           <div className="flex items-center gap-1">
-            {TRIAL_STAGES.map((stage, i) => (
+            {stages.map((s, i) => (
               <div
                 key={i}
                 className="flex-1 h-2 rounded-full transition-all"
@@ -91,21 +116,17 @@ function LockedScreen() {
             ))}
           </div>
           <div className="flex justify-between mt-2">
-            <span className="text-[9px] text-text-secondary">5天</span>
-            <span className="text-[9px] text-text-secondary">7天</span>
-            <span className="text-[9px] text-text-secondary">14天</span>
-            <span className="text-[9px] text-text-secondary">30天</span>
-            <span className="text-[9px] text-text-secondary">永久</span>
+            {stages.map((s, i) => (
+              <span key={i} className="text-[9px] text-text-secondary">
+                {s.durationMs === -1 ? '∞' : devMode ? Math.round(s.durationMs / 1000) + 's' : Math.round(s.durationMs / 86400000) + 'd'}
+              </span>
+            ))}
           </div>
         </div>
 
         {/* 續用碼輸入 */}
         {nextStage && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
-          >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 }}>
             <div className="bg-bg-card rounded-card border border-border/40 p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Unlock size={16} className="text-accent" />
@@ -114,9 +135,9 @@ function LockedScreen() {
                 </span>
               </div>
               <p className="text-xs text-text-secondary mb-3">
-                {nextStage.days === -1
+                {nextStage.durationMs === -1
                   ? '輸入永久會員碼，解鎖無限期使用'
-                  : `輸入續用碼，延長 ${nextStage.days} 天試用`}
+                  : `輸入續用碼，延長 ${devMode ? (nextStage.durationMs / 1000) + ' 秒' : (nextStage.durationMs / 86400000) + ' 天'}試用`}
               </p>
               <input
                 type="text"
@@ -126,7 +147,7 @@ function LockedScreen() {
                   setResult(null);
                 }}
                 onKeyDown={(e) => e.key === 'Enter' && handleRedeem()}
-                placeholder="例如：IRON-7"
+                placeholder="格式：IRON-XXXXXXXX-STAGE-SIG"
                 className="w-full h-12 px-4 bg-bg-secondary rounded-button border-2 border-border text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-accent focus:outline-none transition-colors font-mono uppercase tracking-wider"
                 autoComplete="off"
                 autoCorrect="off"
@@ -134,10 +155,16 @@ function LockedScreen() {
               />
               <button
                 onClick={handleRedeem}
-                disabled={!code.trim()}
-                className="w-full h-12 mt-3 bg-accent text-bg-primary rounded-button text-sm font-bold uppercase tracking-wider disabled:opacity-40 disabled:pointer-events-none active:translate-y-px transition-all"
+                disabled={!code.trim() || submitting}
+                className="w-full h-12 mt-3 bg-accent text-bg-primary rounded-button text-sm font-bold uppercase tracking-wider disabled:opacity-40 disabled:pointer-events-none active:translate-y-px transition-all flex items-center justify-center gap-2"
               >
-                解鎖
+                {submitting ? (
+                  <span className="opacity-70">驗證中…</span>
+                ) : (
+                  <>
+                    <Unlock size={16} /> 解鎖
+                  </>
+                )}
               </button>
 
               <AnimatePresence>
