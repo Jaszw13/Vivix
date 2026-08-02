@@ -251,7 +251,7 @@ export default function Settings() {
               {deviceId || '—'}
             </div>
             <div className="text-[9px] text-text-secondary/70 mt-1">
-              向管理員索取續用碼時請提供此 ID
+              裝置 ID（僅供識別）
             </div>
           </div>
 

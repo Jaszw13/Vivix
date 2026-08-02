@@ -1,32 +1,33 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { verifyCode } from '@/utils/crypto';
 
 // ============ 階梯定義 ============
 export interface TrialStage {
   durationMs: number;
   label: string;
+  /** 對應的續用碼（Stage 0 不需碼） */
+  code?: string;
 }
 
 // 標準模式：天數
 export const STANDARD_STAGES: TrialStage[] = [
-  { durationMs: 5 * 86400000, label: '首次試用' },
-  { durationMs: 7 * 86400000, label: '第二階段' },
-  { durationMs: 14 * 86400000, label: '第三階段' },
-  { durationMs: 30 * 86400000, label: '第四階段' },
-  { durationMs: -1, label: '永久會員' }, // -1 = 永久
+  { durationMs: 5 * 86400000, label: '首次試用' }, // Stage 0 不需碼
+  { durationMs: 7 * 86400000, label: '第二階段', code: '2678' },
+  { durationMs: 14 * 86400000, label: '第三階段', code: '91431' },
+  { durationMs: 30 * 86400000, label: '第四階段', code: '695497' },
+  { durationMs: -1, label: '永久會員', code: 'IRON-ETERNAL' },
 ];
 
-// 開發測試模式：短時段
+// 開發測試模式：每階段 1 分鐘
 export const DEV_STAGES: TrialStage[] = [
-  { durationMs: 10 * 1000, label: '[DEV] 首次試用' },
-  { durationMs: 30 * 1000, label: '[DEV] 第二階段' },
-  { durationMs: 2 * 60 * 1000, label: '[DEV] 第三階段' },
-  { durationMs: 3 * 60 * 1000, label: '[DEV] 第四階段' },
-  { durationMs: -1, label: '[DEV] 永久會員' },
+  { durationMs: 60 * 1000, label: '[DEV] 首次試用' },
+  { durationMs: 60 * 1000, label: '[DEV] 第二階段', code: '2678' },
+  { durationMs: 60 * 1000, label: '[DEV] 第三階段', code: '91431' },
+  { durationMs: 60 * 1000, label: '[DEV] 第四階段', code: '695497' },
+  { durationMs: -1, label: '[DEV] 永久會員', code: 'IRON-ETERNAL' },
 ];
 
-// 反饋間隔（標準模式：7 天；DEV 模式：20 秒）
+// 反饋間隔
 const FEEDBACK_INTERVAL_MS_STD = 7 * 86400000;
 const FEEDBACK_INTERVAL_MS_DEV = 20 * 1000;
 const INSTALL_FOR_FEEDBACK_MS_STD = 3 * 86400000;
@@ -42,7 +43,7 @@ function generateDeviceId(): string {
 }
 
 interface TrialState {
-  // 裝置唯一 ID（用於綁定續用碼）
+  // 裝置唯一 ID（保留顯示用，但不用於綁定續用碼）
   deviceId: string;
   // 安裝時間
   installedAt: string;
@@ -50,8 +51,8 @@ interface TrialState {
   currentStage: number;
   // 當前階梯到期時間（ISO 字串，永久時為 null）
   expiresAt: string | null;
-  // 已使用的續用碼簽章（防止重複）
-  usedSignatures: string[];
+  // 已使用的續用碼（防止重複）
+  usedCodes: string[];
   // 上次反饋時間
   lastFeedbackAt: string | null;
   // 反饋次數
@@ -64,7 +65,7 @@ interface TrialState {
 
   // 方法
   initTrial: () => void;
-  redeemCode: (code: string) => Promise<{ success: boolean; message: string }>;
+  redeemCode: (code: string) => { success: boolean; message: string };
   isExpired: () => boolean;
   isPermanent: () => boolean;
   getRemainingMs: () => number;
@@ -98,7 +99,7 @@ export const useTrialStore = create<TrialState>()(
       installedAt: '',
       currentStage: 0,
       expiresAt: null,
-      usedSignatures: [],
+      usedCodes: [],
       lastFeedbackAt: null,
       feedbackCount: 0,
       feedbackDismissedAt: null,
@@ -118,43 +119,36 @@ export const useTrialStore = create<TrialState>()(
         });
       },
 
-      redeemCode: async (code) => {
+      redeemCode: (code) => {
         const state = get();
-        const { deviceId, currentStage, usedSignatures, isPermanent } = state;
-        if (isPermanent()) {
+        const { currentStage, usedCodes } = state;
+        if (state.currentStage >= getStages(state).length - 1) {
           return { success: false, message: '已是永久會員，無需續用' };
         }
 
-        // 驗證 HMAC 簽章
-        const result = await verifyCode(code, deviceId);
-        if (!result.success) {
-          return { success: false, message: result.message };
-        }
-
-        // 檢查是否下一階段或更高
-        const targetStage = result.stage;
-        if (targetStage <= currentStage) {
-          return { success: false, message: '此階段已啟用，請使用更高階段續用碼' };
-        }
-
+        const trimmed = code.trim();
         const stages = getStages(state);
-        if (targetStage >= stages.length) {
-          return { success: false, message: '無效的階段碼' };
+        const nextStage = stages[currentStage + 1];
+
+        if (!nextStage || !nextStage.code) {
+          return { success: false, message: '無下一階段可解鎖' };
         }
 
-        // 檢查是否重複使用（以碼的原始字串判斷）
-        const codeNorm = code.trim().toUpperCase();
-        if (usedSignatures.includes(codeNorm)) {
+        if (trimmed !== nextStage.code) {
+          return { success: false, message: '續用碼無效' };
+        }
+
+        if (usedCodes.includes(trimmed)) {
           return { success: false, message: '此續用碼已使用過' };
         }
 
-        const stage = stages[targetStage];
-        const newExpiresAt = stage.durationMs === -1 ? null : addIso(stage.durationMs);
+        const newExpiresAt =
+          nextStage.durationMs === -1 ? null : addIso(nextStage.durationMs);
 
         set({
-          currentStage: targetStage,
+          currentStage: currentStage + 1,
           expiresAt: newExpiresAt,
-          usedSignatures: [...usedSignatures, codeNorm],
+          usedCodes: [...usedCodes, trimmed],
           lastFeedbackAt: null,
           feedbackDismissedAt: null,
         });
@@ -162,9 +156,9 @@ export const useTrialStore = create<TrialState>()(
         return {
           success: true,
           message:
-            stage.durationMs === -1
+            nextStage.durationMs === -1
               ? '已解鎖永久會員'
-              : `已解鎖 Stage ${targetStage} · ${state.devMode ? (stage.durationMs / 1000).toFixed(0) + ' 秒' : (stage.durationMs / 86400000).toFixed(0) + ' 天'}`,
+              : `已解鎖 ${nextStage.label} · ${state.devMode ? (nextStage.durationMs / 1000).toFixed(0) + ' 秒' : (nextStage.durationMs / 86400000).toFixed(0) + ' 天'}`,
         };
       },
 
@@ -211,20 +205,17 @@ export const useTrialStore = create<TrialState>()(
       },
 
       shouldShowFeedback: () => {
-        const { lastFeedbackAt, feedbackDismissedAt, currentStage, installedAt, devMode, isPermanent } = get();
+        const { lastFeedbackAt, feedbackDismissedAt, installedAt, devMode, isPermanent } = get();
         if (isPermanent()) return false;
         const now = Date.now();
         const fbInterval = devMode ? FEEDBACK_INTERVAL_MS_DEV : FEEDBACK_INTERVAL_MS_STD;
         const installFor = devMode ? INSTALL_FOR_FEEDBACK_MS_DEV : INSTALL_FOR_FEEDBACK_MS_STD;
         if (!installedAt) return false;
         if (!lastFeedbackAt) {
-          // 從未反饋過：安裝超過閾值才問
           return now - new Date(installedAt).getTime() >= installFor;
         }
-        // 上次反饋超過間隔
         if (now - new Date(lastFeedbackAt).getTime() >= fbInterval) {
           if (feedbackDismissedAt) {
-            // DEV：10 秒後再問；STD：3 天後再問
             const dismissCool = devMode ? 10 * 1000 : 3 * 86400000;
             if (now - new Date(feedbackDismissedAt).getTime() < dismissCool) {
               return false;
@@ -253,7 +244,6 @@ export const useTrialStore = create<TrialState>()(
         set({ devMode: true });
         const state = get();
         const stages = DEV_STAGES;
-        // 以當前階段重新計算到期時間
         const stage = stages[state.currentStage] ?? stages[0];
         set({
           expiresAt: stage.durationMs === -1 ? null : addIso(stage.durationMs),
@@ -288,7 +278,7 @@ export const useTrialStore = create<TrialState>()(
           installedAt: new Date().toISOString(),
           currentStage: 0,
           expiresAt: stage.durationMs === -1 ? null : addIso(stage.durationMs),
-          usedSignatures: [],
+          usedCodes: [],
           lastFeedbackAt: null,
           feedbackCount: 0,
           feedbackDismissedAt: null,
@@ -308,28 +298,24 @@ export const useTrialStore = create<TrialState>()(
     }),
     {
       name: 'ironpulse-trial',
-      version: 2,
+      version: 3,
       migrate: (persistedState, version) => {
         const s = (persistedState ?? {}) as Partial<TrialState>;
-        if (version < 2) {
-          // 舊版沒有 deviceId / usedSignatures / devMode
-          return {
-            deviceId: generateDeviceId(),
-            installedAt: s.installedAt || new Date().toISOString(),
-            currentStage: typeof s.currentStage === 'number' ? Math.min(s.currentStage, 0) : 0,
-            expiresAt: s.expiresAt || null,
-            usedSignatures: [],
-            lastFeedbackAt: s.lastFeedbackAt || null,
-            feedbackCount: typeof s.feedbackCount === 'number' ? s.feedbackCount : 0,
-            feedbackDismissedAt: s.feedbackDismissedAt || null,
-            devMode: false,
-          } as Partial<TrialState>;
-        }
-        // 確保 deviceId 存在
-        if (!s.deviceId) {
-          return { ...s, deviceId: generateDeviceId() } as Partial<TrialState>;
-        }
-        return s;
+        // v2 有 deviceId / usedSignatures（HMAC 版）；v3 改回明文，usedCodes 取代 usedSignatures
+        const usedCodes =
+          (s as { usedCodes?: string[] }).usedCodes ??
+          ((s as { usedSignatures?: string[] }).usedSignatures ?? []);
+        return {
+          deviceId: s.deviceId || generateDeviceId(),
+          installedAt: s.installedAt || new Date().toISOString(),
+          currentStage: typeof s.currentStage === 'number' ? Math.min(s.currentStage, 0) : 0,
+          expiresAt: s.expiresAt || null,
+          usedCodes,
+          lastFeedbackAt: s.lastFeedbackAt || null,
+          feedbackCount: typeof s.feedbackCount === 'number' ? s.feedbackCount : 0,
+          feedbackDismissedAt: s.feedbackDismissedAt || null,
+          devMode: false,
+        } as Partial<TrialState>;
       },
     }
   )

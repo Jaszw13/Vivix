@@ -30,19 +30,16 @@ function LockedScreen() {
     useTrialStore();
   const [code, setCode] = useState('');
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [submitting, setSubmitting] = useState(false);
 
   const stageInfo = getStageInfo();
   const stages = devMode ? DEV_STAGES : STANDARD_STAGES;
   const nextStage = stages[currentStage + 1];
 
-  const handleRedeem = async () => {
-    if (!code.trim() || submitting) return;
-    setSubmitting(true);
+  const handleRedeem = () => {
+    if (!code.trim()) return;
     setResult(null);
-    const res = await redeemCode(code);
+    const res = redeemCode(code);
     setResult(res);
-    setSubmitting(false);
     if (res.success) {
       setCode('');
     }
@@ -95,7 +92,7 @@ function LockedScreen() {
             {deviceId || '—'}
           </div>
           <div className="text-[9px] text-text-secondary/60 mt-1">
-            向管理員索取續用碼時請提供此裝置 ID
+            裝置 ID（僅供識別，續用碼不需綁定裝置）
           </div>
         </div>
 
@@ -147,24 +144,18 @@ function LockedScreen() {
                   setResult(null);
                 }}
                 onKeyDown={(e) => e.key === 'Enter' && handleRedeem()}
-                placeholder="格式：IRON-XXXXXXXX-STAGE-SIG"
-                className="w-full h-12 px-4 bg-bg-secondary rounded-button border-2 border-border text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-accent focus:outline-none transition-colors font-mono uppercase tracking-wider"
+                placeholder="輸入續用碼"
+                className="w-full h-12 px-4 bg-bg-secondary rounded-button border-2 border-border text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-accent focus:outline-none transition-colors font-mono tracking-wider"
                 autoComplete="off"
                 autoCorrect="off"
                 spellCheck={false}
               />
               <button
                 onClick={handleRedeem}
-                disabled={!code.trim() || submitting}
+                disabled={!code.trim()}
                 className="w-full h-12 mt-3 bg-accent text-bg-primary rounded-button text-sm font-bold uppercase tracking-wider disabled:opacity-40 disabled:pointer-events-none active:translate-y-px transition-all flex items-center justify-center gap-2"
               >
-                {submitting ? (
-                  <span className="opacity-70">驗證中…</span>
-                ) : (
-                  <>
-                    <Unlock size={16} /> 解鎖
-                  </>
-                )}
+                <Unlock size={16} /> 解鎖
               </button>
 
               <AnimatePresence>
