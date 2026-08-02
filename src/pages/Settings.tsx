@@ -1,17 +1,23 @@
 import { motion } from 'framer-motion';
-import { Moon, Sun, User, Trash2, Dumbbell } from 'lucide-react';
+import { Moon, Sun, User, Trash2, Dumbbell, Clock, Shield } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
-import { Card, SectionHeader } from '@/components/ui/Card';
+import { Card, SectionHeader, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useThemeStore } from '@/store/themeStore';
 import { useProfileStore } from '@/store/profileStore';
 import { useWorkoutStore } from '@/store/workoutStore';
+import { useTrialStore, TRIAL_STAGES } from '@/store/trialStore';
 import { cn } from '@/lib/utils';
 
 export default function Settings() {
   const { theme, toggleTheme } = useThemeStore();
   const { profile, updateProfile, resetAllData } = useProfileStore();
   const { getTotalSessions, getTotalVolume, personalRecords } = useWorkoutStore();
+  const { isPermanent, getStageInfo, currentStage, feedbackCount } = useTrialStore();
+
+  const stageInfo = getStageInfo();
+  const remainingDays = isPermanent() ? null : stageInfo.remaining;
+  const isLastStage = currentStage >= TRIAL_STAGES.length - 1;
 
   const handleReset = () => {
     if (
@@ -159,11 +165,83 @@ export default function Settings() {
         </Card>
       </motion.div>
 
-      {/* 關於 */}
+      {/* 試用狀態 */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.15 }}
+        className="mt-6"
+      >
+        <SectionHeader title="試用狀態" subtitle="授權與到期" />
+        <Card className="p-4">
+          <div className="flex items-center gap-3 mb-4">
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center"
+              style={{ background: 'var(--accent-soft)' }}
+            >
+              {isPermanent() ? (
+                <Shield size={20} className="text-accent" />
+              ) : (
+                <Clock size={20} className="text-accent" />
+              )}
+            </div>
+            <div className="flex-1">
+              <div className="text-[10px] uppercase tracking-widest text-text-secondary">
+                {isPermanent() ? '永久會員' : stageInfo.label}
+              </div>
+              <div className="font-mono text-lg font-bold text-text-primary">
+                {isPermanent()
+                  ? '∞'
+                  : remainingDays !== null && remainingDays > 0
+                  ? `${remainingDays} 天`
+                  : remainingDays === 0
+                  ? '今日到期'
+                  : '已到期'}
+              </div>
+            </div>
+            {isPermanent() && <Badge variant="accent">永久</Badge>}
+          </div>
+
+          {/* 階梯進度 */}
+          <div className="pt-3 border-t border-border/40">
+            <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-2">
+              階梯進度
+            </div>
+            <div className="flex items-center gap-1">
+              {TRIAL_STAGES.map((stage, i) => (
+                <div key={i} className="flex-1">
+                  <div
+                    className="h-2 rounded-full transition-all"
+                    style={{
+                      background:
+                        i <= currentStage ? 'var(--accent)' : 'var(--border-color)',
+                    }}
+                  />
+                  <div className="text-[8px] text-center mt-1 text-text-secondary">
+                    {stage.days === -1 ? '∞' : stage.days}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 反饋次數 */}
+          <div className="pt-3 mt-3 border-t border-border/40 flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-widest text-text-secondary">
+              已提交反饋
+            </span>
+            <span className="font-mono text-sm font-bold text-text-primary">
+              {feedbackCount} 次
+            </span>
+          </div>
+        </Card>
+      </motion.div>
+
+      {/* 關於 */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
         className="mt-6"
       >
         <SectionHeader title="關於" />
@@ -187,7 +265,7 @@ export default function Settings() {
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
+        transition={{ delay: 0.25 }}
         className="mt-6"
       >
         <SectionHeader title="資料管理" />
