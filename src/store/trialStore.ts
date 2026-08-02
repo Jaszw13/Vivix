@@ -11,19 +11,21 @@ export interface TrialStage {
 
 // 標準模式：天數
 export const STANDARD_STAGES: TrialStage[] = [
-  { durationMs: 5 * 86400000, label: '首次試用' }, // Stage 0 不需碼
-  { durationMs: 7 * 86400000, label: '第二階段', code: '2678' },
-  { durationMs: 14 * 86400000, label: '第三階段', code: '91431' },
-  { durationMs: 30 * 86400000, label: '第四階段', code: '695497' },
+  { durationMs: 1 * 86400000, label: '首次試用' }, // Stage 0 不需碼
+  { durationMs: 3 * 86400000, label: '第二階段', code: '547' },
+  { durationMs: 7 * 86400000, label: '第三階段', code: '2678' },
+  { durationMs: 14 * 86400000, label: '第四階段', code: '91431' },
+  { durationMs: 30 * 86400000, label: '第五階段', code: '695497' },
   { durationMs: -1, label: '永久會員', code: 'IRON-ETERNAL' },
 ];
 
 // 開發測試模式：每階段 1 分鐘
 export const DEV_STAGES: TrialStage[] = [
   { durationMs: 60 * 1000, label: '[DEV] 首次試用' },
-  { durationMs: 60 * 1000, label: '[DEV] 第二階段', code: '2678' },
-  { durationMs: 60 * 1000, label: '[DEV] 第三階段', code: '91431' },
-  { durationMs: 60 * 1000, label: '[DEV] 第四階段', code: '695497' },
+  { durationMs: 60 * 1000, label: '[DEV] 第二階段', code: '547' },
+  { durationMs: 60 * 1000, label: '[DEV] 第三階段', code: '2678' },
+  { durationMs: 60 * 1000, label: '[DEV] 第四階段', code: '91431' },
+  { durationMs: 60 * 1000, label: '[DEV] 第五階段', code: '695497' },
   { durationMs: -1, label: '[DEV] 永久會員', code: 'IRON-ETERNAL' },
 ];
 
@@ -298,19 +300,21 @@ export const useTrialStore = create<TrialState>()(
     }),
     {
       name: 'ironpulse-trial',
-      version: 3,
+      version: 4,
       migrate: (persistedState, version) => {
         const s = (persistedState ?? {}) as Partial<TrialState>;
-        // v2 有 deviceId / usedSignatures（HMAC 版）；v3 改回明文，usedCodes 取代 usedSignatures
+        // v2: HMAC 版；v3: 明文碼；v4: 新增 Stage 1（3天/547），舊用戶 currentStage 值仍有效但需重新計算到期
         const usedCodes =
           (s as { usedCodes?: string[] }).usedCodes ??
           ((s as { usedSignatures?: string[] }).usedSignatures ?? []);
+        // v3→v4: 階段定義變更，重置 currentStage 為 0 以避免索引錯位
+        const resetStage = version < 4;
         return {
           deviceId: s.deviceId || generateDeviceId(),
-          installedAt: s.installedAt || new Date().toISOString(),
-          currentStage: typeof s.currentStage === 'number' ? Math.min(s.currentStage, 0) : 0,
-          expiresAt: s.expiresAt || null,
-          usedCodes,
+          installedAt: resetStage ? new Date().toISOString() : (s.installedAt || new Date().toISOString()),
+          currentStage: resetStage ? 0 : (typeof s.currentStage === 'number' ? s.currentStage : 0),
+          expiresAt: resetStage ? addIso(1 * 86400000) : (s.expiresAt || null),
+          usedCodes: resetStage ? [] : usedCodes,
           lastFeedbackAt: s.lastFeedbackAt || null,
           feedbackCount: typeof s.feedbackCount === 'number' ? s.feedbackCount : 0,
           feedbackDismissedAt: s.feedbackDismissedAt || null,
