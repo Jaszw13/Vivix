@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Unlock, Zap, AlertCircle, Smartphone } from 'lucide-react';
 import { useTrialStore, STANDARD_STAGES, DEV_STAGES } from '@/store/trialStore';
@@ -9,13 +9,28 @@ interface TrialLockProps {
 
 export function TrialLock({ children }: TrialLockProps) {
   const { isExpired, initTrial, installedAt } = useTrialStore();
-  const [initialized, setInitialized] = useState(false);
 
-  if (!initialized) {
+  // ⚠️ React 18 StrictMode 禁止 render phase setState。
+  //    以前寫 if (!initialized) { initTrial(); setInitialized(true) } 會觸發
+  //    infinite re-render / uncaught error → 整棵 App unmount → 白屏（連 onboarding 都唔出）
+  //    改去 useEffect，只在 mounted 後 + installedAt 未設時執行一次
+  useEffect(() => {
     if (!installedAt) {
       initTrial();
     }
-    setInitialized(true);
+  }, [installedAt, initTrial]);
+
+  // persist middleware hydrate 前 installedAt 可能係 undefined，如果此時直接 isExpired()
+  // 可能誤判為 expired 並 render LockedScreen。等 hydrate 完（installedAt 有值 or 保持 null 都算初始化）
+  const hydrated = installedAt !== undefined;
+  if (!hydrated) {
+    return (
+      <div className="min-h-screen w-full max-w-[480px] mx-auto bg-bg-primary flex items-center justify-center">
+        <div className="animate-pulse text-[10px] uppercase tracking-widest text-text-secondary">
+          Loading Vivix…
+        </div>
+      </div>
+    );
   }
 
   if (isExpired()) {
@@ -107,7 +122,7 @@ function LockedScreen() {
                 key={i}
                 className="flex-1 h-2 rounded-full transition-all"
                 style={{
-                  background: i <= currentStage ? 'var(--accent)' : 'var(--border-color)',
+                  background: i <= currentStage ? 'var(--accent)' : 'var(--border)',
                 }}
               />
             ))}
