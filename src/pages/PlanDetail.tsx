@@ -13,6 +13,7 @@ export default function PlanDetail() {
   const navigate = useNavigate();
   const plan = planId ? getPlanById(planId) : undefined;
   const startSession = useWorkoutStore((s) => s.startSession);
+  const setActivePlan = useWorkoutStore((s) => s.setActivePlan);
 
   if (!plan) {
     return (
@@ -27,6 +28,12 @@ export default function PlanDetail() {
   const handleStart = (dayId: string) => {
     const day = plan.days.find((d) => d.id === dayId);
     if (!day) return;
+    // 用戶選了某個 day，也表示他要追蹤這個計畫
+    setActivePlan(plan.id);
+    const idx = plan.days.findIndex((d) => d.id === dayId);
+    if (idx >= 0) {
+      useWorkoutStore.setState({ nextDayIndex: idx });
+    }
     startSession(plan.id, plan.name, day);
     navigate('/workout');
   };

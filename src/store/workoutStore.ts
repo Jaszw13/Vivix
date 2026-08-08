@@ -8,6 +8,7 @@ import {
   createExerciseLog,
   estimate1RM,
 } from '@/utils/workout';
+import { getPlanById } from '@/data/plans';
 
 interface CustomExercise {
   id: string;
@@ -24,12 +25,20 @@ interface WorkoutState {
   personalRecords: PersonalRecord[];
   // 使用者自訂動作
   customExercises: CustomExercise[];
+  // 目前追蹤的訓練計畫（由用戶選擇 or onboarding 預設）
+  activePlanId: string | null;
+  // 該計畫下一個應訓練日的索引（循環：例如 5x5 A→B→A→B）
+  nextDayIndex: number;
 
   // 動作
+  setActivePlan: (planId: string) => void;
+  incrementDayIndex: () => void;
   startSession: (planId: string, planName: string, day: PlanDay) => void;
   startEmptySession: () => void;
   addExerciseToActive: (ex: PlanExercise) => void;
   addCustomExercise: (name: string) => CustomExercise;
+  /** 標註 / 取消標註某個熱身項目已完成（N1） */
+  toggleWarmupCompleted: (warmupId: string) => void;
   updateSet: (exerciseLogId: string, setId: string, patch: Partial<SetLog>) => void;
   addSet: (exerciseLogId: string) => void;
   removeSet: (exerciseLogId: string, setId: string) => void;
@@ -70,6 +79,20 @@ export const useWorkoutStore = create<WorkoutState>()(
       activeSession: null,
       personalRecords: [],
       customExercises: [],
+      activePlanId: null,
+      nextDayIndex: 0,
+
+      setActivePlan: (planId) => {
+        set({ activePlanId: planId, nextDayIndex: 0 });
+      },
+
+      incrementDayIndex: () => {
+        const { activePlanId, nextDayIndex } = get();
+        if (!activePlanId) return;
+        const plan = getPlanById(activePlanId);
+        if (!plan) return;
+        set({ nextDayIndex: (nextDayIndex + 1) % plan.days.length });
+      },
 
       startSession: (planId, planName, day) => {
         const exercises: ExerciseLog[] = day.exercises.map((pe) =>
@@ -80,7 +103,9 @@ export const useWorkoutStore = create<WorkoutState>()(
           date: new Date().toISOString(),
           planId,
           planName,
+          dayId: day.id,
           dayName: day.dayName,
+          warmupCompletedIds: [],
           duration: 0,
           totalVolume: 0,
           exercises,
@@ -92,6 +117,7 @@ export const useWorkoutStore = create<WorkoutState>()(
         const session: WorkoutSession = {
           id: generateId('session'),
           date: new Date().toISOString(),
+          warmupCompletedIds: [],
           duration: 0,
           totalVolume: 0,
           exercises: [],
@@ -99,11 +125,30 @@ export const useWorkoutStore = create<WorkoutState>()(
         set({ activeSession: session });
       },
 
+      toggleWarmupCompleted: (warmupId) => {
+        const active = get().activeSession;
+        if (!active) return;
+        const done = active.warmupCompletedIds.includes(warmupId);
+        set({
+          activeSession: {
+            ...active,
+            warmupCompletedIds: done
+              ? active.warmupCompletedIds.filter((x) => x !== warmupId)
+              : [...active.warmupCompletedIds, warmupId],
+          },
+        });
+      },
+
       addExerciseToActive: (ex) => {
         const active = get().activeSession;
         if (!active) return;
         const newEx = createExerciseLog(ex.exerciseId, ex.name, ex.targetSets || 3, ex.targetWeight);
-        set({ activeSession: { ...active, exercises: [...active.exercises, newEx] } });
+        set({
+          activeSession: {
+            ...active,
+            exercises: [...active.exercises, newEx],
+          },
+        });
       },
 
       addCustomExercise: (name) => {
@@ -207,7 +252,19 @@ export const useWorkoutStore = create<WorkoutState>()(
           }
         }
         newPRs.sort((a, b) => b.estimated1RM - a.estimated1RM);
-        set({ sessions: newSessions, personalRecords: newPRs, activeSession: null });
+        // 若此次 session 關聯某計畫，自動推進下次訓練日
+        const state = get();
+        let nextIndex = state.nextDayIndex;
+        if (active.planId && state.activePlanId === active.planId) {
+          const plan = getPlanById(active.planId);
+          if (plan) nextIndex = (state.nextDayIndex + 1) % plan.days.length;
+        }
+        set({
+          sessions: newSessions,
+          personalRecords: newPRs,
+          activeSession: null,
+          nextDayIndex: nextIndex,
+        });
         return finished;
       },
 
@@ -306,14 +363,16 @@ export const useWorkoutStore = create<WorkoutState>()(
     }),
     {
       name: 'ironpulse-workouts',
-      version: 3,
+      version: 4,
       // 不持久化 activeSession
       partialize: (state) => ({
         sessions: state.sessions,
         personalRecords: state.personalRecords,
         customExercises: state.customExercises,
+        activePlanId: state.activePlanId,
+        nextDayIndex: state.nextDayIndex,
       }),
-      // v1 含 sample data；v2 清空 sample；v3 新增 customExercises
+      // v1 含 sample；v2 清空；v3 新增 customExercises；v4 新增 activePlanId / nextDayIndex
       migrate: (persistedState, version) => {
         const state = (persistedState ?? {}) as Partial<WorkoutState>;
         if (version < 2) {
@@ -321,20 +380,26 @@ export const useWorkoutStore = create<WorkoutState>()(
             sessions: [],
             personalRecords: [],
             customExercises: [],
-          } as Pick<WorkoutState, 'sessions' | 'personalRecords' | 'customExercises'>;
+            activePlanId: null,
+            nextDayIndex: 0,
+          };
         }
-        if (version < 3) {
+        if (version < 4) {
           return {
             sessions: state.sessions ?? [],
             personalRecords: state.personalRecords ?? [],
-            customExercises: [],
-          } as Pick<WorkoutState, 'sessions' | 'personalRecords' | 'customExercises'>;
+            customExercises: state.customExercises ?? [],
+            activePlanId: null,
+            nextDayIndex: 0,
+          };
         }
         return {
           sessions: state.sessions ?? [],
           personalRecords: state.personalRecords ?? [],
           customExercises: state.customExercises ?? [],
-        } as Pick<WorkoutState, 'sessions' | 'personalRecords' | 'customExercises'>;
+          activePlanId: state.activePlanId ?? null,
+          nextDayIndex: state.nextDayIndex ?? 0,
+        };
       },
     }
   )
