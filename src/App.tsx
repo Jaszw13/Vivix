@@ -16,9 +16,27 @@ import { FeedbackModal } from '@/components/FeedbackModal';
 import { useTrialStore } from '@/store/trialStore';
 import { useProfileStore } from '@/store/profileStore';
 
+/**
+ * 守衛放 component 入面，唔用條件式加減 Route：
+ *   避免 onboarding state 切換時，<Route path="/onboarding"> 被即時移除，
+ *   但 URL 仲係 /onboarding → 路由冇匹配 → 白屏。
+ *   將判斷包喺 component 入面，setState + navigate 發生同一個 render 脈絡，唔會有時間差問題
+ */
+function OnboardingGuard() {
+  const onboardingCompleted = useProfileStore((s) => s.onboardingCompleted);
+  if (onboardingCompleted) return <Navigate to="/" replace />;
+  return <Onboarding />;
+}
+
+function DashboardGuard() {
+  const onboardingCompleted = useProfileStore((s) => s.onboardingCompleted);
+  if (!onboardingCompleted) return <Navigate to="/onboarding" replace />;
+  return <Dashboard />;
+}
+
 function AppContent() {
   const { shouldShowFeedback } = useTrialStore();
-  const onboardingCompleted = useProfileStore((s) => s.onboardingCompleted);
+  // AppContent 唔再需要讀 onboardingCompleted，守衛各自讀取，避免同一 state 變化導致雙重 re-render 干擾路由
   const [showFeedback, setShowFeedback] = useState(false);
 
   // 啟動時檢查是否需要顯示反饋
@@ -34,16 +52,9 @@ function AppContent() {
   return (
     <>
       <Routes>
-        {/* N3: 首次啟動強制 onboarding */}
-        {!onboardingCompleted && (
-          <Route path="/onboarding" element={<Onboarding />} />
-        )}
-        <Route
-          path="/"
-          element={
-            onboardingCompleted ? <Dashboard /> : <Navigate to="/onboarding" replace />
-          }
-        />
+        {/* 所有路由永久存在，守衛邏輯放 component 入面，避免 state 切換瞬間路由缺失導致白屏 */}
+        <Route path="/onboarding" element={<OnboardingGuard />} />
+        <Route path="/" element={<DashboardGuard />} />
         <Route path="/plans" element={<Plans />} />
         <Route path="/plans/:planId" element={<PlanDetail />} />
         <Route path="/workout" element={<Workout />} />

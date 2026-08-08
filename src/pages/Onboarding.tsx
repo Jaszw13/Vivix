@@ -38,10 +38,11 @@ export default function Onboarding() {
   const back = () => setStepIdx((i) => Math.max(0, i - 1));
 
   const finish = () => {
-    if (!goal) return;
+    // 略過或早期完成時用戶可能未選目標，預設健康目標（唔會導致 return 後白屏）
+    const finalGoal: TrainingGoalValue = goal ?? 'health';
     // 寫入用戶名
     if (name.trim()) updateProfile({ name: name.trim() });
-    completeOnboarding(goal);
+    completeOnboarding(finalGoal);
     // 預設新手 5x5 追蹤計畫
     setActivePlan(DEFAULT_BEGINNER_PLAN_ID);
     navigate('/', { replace: true });
@@ -69,17 +70,12 @@ export default function Onboarding() {
           {STEPS.map((s, i) => (
             <motion.div
               key={s}
-              animate={{
-                width: i === stepIdx ? 24 : 8,
-                backgroundColor:
-                  i < stepIdx
-                    ? 'var(--accent)'
-                    : i === stepIdx
-                      ? 'var(--accent)'
-                      : 'rgb(from var(--border) r g b / 60%)',
-              }}
+              animate={{ width: i === stepIdx ? 24 : 8 }}
               transition={{ duration: 0.25 }}
-              className="h-1.5 rounded-full"
+              className={cn(
+                'h-1.5 rounded-full transition-colors duration-200',
+                i <= stepIdx ? 'bg-accent' : 'bg-border/60'
+              )}
             />
           ))}
         </div>
