@@ -41,10 +41,17 @@ export default function Onboarding() {
     // 略過或早期完成時用戶可能未選目標，預設健康目標（唔會導致 return 後白屏）
     const finalGoal: TrainingGoalValue = goal ?? 'health';
     // 寫入用戶名
-    if (name.trim()) updateProfile({ name: name.trim() });
-    completeOnboarding(finalGoal);
-    // 預設新手 5x5 追蹤計畫
-    setActivePlan(DEFAULT_BEGINNER_PLAN_ID);
+    if (name.trim()) typeof updateProfile === 'function' && updateProfile({ name: name.trim() });
+    if (typeof completeOnboarding === 'function') completeOnboarding(finalGoal);
+    // 預設新手 5x5 追蹤計畫（defensive：舊 SW cache 可能冇 setActivePlan，唔 call 都唔會 throw）
+    if (typeof setActivePlan === 'function') {
+      try {
+        setActivePlan(DEFAULT_BEGINNER_PLAN_ID);
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('[Onboarding] setActivePlan skipped:', e);
+      }
+    }
     navigate('/', { replace: true });
   };
 

@@ -34,7 +34,15 @@ export default function Dashboard() {
     setActivePlan,
   } = useWorkoutStore();
   const { profile } = useProfileStore();
-  const achievementsStore = useAchievementsStore();
+
+  // ⚠️ 用細粒度 selector 拎 action，唔好拎成個 store object：
+  //   zustand 如果直接 useXxxStore() 唔傳 selector → 每 render 都有新 object ref，
+  //   放落 useEffect deps 會每次都視為變化 → 觸發 recompute() → recompute set state →
+  //   re-render → deps 又新 → infinite loop → React error #185。
+  const recompute = useAchievementsStore((s) => s.recompute);
+  const markUnlockSeen = useAchievementsStore((s) => s.markUnlockSeen);
+  const pendingUnlockId = useAchievementsStore((s) => s.pendingUnlockId);
+  const progress = useAchievementsStore((s) => s.progress);
 
   const totalSessions = getTotalSessions();
   const totalVolume = getTotalVolume(); // 噸
@@ -56,18 +64,17 @@ export default function Dashboard() {
   }, [sessions, totalSessions, streak, totalVolume, personalRecords.length]);
 
   useEffect(() => {
-    achievementsStore.recompute(achieveCtx);
-  }, [achieveCtx, achievementsStore]);
+    recompute(achieveCtx);
+  }, [achieveCtx, recompute]);
 
   // 解鎖彈窗
-  const pendingUnlockId = achievementsStore.pendingUnlockId;
   const pendingUnlock = pendingUnlockId
     ? ACHIEVEMENTS.find((a) => a.id === pendingUnlockId) ?? null
     : null;
 
   // 成就牆摘要（前 4 個）
   const unlockedCount = SORTED_ACHIEVEMENTS.filter(
-    (a) => achievementsStore.progress[a.id]?.unlocked
+    (a) => progress[a.id]?.unlocked
   ).length;
 
   const lastSession = sessions[sessions.length - 1];
@@ -406,7 +413,7 @@ export default function Dashboard() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-md flex items-center justify-center p-6"
-          onClick={() => achievementsStore.markUnlockSeen(pendingUnlock.id)}
+          onClick={() => markUnlockSeen(pendingUnlock.id)}
         >
           <motion.div
             initial={{ scale: 0.7, y: 40, rotateX: -15 }}
@@ -462,7 +469,7 @@ export default function Dashboard() {
               fullWidth
               size="lg"
               className="relative mt-6"
-              onClick={() => achievementsStore.markUnlockSeen(pendingUnlock.id)}
+              onClick={() => markUnlockSeen(pendingUnlock.id)}
             >
               <Award size={18} /> 繼續訓練
             </Button>

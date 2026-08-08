@@ -8,16 +8,18 @@ interface TrialLockProps {
 }
 
 export function TrialLock({ children }: TrialLockProps) {
-  const { isExpired, initTrial, installedAt } = useTrialStore();
+  // ⚠️ 用細粒度 selector 拎 action。如果唔傳 selector 而拎成個 object，
+  //    每次 render 都有新 ref，放落 useEffect deps 會 trigger 不必要嘅 re-run。
+  //    zustand action 本身係 internal stable，但 destructuring 時冇 selector 會有問題
+  const isExpired = useTrialStore((s) => s.isExpired);
+  const initTrial = useTrialStore((s) => s.initTrial);
+  const installedAt = useTrialStore((s) => s.installedAt);
 
-  // ⚠️ React 18 StrictMode 禁止 render phase setState。
-  //    以前寫 if (!initialized) { initTrial(); setInitialized(true) } 會觸發
-  //    infinite re-render / uncaught error → 整棵 App unmount → 白屏（連 onboarding 都唔出）
-  //    改去 useEffect，只在 mounted 後 + installedAt 未設時執行一次
   useEffect(() => {
     if (!installedAt) {
       initTrial();
     }
+    // installedAt 由 ''(pre-hydrate/default) → ISO 後唔再跑；initTrial 係 zustand action stable
   }, [installedAt, initTrial]);
 
   // persist middleware hydrate 前 installedAt 可能係 undefined，如果此時直接 isExpired()

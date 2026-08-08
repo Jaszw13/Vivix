@@ -55,7 +55,13 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // ⚠️ 斬斷舊 SW precache 導致嘅 bundle 版本錯配：
+        //   發佈新版本後，立即 skipWaiting + clientsClaim，唔會因為用戶未關閉晒所有 tab 就拖住唔更新。
+        //   之前 onboarding finish() 撞舊 bundle → setActivePlan 未定義 throw 就係因為 SW 舊 cache。
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2,ttf}'],
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         // 預載 Google Fonts 樣式
         runtimeCaching: [
           {
