@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useEffect, useMemo } from 'react';
-import { Flame, Plus, TrendingUp, Trophy, Zap, Award, X, Sparkles } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Flame, Plus, TrendingUp, Trophy, Zap, Award, X, Sparkles, Cat, Dog, ChevronRight, Gift } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { Button } from '@/components/ui/Button';
 import { Card, SectionHeader, StatTile, Badge } from '@/components/ui/Card';
@@ -17,6 +17,11 @@ import {
 import { trainingPlans, getPlanById } from '@/data/plans';
 import { formatDate } from '@/utils/workout';
 import { cn } from '@/lib/utils';
+import { usePartnerStore } from '@/features/partner/stores/partnerStore';
+import { useFeatureFlags } from '@/features/partner/stores/featureFlags';
+import { getXpProgress } from '@/features/partner/engine/level';
+import { getFormForWorkouts } from '@/features/partner/data/forms';
+import { PartnerSetupModal } from '@/features/partner/components/PartnerSetupModal';
 
 // 新手預設計畫：5x5 力量基礎 (beginner)
 const DEFAULT_BEGINNER_PLAN_ID = '5x5-strength';
@@ -34,6 +39,15 @@ export default function Dashboard() {
     setActivePlan,
   } = useWorkoutStore();
   const { profile } = useProfileStore();
+
+  // Partner 夥伴卡片
+  const partnerEnabled = useFeatureFlags((s) => s.partnerEnabled);
+  const partner = usePartnerStore();
+  const xpProgress = getXpProgress(partner.xp);
+  const milestone = partner.getNextMilestone();
+  const currentForm = getFormForWorkouts(partner.totalWorkouts);
+  // 舊用戶（Partner 系統上線前已完成 onboarding）補建立 Partner 的 modal
+  const [setupModalOpen, setSetupModalOpen] = useState(false);
 
   // ⚠️ 用細粒度 selector 拎 action，唔好拎成個 store object：
   //   zustand 如果直接 useXxxStore() 唔傳 selector → 每 render 都有新 object ref，
@@ -151,6 +165,102 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Partner 夥伴卡片 */}
+      {partnerEnabled && partner.name && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.03 }}
+          className="mb-4"
+        >
+          <Card className="relative overflow-hidden p-4 border-accent/30">
+            <div className="absolute inset-0 bg-gradient-to-br from-accent/10 via-accent/5 to-transparent pointer-events-none" />
+            <button
+              type="button"
+              onClick={() => navigate('/partner')}
+              className="relative flex items-center gap-3 w-full text-left active:scale-[0.99] transition-transform"
+              aria-label={`查看 ${partner.name} 的 Partner 詳情`}
+            >
+              {/* Partner species icon */}
+              <div className="w-12 h-12 rounded-full bg-accent/15 text-accent flex items-center justify-center flex-shrink-0 border border-accent/30">
+                {partner.species === 'cat' ? <Cat size={22} /> : <Dog size={22} />}
+              </div>
+
+              {/* Partner 名稱 + 等級 + XP */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="font-display text-lg tracking-wide uppercase text-text-primary truncate">
+                    {partner.name}
+                  </span>
+                  <Badge variant="default" className="border border-accent/30 text-accent">
+                    Lv.{partner.level}
+                  </Badge>
+                  <span className="text-[10px] text-text-secondary/80 truncate">
+                    {currentForm.name}
+                  </span>
+                </div>
+
+                {/* XP 進度條 */}
+                <div className="w-full h-1.5 bg-bg-secondary rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-accent rounded-full transition-all"
+                    style={{ width: `${Math.round(xpProgress.progress * 100)}%` }}
+                  />
+                </div>
+
+                {/* 下一個里程碑 */}
+                {milestone && (
+                  <p className="text-[10px] text-text-secondary mt-1.5 leading-snug line-clamp-1">
+                    {milestone}
+                  </p>
+                )}
+              </div>
+              <ChevronRight size={18} className="text-text-secondary/60 flex-shrink-0" />
+            </button>
+
+            {/* CTA */}
+            <Button fullWidth size="sm" className="mt-3" onClick={handleStartToday}>
+              <TrendingUp size={16} /> 開始今日訓練
+            </Button>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* 舊用戶未建立 Partner 時的引導卡片 */}
+      {partnerEnabled && !partner.name && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.03 }}
+          className="mb-4"
+        >
+          <Card className="relative overflow-hidden p-4 border-accent/30">
+            <div className="absolute inset-0 bg-gradient-to-br from-accent/12 via-accent/5 to-auxiliary/8 pointer-events-none" />
+            <button
+              type="button"
+              onClick={() => setSetupModalOpen(true)}
+              className="relative flex items-center gap-3 w-full text-left active:scale-[0.99] transition-transform"
+            >
+              <div className="w-12 h-12 rounded-full bg-accent/15 text-accent flex items-center justify-center flex-shrink-0 border border-accent/30">
+                <Gift size={22} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[10px] uppercase tracking-widest text-accent font-bold">
+                  新功能上線
+                </div>
+                <div className="font-display text-base tracking-wide text-text-primary mt-0.5">
+                  揀你嘅訓練夥伴
+                </div>
+                <p className="text-[11px] text-text-secondary mt-1 leading-snug">
+                  Partner 會陪你記錄、陪你休息、陪你進步。
+                </p>
+              </div>
+              <ChevronRight size={18} className="text-text-secondary/60 flex-shrink-0" />
+            </button>
           </Card>
         </motion.div>
       )}
@@ -476,6 +586,12 @@ export default function Dashboard() {
           </motion.div>
         </motion.div>
       )}
+
+      {/* 舊用戶補建立 Partner 的 Modal */}
+      <PartnerSetupModal
+        open={setupModalOpen}
+        onClose={() => setSetupModalOpen(false)}
+      />
     </PageShell>
   );
 }

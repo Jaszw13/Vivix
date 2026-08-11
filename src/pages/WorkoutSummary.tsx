@@ -1,11 +1,20 @@
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Trophy, TrendingUp, Flame, Check } from 'lucide-react';
+import { Trophy, TrendingUp, Flame, Check, Sparkles, Star } from 'lucide-react';
 import type { WorkoutSession } from '@/types';
 import { estimate1RM, formatDateFull } from '@/utils/workout';
 import { Card, SectionHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PageShell } from '@/components/layout/PageShell';
+import { useWorkoutStore } from '@/store/workoutStore';
+import { usePartnerStore } from '@/features/partner/stores/partnerStore';
+import { useFeatureFlags } from '@/features/partner/stores/featureFlags';
+import { handleWorkoutCompleted } from '@/features/partner/engine/rewardEngine';
+import { PARTNER_FORMS } from '@/features/partner/data/forms';
+import { COSMETIC_MAP } from '@/features/partner/data/cosmetics';
+import type { RewardResult } from '@/features/partner/types';
+import { PartnerLevelUpModal } from '@/features/partner/components/PartnerLevelUpModal';
 
 interface SummaryLocationState {
   session: WorkoutSession;
@@ -15,6 +24,47 @@ export default function WorkoutSummary() {
   const navigate = useNavigate();
   const location = useLocation();
   const session = (location.state as SummaryLocationState | null)?.session;
+
+  // Partner 獎勵：僅在 mount 時計算一次（ref 防重 + 引擎每日上限雙重冪等）
+  const partnerEnabled = useFeatureFlags((s) => s.partnerEnabled);
+  const partnerName = usePartnerStore((s) => s.name);
+  const nextMilestone = usePartnerStore((s) => s.getNextMilestone());
+  const [reward, setReward] = useState<RewardResult | null>(null);
+  const [levelUpVisible, setLevelUpVisible] = useState(false);
+  const rewardComputedRef = useRef(false);
+
+  useEffect(() => {
+    if (rewardComputedRef.current) return;
+    if (!session) return;
+    const flags = useFeatureFlags.getState();
+    const partner = usePartnerStore.getState();
+    if (!flags.partnerEnabled || !partner.name) return;
+    rewardComputedRef.current = true;
+
+    const completedSets = session.exercises.reduce(
+      (s, e) => s + e.sets.filter((set) => set.completed).length,
+      0
+    );
+    const plannedSets = session.exercises.reduce((s, e) => s + e.sets.length, 0);
+    const personalRecords = useWorkoutStore.getState().personalRecords;
+    const hasPR = personalRecords.some((pr) => pr.date === session.date);
+
+    const result = handleWorkoutCompleted({
+      date: session.date,
+      completedSets,
+      plannedSets,
+      hasPR,
+      durationSeconds: session.duration,
+      warmupCompleted: session.warmupCompletedIds.length > 0,
+    });
+    setReward(result);
+    // 升級時延遲彈出 LevelUpModal，等用戶先看到獎勵卡
+    if (result.leveledUp) {
+      const t = window.setTimeout(() => setLevelUpVisible(true), 900);
+      return () => window.clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!session) {
     return (
@@ -173,6 +223,77 @@ export default function WorkoutSummary() {
             })}
           </Card>
         </motion.div>
+
+        {/* Partner 獎勵 */}
+        {partnerEnabled && partnerName && reward && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.55 }}
+            className="mt-6"
+          >
+            <SectionHeader title="Partner 獎勵" />
+            <Card className="p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <Sparkles size={18} className="text-accent" />
+                <div className="flex-1">
+                  <div className="text-[10px] uppercase tracking-widest text-text-secondary">
+                    Partner 獲得
+                  </div>
+                  <div className="font-mono text-2xl font-bold text-accent">
+                    {reward.xpGained} XP
+                  </div>
+                </div>
+              </div>
+
+              {reward.leveledUp && (
+                <motion.div
+                  initial={{ scale: 0.6, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: 'spring', delay: 0.25 }}
+                  className="flex items-center gap-2 mb-3 px-3 py-2 rounded bg-accent/15"
+                >
+                  <Star size={16} className="text-accent" />
+                  <span className="text-sm font-bold text-accent">
+                    Partner 升到 Lv.{reward.newLevel}！
+                  </span>
+                </motion.div>
+              )}
+
+              {reward.newFormId && (
+                <div className="text-sm text-text-primary mb-3">
+                  Partner 進入「
+                  {PARTNER_FORMS.find((f) => f.id === reward.newFormId)?.name ?? reward.newFormId}
+                  」形態！
+                </div>
+              )}
+
+              {reward.newCosmeticIds.length > 0 && (
+                <div className="mb-3">
+                  <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-1">
+                    解鎖配件
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {reward.newCosmeticIds.map((id) => (
+                      <span
+                        key={id}
+                        className="px-2 py-1 rounded bg-auxiliary/15 text-xs text-auxiliary"
+                      >
+                        {COSMETIC_MAP[id]?.name ?? id}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {nextMilestone && (
+                <div className="text-xs text-text-secondary pt-2 border-t border-border/40">
+                  {nextMilestone}
+                </div>
+              )}
+            </Card>
+          </motion.div>
+        )}
       </div>
 
       <div className="sticky bottom-0 px-4 pt-4 pb-4 bg-gradient-to-t from-bg-primary via-bg-primary to-transparent">
@@ -180,6 +301,16 @@ export default function WorkoutSummary() {
           返回主控台
         </Button>
       </div>
+
+      {/* Partner 升級慶祝 Modal（§15：level change 動畫反饋） */}
+      <PartnerLevelUpModal
+        result={
+          levelUpVisible && reward?.leveledUp
+            ? { newLevel: reward.newLevel, partnerName }
+            : null
+        }
+        onDismiss={() => setLevelUpVisible(false)}
+      />
     </PageShell>
   );
 }

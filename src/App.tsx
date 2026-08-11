@@ -12,6 +12,7 @@ import Onboarding from '@/pages/Onboarding';
 import Exercises from '@/pages/Exercises';
 import ExerciseDetail from '@/pages/ExerciseDetail';
 import Settings from '@/pages/Settings';
+import { PartnerPage } from '@/features/partner/components/PartnerPage';
 import { TrialLock } from '@/components/TrialLock';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { useTrialStore } from '@/store/trialStore';
@@ -150,6 +151,7 @@ function AppContent() {
         <Route path="/achievements" element={<Achievements />} />
         <Route path="/exercises" element={<Exercises />} />
         <Route path="/exercises/:exerciseId" element={<ExerciseDetail />} />
+        <Route path="/partner" element={<PartnerPage />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
       <FeedbackModal show={showFeedback} />

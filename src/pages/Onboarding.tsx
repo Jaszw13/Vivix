@@ -11,6 +11,10 @@ import {
   Sparkles,
   X,
   Info,
+  Cat,
+  Dog,
+  Pencil,
+  Gift,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
@@ -18,10 +22,15 @@ import { Card, Badge } from '@/components/ui/Card';
 import { useProfileStore, TRAINING_GOAL_LABELS, type TrainingGoalValue } from '@/store/profileStore';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { trainingPlans, getPlanById } from '@/data/plans';
+import { usePartnerStore } from '@/features/partner/stores/partnerStore';
+import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
+import { CAT_DEFAULT_NAMES, DOG_DEFAULT_NAMES } from '@/features/partner/data/partnerNames';
+import type { PartnerSpecies } from '@/features/partner/types';
 
 const DEFAULT_BEGINNER_PLAN_ID = '5x5-strength';
 
-const STEPS = ['welcome', 'goal', 'recommend', 'tutorial'] as const;
+// 加入 Partner 選擇步驟（§19 文檔要求）
+const STEPS = ['welcome', 'partner', 'goal', 'recommend', 'tutorial'] as const;
 type StepId = (typeof STEPS)[number];
 
 export default function Onboarding() {
@@ -29,8 +38,12 @@ export default function Onboarding() {
   const completeOnboarding = useProfileStore((s) => s.completeOnboarding);
   const updateProfile = useProfileStore((s) => s.updateProfile);
   const setActivePlan = useWorkoutStore((s) => s.setActivePlan);
+  const createPartner = usePartnerStore((s) => s.createPartner);
+  const telemetryLog = useTelemetryStore((s) => s.log);
   const [name, setName] = useState('');
   const [goal, setGoal] = useState<TrainingGoalValue | null>(null);
+  const [partnerSpecies, setPartnerSpecies] = useState<PartnerSpecies | null>(null);
+  const [partnerName, setPartnerName] = useState('');
   const [stepIdx, setStepIdx] = useState(0);
 
   const step = STEPS[stepIdx];
@@ -38,17 +51,29 @@ export default function Onboarding() {
   const back = () => setStepIdx((i) => Math.max(0, i - 1));
 
   const finish = () => {
-    // 略過或早期完成時用戶可能未選目標，預設健康目標（唔會導致 return 後白屏）
+    // 略過或早期完成時用戶可能未選目標，預設健康目標
     const finalGoal: TrainingGoalValue = goal ?? 'health';
     // 寫入用戶名
     if (name.trim()) typeof updateProfile === 'function' && updateProfile({ name: name.trim() });
+    // 建立 Partner（§19: 用戶必須選 cat 或 dog）
+    const finalSpecies: PartnerSpecies = partnerSpecies ?? 'cat';
+    const finalPartnerName = partnerName.trim() ||
+      (finalSpecies === 'cat' ? CAT_DEFAULT_NAMES[0] : DOG_DEFAULT_NAMES[0]);
+    if (typeof createPartner === 'function') {
+      try {
+        createPartner(finalSpecies, finalPartnerName);
+        telemetryLog('partner_selected', { species: finalSpecies, name: finalPartnerName });
+        telemetryLog('onboarding_completed', { goal: finalGoal });
+      } catch (e) {
+        console.warn('[Onboarding] createPartner skipped:', e);
+      }
+    }
     if (typeof completeOnboarding === 'function') completeOnboarding(finalGoal);
-    // 預設新手 5x5 追蹤計畫（defensive：舊 SW cache 可能冇 setActivePlan，唔 call 都唔會 throw）
+    // 預設新手 5x5 追蹤計畫
     if (typeof setActivePlan === 'function') {
       try {
         setActivePlan(DEFAULT_BEGINNER_PLAN_ID);
       } catch (e) {
-        // eslint-disable-next-line no-console
         console.warn('[Onboarding] setActivePlan skipped:', e);
       }
     }
@@ -101,6 +126,22 @@ export default function Onboarding() {
               key="welcome"
               name={name}
               setName={setName}
+              onNext={next}
+            />
+          )}
+          {step === 'partner' && (
+            <StepPartner
+              key="partner"
+              selected={partnerSpecies}
+              setSelected={(s) => {
+                setPartnerSpecies(s);
+                // 預設名跟 species
+                if (!partnerName.trim()) {
+                  setPartnerName(s === 'cat' ? CAT_DEFAULT_NAMES[0] : DOG_DEFAULT_NAMES[0]);
+                }
+              }}
+              partnerName={partnerName}
+              setPartnerName={setPartnerName}
               onNext={next}
             />
           )}
@@ -206,6 +247,150 @@ function StepWelcome({
   );
 }
 
+// ============ Step 1.5: 選擇 Partner（§19） ============
+
+function StepPartner({
+  selected,
+  setSelected,
+  partnerName,
+  setPartnerName,
+  onNext,
+}: {
+  selected: PartnerSpecies | null;
+  setSelected: (s: PartnerSpecies) => void;
+  partnerName: string;
+  setPartnerName: (s: string) => void;
+  onNext: () => void;
+}) {
+  const species: { id: PartnerSpecies; icon: typeof Cat; label: string; desc: string; names: string[] }[] = [
+    { id: 'cat', icon: Cat, label: '貓', desc: '冷靜、溫柔、安靜陪伴', names: CAT_DEFAULT_NAMES },
+    { id: 'dog', icon: Dog, label: '狗', desc: '活力、鼓勵、溫暖同行', names: DOG_DEFAULT_NAMES },
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 30 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -30 }}
+      className="flex-1 flex flex-col"
+    >
+      <p className="text-[10px] uppercase tracking-widest text-text-secondary">
+        第一步半
+      </p>
+      <h1 className="font-display text-3xl tracking-wide uppercase text-text-primary mt-2 leading-tight">
+        揀你嘅訓練夥伴
+      </h1>
+      <p className="text-sm text-text-secondary mt-2 leading-relaxed">
+        你訓練，Partner 成長。佢會陪你記錄、陪你休息、陪你進步。
+      </p>
+
+      <div className="grid grid-cols-2 gap-3 mt-6">
+        {species.map((s, i) => {
+          const Icon = s.icon;
+          const isSel = selected === s.id;
+          return (
+            <motion.button
+              key={s.id}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.08 }}
+              onClick={() => setSelected(s.id)}
+              className={cn(
+                'relative p-4 rounded-card border-2 text-center transition-all',
+                isSel
+                  ? 'border-accent bg-gradient-to-br from-accent/10 via-bg-card to-bg-card shadow-card'
+                  : 'border-border/60 bg-bg-card hover:border-accent/40'
+              )}
+            >
+              <div
+                className={cn(
+                  'w-16 h-16 mx-auto rounded-2xl flex items-center justify-center',
+                  isSel ? 'bg-accent text-bg-primary' : 'bg-accent-soft text-accent'
+                )}
+              >
+                <Icon size={28} />
+              </div>
+              <h3 className="font-display text-lg tracking-wide uppercase text-text-primary mt-2">
+                {s.label}
+              </h3>
+              <p className="text-[10px] text-text-secondary mt-0.5 leading-snug">{s.desc}</p>
+              <CheckCircle2
+                size={20}
+                className={cn(
+                  'absolute top-2 right-2 transition-all',
+                  isSel ? 'text-accent opacity-100 scale-100' : 'opacity-0 scale-75'
+                )}
+              />
+            </motion.button>
+          );
+        })}
+      </div>
+
+      {/* 改名區（可選） */}
+      {selected && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          className="mt-5 overflow-hidden"
+        >
+          <label className="text-[10px] uppercase tracking-widest text-text-secondary flex items-center gap-1.5 mb-2">
+            <Pencil size={11} /> 幫 Partner 改名（可以唔改）
+          </label>
+          <div className="flex gap-2 flex-wrap mb-2">
+            {(selected === 'cat' ? CAT_DEFAULT_NAMES : DOG_DEFAULT_NAMES).map((n) => (
+              <button
+                key={n}
+                onClick={() => setPartnerName(n)}
+                className={cn(
+                  'px-3 py-1.5 rounded-button text-xs font-bold transition-colors',
+                  partnerName === n
+                    ? 'bg-accent text-bg-primary'
+                    : 'bg-bg-card border border-border text-text-secondary hover:border-accent/40'
+                )}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          <input
+            type="text"
+            value={partnerName}
+            maxLength={12}
+            onChange={(e) => setPartnerName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && onNext()}
+            placeholder="自訂名字…"
+            className="w-full h-11 px-4 bg-bg-card rounded-button border-2 border-border text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-accent focus:outline-none transition-colors"
+          />
+        </motion.div>
+      )}
+
+      {/* 獎勵預覽（§19） */}
+      <div className="mt-5 p-3.5 rounded-card bg-accent/8 border border-accent/25">
+        <div className="flex items-center gap-2 mb-1.5">
+          <Gift size={15} className="text-accent" />
+          <span className="text-[11px] uppercase tracking-widest text-accent font-bold">
+            完成今日訓練 → Partner 獲得 XP 並解鎖配件
+          </span>
+        </div>
+        <p className="text-[11px] text-text-secondary leading-relaxed">
+          3 次訓練內，Partner 會出現明顯成長變化。
+        </p>
+      </div>
+
+      <div className="mt-auto pt-6">
+        <Button
+          fullWidth
+          size="lg"
+          onClick={onNext}
+          disabled={!selected}
+        >
+          <ArrowRight size={18} /> 下一步
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
 // ============ Step 2: 選目標 ============
 
 const GOAL_ICONS: Record<TrainingGoalValue, typeof Flame> = {
@@ -230,7 +415,7 @@ function StepGoal({
       className="flex-1 flex flex-col"
     >
       <p className="text-[10px] uppercase tracking-widest text-text-secondary">
-        第二步
+        第三步
       </p>
       <h1 className="font-display text-3xl tracking-wide uppercase text-text-primary mt-2 leading-tight">
         你最想達到什麼？
@@ -312,7 +497,7 @@ function StepRecommend({
       className="flex-1 flex flex-col"
     >
       <p className="text-[10px] uppercase tracking-widest text-text-secondary">
-        第三步 · 為你推薦
+        第四步 · 為你推薦
       </p>
       <h1 className="font-display text-3xl tracking-wide uppercase text-text-primary mt-2 leading-tight">
         我幫你揀咗：
@@ -374,6 +559,21 @@ function StepRecommend({
         <br />
         因為三大項（深蹲/臥推/划船/硬舉）係新手入門最快建立力量嘅路徑，5 組 × 5 次唔太難跟，每完成一次都有清晰進步感。
       </p>
+
+      {/* §19 獎勵預覽 */}
+      <div className="mt-4 p-3.5 rounded-card bg-gradient-to-br from-accent/10 to-auxiliary/8 border border-accent/25">
+        <div className="flex items-center gap-2 mb-1.5">
+          <Gift size={15} className="text-accent" />
+          <span className="text-[11px] uppercase tracking-widest text-accent font-bold">
+            今日完成訓練後
+          </span>
+        </div>
+        <ul className="text-[11.5px] text-text-secondary leading-relaxed space-y-1">
+          <li>✓ Partner 獲得 40 XP，升至 Lv.2</li>
+          <li>✓ 解鎖「起步」形態 + 運動頭帶配件</li>
+          <li>✓ 再完成 2 次訓練 → Partner 進入「活躍」形態</li>
+        </ul>
+      </div>
 
       <div className="mt-auto pt-6">
         <Button fullWidth size="lg" onClick={onNext}>

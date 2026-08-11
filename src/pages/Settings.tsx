@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Moon, Sun, User, Trash2, Dumbbell, Clock, Shield, Smartphone, Copy, RotateCcw, FastForward, AlertTriangle, Bug } from 'lucide-react';
+import { Moon, Sun, User, Trash2, Dumbbell, Clock, Shield, Smartphone, Copy, RotateCcw, FastForward, AlertTriangle, Bug, Download, Eraser, Cat } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { Card, SectionHeader, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -8,6 +8,8 @@ import { useThemeStore } from '@/store/themeStore';
 import { useProfileStore } from '@/store/profileStore';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { useTrialStore, STANDARD_STAGES, DEV_STAGES } from '@/store/trialStore';
+import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
+import { usePartnerStore } from '@/features/partner/stores/partnerStore';
 import { cn } from '@/lib/utils';
 
 export default function Settings() {
@@ -29,6 +31,11 @@ export default function Settings() {
     devResetTrial,
     devAdvanceStage,
   } = useTrialStore();
+  const telemetryEvents = useTelemetryStore((s) => s.events);
+  const telemetryClear = useTelemetryStore((s) => s.clear);
+  const telemetryExportJSON = useTelemetryStore((s) => s.exportJSON);
+  const partnerName = usePartnerStore((s) => s.name);
+  const partnerReset = usePartnerStore((s) => s.resetPartner);
 
   // 開發者選單隱藏開關：連點 IRONPULSE 5 次
   const tapCountRef = useRef(0);
@@ -59,6 +66,60 @@ export default function Settings() {
   const copyDeviceId = () => {
     if (deviceId) {
       navigator.clipboard?.writeText(deviceId);
+    }
+  };
+
+  // 匯出遙測 JSON：觸發瀏覽器下載
+  const handleExportTelemetry = () => {
+    const json = telemetryExportJSON();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vivix-telemetry-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // 匯出全部本地資料（vivix-* + ironpulse-* localStorage keys）
+  const handleExportAll = () => {
+    const dump: Record<string, unknown> = {};
+    try {
+      for (const key of Object.keys(localStorage)) {
+        if (!key.startsWith('vivix-') && !key.startsWith('ironpulse-')) continue;
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        try {
+          dump[key] = JSON.parse(raw);
+        } catch {
+          dump[key] = raw;
+        }
+      }
+    } catch {}
+    const blob = new Blob([JSON.stringify(dump, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vivix-data-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleClearTelemetry = () => {
+    if (window.confirm('確定要清除所有遙測事件紀錄？')) {
+      telemetryClear();
+    }
+  };
+
+  const handleResetPartner = () => {
+    if (
+      window.confirm(
+        `確定要重置 Partner「${partnerName || '—'}」？所有等級、XP、配件、任務進度將被清除且無法復原。`
+      )
+    ) {
+      partnerReset();
     }
   };
 
@@ -365,6 +426,46 @@ export default function Settings() {
                 <RotateCcw size={18} />
                 <span className="text-[10px] uppercase tracking-wider font-bold">重置試用期</span>
               </button>
+            </div>
+
+            {/* 資料工具區塊（§5.4：遙測需可匯出/清除；§6.1：debug/export/reset 工具） */}
+            <div className="mt-5 pt-4 border-t border-border/40">
+              <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-2 flex items-center gap-1.5">
+                <Download size={11} /> 資料工具
+              </div>
+              <p className="text-[10px] text-text-secondary/80 mb-3 leading-relaxed">
+                遙測事件：{telemetryEvents.length} 筆 · Partner：{partnerName || '未建立'}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={handleExportTelemetry}
+                  className="flex flex-col items-center gap-1 p-3 rounded-button border border-accent/40 text-accent hover:bg-accent-soft transition-colors"
+                >
+                  <Download size={16} />
+                  <span className="text-[10px] uppercase tracking-wider font-bold">匯出遙測</span>
+                </button>
+                <button
+                  onClick={handleClearTelemetry}
+                  className="flex flex-col items-center gap-1 p-3 rounded-button border border-border text-text-secondary hover:bg-bg-secondary transition-colors"
+                >
+                  <Eraser size={16} />
+                  <span className="text-[10px] uppercase tracking-wider font-bold">清除遙測</span>
+                </button>
+                <button
+                  onClick={handleExportAll}
+                  className="flex flex-col items-center gap-1 p-3 rounded-button border border-accent/40 text-accent hover:bg-accent-soft transition-colors"
+                >
+                  <Download size={16} />
+                  <span className="text-[10px] uppercase tracking-wider font-bold">匯出全部資料</span>
+                </button>
+                <button
+                  onClick={handleResetPartner}
+                  className="flex flex-col items-center gap-1 p-3 rounded-button border border-auxiliary/40 text-auxiliary hover:bg-auxiliary/10 transition-colors"
+                >
+                  <Cat size={16} />
+                  <span className="text-[10px] uppercase tracking-wider font-bold">重置 Partner</span>
+                </button>
+              </div>
             </div>
           </Card>
         </motion.div>
