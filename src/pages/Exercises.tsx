@@ -296,7 +296,7 @@ function CustomEditSheet({
                       : 'bg-bg-card text-text-secondary border-border hover:text-text-primary'
                   )}
                 >
-                  {o.emoji} · {o.label}
+                  {o.label}
                 </button>
               ))}
             </div>
