@@ -1,17 +1,35 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Plus, Timer, X, Play, Flame } from 'lucide-react';
+import {
+  Check, Plus, Timer, X, Play, Flame, RefreshCw, Edit3,
+} from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { Button } from '@/components/ui/Button';
 import { Card, Badge } from '@/components/ui/Card';
 import { ExerciseSetList } from '@/components/workout/ExerciseSetList';
 import { RestTimer } from '@/components/workout/RestTimer';
-import { useWorkoutStore } from '@/store/workoutStore';
-import { exercises, exerciseCategories } from '@/data/exercises';
+import {
+  useWorkoutStore,
+  getAllExercises,
+  type CustomExercise,
+} from '@/store/workoutStore';
+import { useEquipmentMemoryStore } from '@/store/equipmentMemoryStore';
+import {
+  exercises as builtinExercises,
+  exerciseCategories,
+} from '@/data/exercises';
 import { getPlanById } from '@/data/plans';
 import { formatDuration } from '@/utils/workout';
-import type { ExerciseCategory, WarmupItem } from '@/types';
+import type {
+  ExerciseCategory, WarmupItem, MuscleGroup, EquipmentType,
+  PlannedExercise, Exercise,
+} from '@/types';
+import {
+  CATEGORY_LABELS, EQUIPMENT_TYPE_LABELS,
+  MUSCLE_GROUP_OPTIONS, EQUIPMENT_TYPE_OPTIONS,
+} from '@/types';
+import { cn } from '@/lib/utils';
 
 const WARMUP_TYPE_LABELS: Record<WarmupItem['type'], { label: string; color: string }> = {
   dynamic: { label: '動態伸展', color: 'accent' },
@@ -28,21 +46,30 @@ export default function Workout() {
     clearActiveSession,
     addExerciseToActive,
     toggleWarmupCompleted,
+    substituteExerciseInActive,
   } = useWorkoutStore();
 
   const [showTimer, setShowTimer] = useState(false);
   const [timerPresetSec, setTimerPresetSec] = useState<number | undefined>(undefined);
   const [elapsed, setElapsed] = useState(0);
   const [showAddExercise, setShowAddExercise] = useState(false);
+  // T-04：替換彈窗
+  const [substituteTarget, setSubstituteTarget] = useState<{
+    exerciseLogId: string;
+    currentExerciseId: string;
+    muscleGroup: MuscleGroup;
+    currentEquipmentType?: EquipmentType;
+  } | null>(null);
 
-  // 若無進行中訓練，自動建立空白 session
+  // 完成訓練後，同步寫入器械記憶（T-06）
+  const updateFromSession = useEquipmentMemoryStore((s) => s.updateFromSession);
+
   useEffect(() => {
     if (!activeSession) {
       startEmptySession();
     }
   }, [activeSession, startEmptySession]);
 
-  // 整體訓練計時
   useEffect(() => {
     if (!activeSession) return;
     const startTime = new Date(activeSession.date).getTime();
@@ -52,7 +79,6 @@ export default function Workout() {
     return () => clearInterval(interval);
   }, [activeSession]);
 
-  // 依 planId + dayId 查回當日的 warmup 項目
   const warmupItems = useMemo<WarmupItem[]>(() => {
     if (!activeSession?.planId || !activeSession.dayId) return [];
     const plan = getPlanById(activeSession.planId);
@@ -77,6 +103,7 @@ export default function Workout() {
   const handleFinish = () => {
     const finished = finishSession();
     if (finished) {
+      updateFromSession(finished); // T-06：更新器械記憶／usageCount／PB
       navigate('/workout/summary', { state: { session: finished } });
     }
   };
@@ -92,6 +119,29 @@ export default function Workout() {
     if (seconds <= 0) return;
     setTimerPresetSec(seconds);
     setShowTimer(true);
+  };
+
+  const buildPlannedExercise = (exerciseId: string, name: string): PlannedExercise => {
+    const all = getAllExercises();
+    const ex = all.find((e) => e.id === exerciseId);
+    const mg: MuscleGroup = (ex?.muscleGroup as MuscleGroup) ?? 'chest';
+    const et: EquipmentType = ex?.equipmentType ?? 'other';
+    return {
+      id: `pe-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      exerciseId,
+      name: ex?.name ?? name,
+      snapshot: {
+        name: ex?.name ?? name,
+        muscleGroup: mg,
+        equipmentType: et,
+      },
+      targetSets: 3,
+      targetReps: '8-12',
+      alternativeIds: builtinExercises
+        .filter((e) => e.muscleGroup === mg && e.id !== exerciseId)
+        .slice(0, 4)
+        .map((e) => e.id),
+    };
   };
 
   return (
@@ -160,7 +210,6 @@ export default function Workout() {
               )}
             </div>
 
-            {/* 進度條 */}
             <div className="h-1 w-full bg-border/60 rounded-full mb-3 overflow-hidden">
               <motion.div
                 initial={{ width: 0 }}
@@ -274,12 +323,24 @@ export default function Workout() {
                         setTimerPresetSec(undefined);
                         setShowTimer(true);
                       }}
+                      onSubstitute={() => {
+                        const found = getAllExercises().find((e) => e.id === ex.exerciseId);
+                        const mg = (ex.muscleGroup as MuscleGroup) ??
+                          (found?.muscleGroup as MuscleGroup) ??
+                          'chest';
+                        const eq = (ex.equipmentType as EquipmentType) ?? found?.equipmentType;
+                        setSubstituteTarget({
+                          exerciseLogId: ex.id,
+                          currentExerciseId: ex.exerciseId,
+                          muscleGroup: mg,
+                          currentEquipmentType: eq,
+                        });
+                      }}
                     />
                   </motion.div>
                 ))}
               </AnimatePresence>
 
-              {/* 新增動作 */}
               {activeSession.exercises.length === 0 && (
                 <Card className="p-8 text-center">
                   <p className="text-sm text-text-secondary mb-4">
@@ -343,14 +404,22 @@ export default function Workout() {
           <AddExerciseSheet
             onClose={() => setShowAddExercise(false)}
             onSelect={(exerciseId, name) => {
-              addExerciseToActive({
-                id: `pe-${Date.now()}`,
-                exerciseId,
-                name,
-                targetSets: 3,
-                targetReps: '8-12',
-              });
+              addExerciseToActive(buildPlannedExercise(exerciseId, name));
               setShowAddExercise(false);
+            }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* 訓練中替換動作彈窗（T-04） */}
+      <AnimatePresence>
+        {substituteTarget && (
+          <SubstituteSheet
+            target={substituteTarget}
+            onClose={() => setSubstituteTarget(null)}
+            onConfirm={(nextExerciseId) => {
+              substituteExerciseInActive(substituteTarget.exerciseLogId, nextExerciseId);
+              setSubstituteTarget(null);
             }}
           />
         )}
@@ -359,7 +428,7 @@ export default function Workout() {
   );
 }
 
-// ============ 新增動作彈窗 ============
+// ============ 新增動作彈窗（T-03：強制自訂分類） ============
 
 interface AddExerciseSheetProps {
   onClose: () => void;
@@ -368,24 +437,60 @@ interface AddExerciseSheetProps {
 
 function AddExerciseSheet({ onClose, onSelect }: AddExerciseSheetProps) {
   const [category, setCategory] = useState<ExerciseCategory | 'all'>('all');
+  const [equipmentFilter, setEquipmentFilter] = useState<EquipmentType | 'all'>('all');
+  const [query, setQuery] = useState('');
+
+  // 自訂動作 v2 表單（強制分類）
+  const [showCustomForm, setShowCustomForm] = useState(false);
   const [customName, setCustomName] = useState('');
-  const { customExercises, addCustomExercise } = useWorkoutStore();
+  const [customMuscle, setCustomMuscle] = useState<MuscleGroup | ''>('');
+  const [customEquip, setCustomEquip] = useState<EquipmentType | ''>('');
+  const [customSteps, setCustomSteps] = useState('');
+  const [customTips, setCustomTips] = useState('');
 
-  const list = category === 'all'
-    ? exercises
-    : exercises.filter((e) => e.category === category);
+  const { customExercises, addCustomExerciseV2 } = useWorkoutStore();
 
-  const handleAddCustom = () => {
+  const allList = useMemo<Exercise[]>(() => {
+    return [
+      ...builtinExercises.map((e) => e as Exercise),
+      ...(customExercises as CustomExercise[]),
+    ];
+  }, [customExercises]);
+
+  const list = useMemo(() => {
+    return allList.filter((ex) => {
+      if (category !== 'all' && ex.category !== category) return false;
+      if (equipmentFilter !== 'all' && ex.equipmentType !== equipmentFilter) return false;
+      if (query && !ex.name.toLowerCase().includes(query.toLowerCase())) return false;
+      return true;
+    });
+  }, [allList, category, equipmentFilter, query]);
+
+  const canSubmitCustom = customName.trim().length > 0 && !!customMuscle && !!customEquip;
+
+  const handleSubmitCustom = () => {
+    if (!canSubmitCustom) return;
     const name = customName.trim();
-    if (!name) return;
+    // 已存在相同名稱自訂動作 → 直接選取
     const existing = customExercises.find((c) => c.name === name);
     if (existing) {
       onSelect(existing.id, existing.name);
-    } else {
-      const created = addCustomExercise(name);
-      onSelect(created.id, created.name);
+      return;
     }
-    setCustomName('');
+    const created = addCustomExerciseV2({
+      name,
+      muscleGroup: customMuscle as MuscleGroup,
+      equipmentType: customEquip as EquipmentType,
+      steps: customSteps
+        .split(/\n|；|;/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+      tips: customTips
+        .split(/\n|；|;/)
+        .map((s) => s.trim())
+        .filter(Boolean),
+    });
+    onSelect(created.id, created.name);
   };
 
   return (
@@ -402,12 +507,311 @@ function AddExerciseSheet({ onClose, onSelect }: AddExerciseSheetProps) {
         exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[480px] h-[85vh] bg-bg-primary rounded-t-card flex flex-col"
+        className="w-full max-w-[480px] h-[88vh] bg-bg-primary rounded-t-card flex flex-col"
       >
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h3 className="font-display text-2xl tracking-wide uppercase text-text-primary">
-            選擇動作
+            {showCustomForm ? '新增自訂動作' : '選擇動作'}
           </h3>
+          <div className="flex items-center gap-1">
+            {!showCustomForm && (
+              <button
+                onClick={() => setShowCustomForm(true)}
+                className="mr-2 h-9 px-3 flex items-center gap-1.5 rounded-button border border-accent/40 text-accent text-xs hover:bg-accent/10 transition-colors"
+              >
+                <Edit3 size={14} /> 自訂
+              </button>
+            )}
+            {showCustomForm && (
+              <button
+                onClick={() => setShowCustomForm(false)}
+                className="mr-2 h-9 px-3 rounded-button border border-border text-text-secondary text-xs hover:border-accent hover:text-accent transition-colors"
+              >
+                返回
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="w-9 h-9 flex items-center justify-center text-text-secondary hover:text-text-primary"
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        {!showCustomForm ? (
+          <>
+            {/* 搜尋 & 器械篩選 */}
+            <div className="p-3 border-b border-border bg-bg-secondary/50 space-y-2">
+              <div className="relative">
+                <Plus
+                  size={16}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary rotate-45"
+                />
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="搜尋動作…"
+                  className="w-full h-10 pl-9 pr-3 bg-bg-card rounded-button border border-border text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-accent focus:outline-none"
+                />
+              </div>
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+                <FilterChip
+                  label="全部器械"
+                  active={equipmentFilter === 'all'}
+                  onClick={() => setEquipmentFilter('all')}
+                />
+                {EQUIPMENT_TYPE_OPTIONS.map((o) => (
+                  <FilterChip
+                    key={o.value}
+                    label={o.label}
+                    active={equipmentFilter === o.value}
+                    onClick={() => setEquipmentFilter(o.value)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* 分類標籤 */}
+            <div className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-hide border-b border-border">
+              <CategoryChip
+                label="全部"
+                active={category === 'all'}
+                onClick={() => setCategory('all')}
+              />
+              {exerciseCategories.map((c) => (
+                <CategoryChip
+                  key={c.value}
+                  label={c.label}
+                  active={category === c.value}
+                  onClick={() => setCategory(c.value)}
+                />
+              ))}
+            </div>
+
+            {/* 動作列表 */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex flex-col gap-2">
+                {list.map((ex) => (
+                  <button
+                    key={ex.id}
+                    onClick={() => onSelect(ex.id, ex.name)}
+                    className="flex items-center justify-between p-3 bg-bg-card rounded-button border border-border/40 hover:border-accent/50 transition-colors text-left"
+                  >
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="text-sm font-bold text-text-primary">{ex.name}</div>
+                        {(ex as CustomExercise).isCustom && (
+                          <Badge variant="auxiliary">自訂</Badge>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-text-secondary mt-0.5">
+                        {CATEGORY_LABELS[ex.category]} · {EQUIPMENT_TYPE_LABELS[ex.equipmentType]}
+                      </div>
+                    </div>
+                    <Plus size={18} className="text-accent" />
+                  </button>
+                ))}
+                {list.length === 0 && (
+                  <div className="text-center text-text-secondary text-xs py-8">
+                    找不到符合的動作，點右上角「自訂」建立吧 ✨
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          // ============ 自訂動作 v2 表單（強制分類） ============
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <Field label="動作名稱">
+              <input
+                type="text"
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                placeholder="例如：單手啞鈴划船"
+                maxLength={30}
+                className="w-full h-11 px-3 bg-bg-card rounded-button border border-border text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-accent focus:outline-none"
+              />
+            </Field>
+
+            <Field label="部位（必填）" required>
+              <div className="grid grid-cols-3 gap-2">
+                {MUSCLE_GROUP_OPTIONS.map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => setCustomMuscle(o.value)}
+                    className={cn(
+                      'py-2 text-xs rounded-button border transition-colors',
+                      customMuscle === o.value
+                        ? 'bg-accent text-bg-primary border-accent'
+                        : 'bg-bg-card text-text-secondary border-border hover:text-text-primary'
+                    )}
+                  >
+                    {o.emoji} · {o.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+
+            <Field label="器械類型（必填）" required>
+              <div className="grid grid-cols-4 gap-2">
+                {EQUIPMENT_TYPE_OPTIONS.map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => setCustomEquip(o.value)}
+                    className={cn(
+                      'py-2 text-[11px] rounded-button border transition-colors',
+                      customEquip === o.value
+                        ? 'bg-accent text-bg-primary border-accent'
+                        : 'bg-bg-card text-text-secondary border-border hover:text-text-primary'
+                    )}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+
+            <Field label="步驟（選填，每行一步驟）">
+              <textarea
+                value={customSteps}
+                onChange={(e) => setCustomSteps(e.target.value)}
+                rows={4}
+                placeholder={'雙腳與肩同寬\n髖部向後推\n保持背部挺直'}
+                className="w-full px-3 py-2 bg-bg-card rounded-button border border-border text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-accent focus:outline-none"
+              />
+            </Field>
+
+            <Field label="提示（選填，每行一項）">
+              <textarea
+                value={customTips}
+                onChange={(e) => setCustomTips(e.target.value)}
+                rows={3}
+                placeholder={'核心繃緊\n不圓背\n控制節奏'}
+                className="w-full px-3 py-2 bg-bg-card rounded-button border border-border text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-accent focus:outline-none"
+              />
+            </Field>
+
+            <div className="pt-2">
+              <Button fullWidth size="lg" disabled={!canSubmitCustom} onClick={handleSubmitCustom}>
+                儲存並加入訓練
+              </Button>
+              {!canSubmitCustom && (
+                <p className="text-center text-[11px] text-text-secondary mt-2">
+                  請填寫名稱、選擇部位與器械類型
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+}
+
+function Field({ label, children, required }: { label: string; children: React.ReactNode; required?: boolean }) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-2">
+        {label} {required && <span className="text-auxiliary">*</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function CategoryChip({ label, active, onClick }: {
+  label: string; active: boolean; onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'px-3 py-1.5 text-xs uppercase tracking-wider rounded-button whitespace-nowrap border transition-colors',
+        active
+          ? 'bg-accent text-bg-primary border-accent'
+          : 'bg-transparent text-text-secondary border-border hover:text-text-primary'
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+function FilterChip({ label, active, onClick }: {
+  label: string; active: boolean; onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'px-2.5 py-1 text-[11px] whitespace-nowrap rounded-button border transition-colors',
+        active
+          ? 'bg-auxiliary/15 text-auxiliary border-auxiliary/50'
+          : 'bg-bg-card text-text-secondary border-border hover:text-text-primary'
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
+// ============ T-04 訓練中替換動作 Sheet ============
+
+interface SubstituteSheetProps {
+  target: {
+    exerciseLogId: string;
+    currentExerciseId: string;
+    muscleGroup: MuscleGroup;
+    currentEquipmentType?: EquipmentType;
+  };
+  onClose: () => void;
+  onConfirm: (nextExerciseId: string) => void;
+}
+
+function SubstituteSheet({ target, onClose, onConfirm }: SubstituteSheetProps) {
+  const customExercises = useWorkoutStore((s) => s.customExercises);
+  // T-06：依器械記憶排序候選
+  const sortByMemory = useEquipmentMemoryStore((s) => s.sortCandidatesByMemory);
+  const candidates = useMemo<Exercise[]>(() => {
+    const all: Exercise[] = [
+      ...builtinExercises.map((e) => e as Exercise),
+      ...(customExercises as CustomExercise[]),
+    ];
+    const filtered = all
+      .filter((e) => e.muscleGroup === target.muscleGroup && e.id !== target.currentExerciseId);
+    // T-06：排序 - 最近用過的器械記憶優先 → 同器械類型優先 → 名稱
+    return sortByMemory(filtered, target.currentEquipmentType);
+  }, [customExercises, target.muscleGroup, target.currentExerciseId, target.currentEquipmentType, sortByMemory]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-[480px] h-[70vh] bg-bg-primary rounded-t-card flex flex-col"
+      >
+        <div className="flex items-center justify-between p-4 border-b border-border">
+          <div>
+            <h3 className="font-display text-xl tracking-wide uppercase text-text-primary">
+              替換動作
+            </h3>
+            <p className="text-[11px] text-text-secondary mt-0.5">
+              同部位（{CATEGORY_LABELS[target.muscleGroup]}）其他動作，組數次數模板保留
+            </p>
+          </div>
           <button
             onClick={onClose}
             className="w-9 h-9 flex items-center justify-center text-text-secondary hover:text-text-primary"
@@ -416,108 +820,37 @@ function AddExerciseSheet({ onClose, onSelect }: AddExerciseSheetProps) {
           </button>
         </div>
 
-        {/* 自訂動作輸入 */}
-        <div className="p-3 border-b border-border bg-bg-secondary/50">
-          <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-2">
-            找不到想要的動作？自行輸入
-          </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={customName}
-              onChange={(e) => setCustomName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
-              placeholder="輸入動作名稱，例如：單手啞鈴划船"
-              className="flex-1 h-10 px-3 bg-bg-card rounded-button border border-border text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-accent focus:outline-none"
-            />
-            <button
-              onClick={handleAddCustom}
-              disabled={!customName.trim()}
-              className="h-10 px-4 bg-accent text-bg-primary rounded-button text-sm font-bold disabled:opacity-40 disabled:pointer-events-none"
-            >
-              加入
-            </button>
-          </div>
-          {/* 自訂動作快捷選項 */}
-          {customExercises.length > 0 && (
-            <div className="mt-3">
-              <div className="text-[9px] uppercase tracking-widest text-text-secondary/60 mb-1.5">
-                我的自訂動作
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {customExercises.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => onSelect(c.id, c.name)}
-                    className="px-2.5 py-1 text-[11px] rounded-button border border-accent/40 text-accent hover:bg-accent/10 transition-colors"
-                  >
-                    {c.name}
-                  </button>
-                ))}
-              </div>
+        <div className="flex-1 overflow-y-auto p-4">
+          {candidates.length === 0 ? (
+            <div className="text-center text-text-secondary text-xs py-12">
+              尚未有其他同部位動作可替換 🤔
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {candidates.map((ex) => (
+                <button
+                  key={ex.id}
+                  onClick={() => onConfirm(ex.id)}
+                  className="flex items-center justify-between p-3 bg-bg-card rounded-button border border-border/40 hover:border-accent/50 transition-colors text-left"
+                >
+                  <div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <div className="text-sm font-bold text-text-primary">{ex.name}</div>
+                      {(ex as CustomExercise).isCustom && (
+                        <Badge variant="auxiliary">自訂</Badge>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-text-secondary mt-0.5">
+                      {EQUIPMENT_TYPE_LABELS[ex.equipmentType]}
+                    </div>
+                  </div>
+                  <RefreshCw size={16} className="text-accent" />
+                </button>
+              ))}
             </div>
           )}
         </div>
-
-        {/* 分類標籤 */}
-        <div className="flex gap-2 px-4 py-3 overflow-x-auto scrollbar-hide border-b border-border">
-          <CategoryChip
-            label="全部"
-            active={category === 'all'}
-            onClick={() => setCategory('all')}
-          />
-          {exerciseCategories.map((c) => (
-            <CategoryChip
-              key={c.value}
-              label={c.label}
-              active={category === c.value}
-              onClick={() => setCategory(c.value)}
-            />
-          ))}
-        </div>
-
-        {/* 動作列表 */}
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="flex flex-col gap-2">
-            {list.map((ex) => (
-              <button
-                key={ex.id}
-                onClick={() => onSelect(ex.id, ex.name)}
-                className="flex items-center justify-between p-3 bg-bg-card rounded-button border border-border/40 hover:border-accent/50 transition-colors text-left"
-              >
-                <div>
-                  <div className="text-sm font-bold text-text-primary">{ex.name}</div>
-                  <div className="text-[10px] text-text-secondary mt-0.5">
-                    {ex.muscleGroup} · {ex.equipment}
-                  </div>
-                </div>
-                <Plus size={18} className="text-accent" />
-              </button>
-            ))}
-          </div>
-        </div>
       </motion.div>
     </motion.div>
-  );
-}
-
-interface CategoryChipProps {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}
-
-function CategoryChip({ label, active, onClick }: CategoryChipProps) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-3 py-1.5 text-xs uppercase tracking-wider rounded-button whitespace-nowrap border transition-colors ${
-        active
-          ? 'bg-accent text-bg-primary border-accent'
-          : 'bg-transparent text-text-secondary border-border hover:text-text-primary'
-      }`}
-    >
-      {label}
-    </button>
   );
 }

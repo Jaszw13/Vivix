@@ -1,4 +1,4 @@
-import { Check, Minus, Plus, Trash2, History } from 'lucide-react';
+import { Check, Minus, Plus, Trash2, History, Repeat } from 'lucide-react';
 import type { ExerciseLog, SetLog } from '@/types';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { Card } from '@/components/ui/Card';
@@ -7,9 +7,10 @@ import { cn } from '@/lib/utils';
 interface SetRowProps {
   exercise: ExerciseLog;
   onSetCompleted?: () => void;
+  onSubstitute?: () => void;
 }
 
-export function ExerciseSetList({ exercise, onSetCompleted }: SetRowProps) {
+export function ExerciseSetList({ exercise, onSetCompleted, onSubstitute }: SetRowProps) {
   const { updateSet, addSet, removeSet, toggleSetCompleted, removeExercise, getLastSetsForExercise } =
     useWorkoutStore();
 
@@ -25,6 +26,11 @@ export function ExerciseSetList({ exercise, onSetCompleted }: SetRowProps) {
         <div>
           <h3 className="font-display text-xl tracking-wide uppercase text-text-primary">
             {exercise.name}
+            {exercise.substitutedFrom && (
+              <span className="ml-2 text-[9px] uppercase tracking-widest text-auxiliary font-normal align-middle">
+                (已替換)
+              </span>
+            )}
           </h3>
           <div className="flex items-center gap-3 mt-0.5">
             <span className="text-[10px] uppercase tracking-widest text-text-secondary">
@@ -37,13 +43,25 @@ export function ExerciseSetList({ exercise, onSetCompleted }: SetRowProps) {
             )}
           </div>
         </div>
-        <button
-          onClick={() => removeExercise(exercise.id)}
-          className="w-8 h-8 flex items-center justify-center text-text-secondary hover:text-auxiliary transition-colors"
-          aria-label="刪除動作"
-        >
-          <Trash2 size={16} />
-        </button>
+        <div className="flex items-center gap-1">
+          {onSubstitute && (
+            <button
+              onClick={onSubstitute}
+              className="w-8 h-8 flex items-center justify-center text-text-secondary hover:text-accent transition-colors"
+              aria-label="替換動作"
+              title="器械排隊？替換同部位動作"
+            >
+              <Repeat size={16} />
+            </button>
+          )}
+          <button
+            onClick={() => removeExercise(exercise.id)}
+            className="w-8 h-8 flex items-center justify-center text-text-secondary hover:text-auxiliary transition-colors"
+            aria-label="刪除動作"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
       </div>
 
       {/* 上一次訓練參考 */}

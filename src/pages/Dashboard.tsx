@@ -34,6 +34,7 @@ export default function Dashboard() {
     getTotalSessions,
     getTotalVolume,
     getStreakDays,
+    getGroupStats,
     activePlanId,
     nextDayIndex,
     setActivePlan,
@@ -63,19 +64,23 @@ export default function Dashboard() {
   const streak = getStreakDays();
 
   // 成就：派生 context 並 recompute（每次統計值變動都會自動更新）
+  // 加入 groupStats：分部位成就只計算對應部位的 workoutCount / prCount
+  //   → 腿部重量不會加速胸部成就（P-01 根因修復）
   const achieveCtx = useMemo(() => {
     const varietyIds = new Set<string>();
     for (const s of sessions) {
       for (const ex of s.exercises) varietyIds.add(ex.exerciseId);
     }
+    const groupStats = getGroupStats();
     return {
       totalSessions,
       streak,
       totalVolumeTon: totalVolume,
       prCount: personalRecords.length,
       exercisesVariety: varietyIds.size,
+      groupStats,
     };
-  }, [sessions, totalSessions, streak, totalVolume, personalRecords.length]);
+  }, [sessions, totalSessions, streak, totalVolume, personalRecords.length, getGroupStats]);
 
   useEffect(() => {
     recompute(achieveCtx);

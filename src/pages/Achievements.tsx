@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Lock } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
@@ -8,14 +8,25 @@ import {
   useAchievementsStore,
   SORTED_ACHIEVEMENTS,
   TIER_STYLES,
+  groupAchievementsByCategory,
   type AchievementTier,
+  type AchievementDef,
 } from '@/store/achievementsStore';
+import { MUSCLE_GROUP_LABELS, MUSCLE_GROUP_OPTIONS } from '@/types';
+import type { MuscleGroup } from '@/types';
 import { cn } from '@/lib/utils';
 
 export default function Achievements() {
-  const { sessions, personalRecords, getTotalSessions, getTotalVolume, getStreakDays } =
-    useWorkoutStore();
+  const {
+    sessions,
+    personalRecords,
+    getTotalSessions,
+    getTotalVolume,
+    getStreakDays,
+    getGroupStats,
+  } = useWorkoutStore();
   const progress = useAchievementsStore((s) => s.progress);
+  const recompute = useAchievementsStore((s) => s.recompute);
 
   const totalSessions = getTotalSessions();
   const totalVolume = getTotalVolume();
@@ -26,6 +37,27 @@ export default function Achievements() {
     for (const s of sessions) for (const ex of s.exercises) ids.add(ex.exerciseId);
     return ids.size;
   }, [sessions]);
+
+  // 進入頁面時也重算，確保分部位成就 current 值最新
+  useEffect(() => {
+    const groupStats = getGroupStats();
+    recompute({
+      totalSessions,
+      streak,
+      totalVolumeTon: totalVolume,
+      prCount: personalRecords.length,
+      exercisesVariety: varietySize,
+      groupStats,
+    });
+  }, [
+    recompute,
+    getGroupStats,
+    totalSessions,
+    streak,
+    totalVolume,
+    personalRecords.length,
+    varietySize,
+  ]);
 
   const unlockedCount = SORTED_ACHIEVEMENTS.filter(
     (a) => progress[a.id]?.unlocked
@@ -48,6 +80,9 @@ export default function Achievements() {
     SORTED_ACHIEVEMENTS.length === 0
       ? 0
       : Math.round((unlockedCount / SORTED_ACHIEVEMENTS.length) * 100);
+
+  // T-02：分組顯示成就
+  const grouped = useMemo(() => groupAchievementsByCategory(), []);
 
   return (
     <PageShell title="成就牆" showBack>
@@ -127,105 +162,139 @@ export default function Achievements() {
         </Card>
       </motion.section>
 
-      {/* 成就列表 */}
+      {/* 全局成就 */}
       <motion.section
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.08 }}
+        className="mb-8"
       >
         <SectionHeader
-          title="所有成就"
-          subtitle="按銅 → 銀 → 金排序"
+          title="全局成就"
+          subtitle="累積整體訓練里程碑"
         />
-        <div className="flex flex-col gap-3">
-          {SORTED_ACHIEVEMENTS.map((a, i) => {
-            const p = progress[a.id] ?? { unlocked: false, current: 0 };
-            const style = TIER_STYLES[a.tier];
-            const ratio = Math.min(1, p.current / Math.max(1, a.threshold));
-            return (
-              <motion.div
-                key={a.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.02 * i }}
-              >
-                <Card
-                  className={cn(
-                    'relative overflow-hidden p-4 border',
-                    p.unlocked
-                      ? 'border-accent/30 bg-gradient-to-br from-bg-card to-accent/5'
-                      : 'border-border/50 bg-bg-card'
-                  )}
-                >
-                  {p.unlocked && (
-                    <div
-                      className={`absolute inset-0 bg-gradient-to-br ${style.ring} opacity-30 pointer-events-none blur-3xl`}
-                    />
-                  )}
-                  <div className="relative flex items-start gap-4">
-                    <div
-                      className={cn(
-                        'w-14 h-14 flex-shrink-0 rounded-2xl flex items-center justify-center border',
-                        p.unlocked
-                          ? 'bg-bg-card border-accent/40'
-                          : 'bg-bg-secondary border-border/40 grayscale opacity-70'
-                      )}
-                    >
-                      {p.unlocked ? (
-                        <span className="text-3xl leading-none">{a.icon}</span>
-                      ) : (
-                        <Lock size={20} className="text-text-secondary/60" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Badge
-                          variant="default"
-                          className={cn('border', style.badge)}
-                        >
-                          {style.title}牌
-                        </Badge>
-                        <h3 className="font-bold text-sm text-text-primary">
-                          {a.title}
-                        </h3>
-                      </div>
-                      <p className="text-xs text-text-secondary leading-relaxed">
-                        {a.description}
-                      </p>
-                      <div className="mt-3 flex items-center gap-2">
-                        <div className="flex-1 h-1.5 bg-border/60 rounded-full overflow-hidden">
-                          <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${Math.round(ratio * 100)}%` }}
-                            transition={{ duration: 0.5, delay: 0.1 + i * 0.02 }}
-                            className={cn(
-                              'h-full rounded-full',
-                              p.unlocked
-                                ? 'bg-gradient-to-r from-accent to-auxiliary'
-                                : 'bg-text-secondary/40'
-                            )}
-                          />
-                        </div>
-                        <div className="font-mono text-[11px] text-text-secondary tabular-nums">
-                          {p.current}/{a.threshold}
-                        </div>
-                      </div>
-                      {p.unlocked && p.unlockedAt && (
-                        <p className="mt-2 text-[10px] uppercase tracking-widest text-accent font-bold">
-                          解鎖於 {new Date(p.unlockedAt).toLocaleDateString('zh-TW')}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </Card>
-              </motion.div>
-            );
-          })}
-        </div>
+        <AchievementList items={grouped.global} progress={progress} />
       </motion.section>
+
+      {/* 分部位成就（T-02 新增） */}
+      {(['chest', 'back', 'legs', 'shoulders', 'arms', 'core'] as MuscleGroup[]).map(
+        (g, gi) => {
+          const items: AchievementDef[] = grouped[g] ?? [];
+          if (items.length === 0) return null;
+          return (
+            <motion.section
+              key={g}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 + gi * 0.04 }}
+              className="mb-8"
+            >
+              <SectionHeader
+                title={`${MUSCLE_GROUP_LABELS[g]}成就`}
+                subtitle="只計算此部位的訓練與 PR，腿部重量不影響胸部解鎖"
+              />
+              <AchievementList items={items} progress={progress} />
+            </motion.section>
+          );
+        }
+      )}
     </PageShell>
   );
 }
 
-// 避免 TS unused 警告（TIER_STYLES 上面已透過 import 使用，這裡只是確保 export 的類別一致）
-void TIER_STYLES;
+// ===== 小組件：成就卡片列表 =====
+function AchievementList({
+  items,
+  progress,
+}: {
+  items: AchievementDef[];
+  progress: Record<string, { unlocked: boolean; current: number; unlockedAt?: string }>;
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      {items.map((a, i) => {
+        const p = progress[a.id] ?? { unlocked: false, current: 0 };
+        const style = TIER_STYLES[a.tier];
+        const ratio = Math.min(1, p.current / Math.max(1, a.threshold));
+        return (
+          <motion.div
+            key={a.id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.02 * i }}
+          >
+            <Card
+              className={cn(
+                'relative overflow-hidden p-4 border',
+                p.unlocked
+                  ? 'border-accent/30 bg-gradient-to-br from-bg-card to-accent/5'
+                  : 'border-border/50 bg-bg-card'
+              )}
+            >
+              {p.unlocked && (
+                <div
+                  className={`absolute inset-0 bg-gradient-to-br ${style.ring} opacity-30 pointer-events-none blur-3xl`}
+                />
+              )}
+              <div className="relative flex items-start gap-4">
+                <div
+                  className={cn(
+                    'w-14 h-14 flex-shrink-0 rounded-2xl flex items-center justify-center border',
+                    p.unlocked
+                      ? 'bg-bg-card border-accent/40'
+                      : 'bg-bg-secondary border-border/40 grayscale opacity-70'
+                  )}
+                >
+                  {p.unlocked ? (
+                    <span className="text-3xl leading-none">{a.icon}</span>
+                  ) : (
+                    <Lock size={20} className="text-text-secondary/60" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Badge
+                      variant="default"
+                      className={cn('border', style.badge)}
+                    >
+                      {style.title}牌
+                    </Badge>
+                    <h3 className="font-bold text-sm text-text-primary">
+                      {a.title}
+                    </h3>
+                  </div>
+                  <p className="text-xs text-text-secondary leading-relaxed">
+                    {a.description}
+                  </p>
+                  <div className="mt-3 flex items-center gap-2">
+                    <div className="flex-1 h-1.5 bg-border/60 rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${Math.round(ratio * 100)}%` }}
+                        transition={{ duration: 0.5, delay: 0.1 + i * 0.02 }}
+                        className={cn(
+                          'h-full rounded-full',
+                          p.unlocked
+                            ? 'bg-gradient-to-r from-accent to-auxiliary'
+                            : 'bg-text-secondary/40'
+                        )}
+                      />
+                    </div>
+                    <div className="font-mono text-[11px] text-text-secondary tabular-nums">
+                      {p.current}/{a.threshold}
+                    </div>
+                  </div>
+                  {p.unlocked && p.unlockedAt && (
+                    <p className="mt-2 text-[10px] uppercase tracking-widest text-accent font-bold">
+                      解鎖於 {new Date(p.unlockedAt).toLocaleDateString('zh-TW')}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </Card>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
