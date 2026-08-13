@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, Send, X, Star } from 'lucide-react';
 import { useTrialStore } from '@/store/trialStore';
+import { OVERLAY_SCRIM } from '@/data/theme';
 
 interface FeedbackModalProps {
   show: boolean;
@@ -49,7 +50,7 @@ export function FeedbackModal({ show }: FeedbackModalProps) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-50 flex items-end justify-center"
-          style={{ background: 'rgba(0, 0, 0, 0.6)' }}
+          style={{ background: OVERLAY_SCRIM.background }}
           onClick={handleDismiss}
         >
           <motion.div
@@ -197,7 +198,7 @@ export function FeedbackModal({ show }: FeedbackModalProps) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex items-center justify-center px-6"
-            style={{ background: 'rgba(0, 0, 0, 0.7)' }}
+            style={{ background: OVERLAY_SCRIM.background }}
           >
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}

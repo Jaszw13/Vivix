@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { DAY_MS } from '@/utils/time';
 
 // ============ 階梯定義 ============
 export interface TrialStage {
@@ -11,11 +12,11 @@ export interface TrialStage {
 
 // 標準模式：天數 （2026-08-11 調整：Stage 0-4 全數 +1，Stage 5 永久保持 -1）
 export const STANDARD_STAGES: TrialStage[] = [
-  { durationMs: 2 * 86400000, label: '首次試用' }, // Stage 0: 1→2 天
-  { durationMs: 4 * 86400000, label: '第二階段', code: '547' }, // Stage 1: 3→4 天
-  { durationMs: 8 * 86400000, label: '第三階段', code: '2678' }, // Stage 2: 7→8 天
-  { durationMs: 15 * 86400000, label: '第四階段', code: '91431' }, // Stage 3: 14→15 天
-  { durationMs: 31 * 86400000, label: '第五階段', code: '695497' }, // Stage 4: 30→31 天
+  { durationMs: 2 * DAY_MS, label: '首次試用' }, // Stage 0: 1→2 天
+  { durationMs: 4 * DAY_MS, label: '第二階段', code: '547' }, // Stage 1: 3→4 天
+  { durationMs: 8 * DAY_MS, label: '第三階段', code: '2678' }, // Stage 2: 7→8 天
+  { durationMs: 15 * DAY_MS, label: '第四階段', code: '91431' }, // Stage 3: 14→15 天
+  { durationMs: 31 * DAY_MS, label: '第五階段', code: '695497' }, // Stage 4: 30→31 天
   { durationMs: -1, label: '永久會員', code: 'IRON-ETERNAL' }, // Stage 5: 永久，不變
 ];
 
@@ -30,9 +31,9 @@ export const DEV_STAGES: TrialStage[] = [
 ];
 
 // 反饋間隔
-const FEEDBACK_INTERVAL_MS_STD = 7 * 86400000;
+const FEEDBACK_INTERVAL_MS_STD = 7 * DAY_MS;
 const FEEDBACK_INTERVAL_MS_DEV = 20 * 1000;
-const INSTALL_FOR_FEEDBACK_MS_STD = 3 * 86400000;
+const INSTALL_FOR_FEEDBACK_MS_STD = 3 * DAY_MS;
 const INSTALL_FOR_FEEDBACK_MS_DEV = 5 * 1000;
 
 function generateDeviceId(): string {
@@ -160,7 +161,7 @@ export const useTrialStore = create<TrialState>()(
           message:
             nextStage.durationMs === -1
               ? '已解鎖永久會員'
-              : `已解鎖 ${nextStage.label} · ${state.devMode ? (nextStage.durationMs / 1000).toFixed(0) + ' 秒' : (nextStage.durationMs / 86400000).toFixed(0) + ' 天'}`,
+              : `已解鎖 ${nextStage.label} · ${state.devMode ? (nextStage.durationMs / 1000).toFixed(0) + ' 秒' : (nextStage.durationMs / DAY_MS).toFixed(0) + ' 天'}`,
         };
       },
 
@@ -191,7 +192,7 @@ export const useTrialStore = create<TrialState>()(
           const sec = s % 60;
           return m > 0 ? `${m}分 ${sec}秒` : `${sec}秒`;
         }
-        const days = Math.ceil(ms / 86400000);
+        const days = Math.ceil(ms / DAY_MS);
         return `${days}天`;
       },
 
@@ -218,7 +219,7 @@ export const useTrialStore = create<TrialState>()(
         }
         if (now - new Date(lastFeedbackAt).getTime() >= fbInterval) {
           if (feedbackDismissedAt) {
-            const dismissCool = devMode ? 10 * 1000 : 3 * 86400000;
+            const dismissCool = devMode ? 10 * 1000 : 3 * DAY_MS;
             if (now - new Date(feedbackDismissedAt).getTime() < dismissCool) {
               return false;
             }
@@ -269,7 +270,7 @@ export const useTrialStore = create<TrialState>()(
       },
 
       devForceFeedbackNow: () => {
-        set({ lastFeedbackAt: new Date(Date.now() - 30 * 86400000).toISOString() });
+        set({ lastFeedbackAt: new Date(Date.now() - 30 * DAY_MS).toISOString() });
       },
 
       devResetTrial: () => {
@@ -326,11 +327,11 @@ export const useTrialStore = create<TrialState>()(
               ? s.currentStage
               : 0,
           expiresAt: resetStage
-            ? addIso(2 * 86400000)
+            ? addIso(2 * DAY_MS)
             : version < 5
               ? stillValid
                 ? s.expiresAt // 舊用戶仲有效 → 保留原本到期日
-                : addIso(2 * 86400000) // 舊用戶過期咗 → 補償式俾 2 天 Stage 0 新 duration
+                : addIso(2 * DAY_MS) // 舊用戶過期咗 → 補償式俾 2 天 Stage 0 新 duration
               : s.expiresAt || null,
           usedCodes: resetStage ? [] : usedCodes,
           lastFeedbackAt: s.lastFeedbackAt || null,

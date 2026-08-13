@@ -436,37 +436,6 @@ export function getExerciseById(id: string): Exercise | undefined {
   return exercises.find((e) => e.id === id);
 }
 
-export function getExercisesByCategory(category: ExerciseCategory): Exercise[] {
-  return exercises.filter((e) => e.category === category);
-}
-
-export function getExercisesByMuscleGroup(group: MuscleGroup): Exercise[] {
-  return exercises.filter((e) => e.muscleGroup === group);
-}
-
-export function getExercisesByEquipmentType(equipment: EquipmentType): Exercise[] {
-  return exercises.filter((e) => e.equipmentType === equipment);
-}
-
-/**
- * 給定部位 + 排除動作 id，回傳同部位的候選替換動作（T-04 用）
- */
-export function getAlternativeExercises(
-  muscleGroup: MuscleGroup,
-  excludeId?: string
-): Exercise[] {
-  return exercises.filter((e) => e.muscleGroup === muscleGroup && e.id !== excludeId);
-}
-
-export const exerciseCategories: { value: ExerciseCategory; label: string; emoji: string }[] = [
-  { value: 'chest', label: '胸', emoji: '胸' },
-  { value: 'back', label: '背', emoji: '背' },
-  { value: 'legs', label: '腿', emoji: '腿' },
-  { value: 'shoulders', label: '肩', emoji: '肩' },
-  { value: 'arms', label: '手臂', emoji: '臂' },
-  { value: 'core', label: '核心', emoji: '核' },
-];
-
 /**
  * 工具：從「自由文字舊 Exercise」資料補齊缺失欄位（migrate 用）
  */

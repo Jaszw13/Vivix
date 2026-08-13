@@ -14,6 +14,12 @@ export type MuscleGroup =
 /** 兼容舊命名，等同 MuscleGroup */
 export type ExerciseCategory = MuscleGroup;
 
+/**
+ * N-5：力量動作家族（成就力量軌分組用）。
+ * 權威定義於 types；data/achievements re-export 保持兼容。
+ */
+export type LiftFamily = 'bench' | 'squat' | 'deadlift' | 'ohp';
+
 export const MUSCLE_GROUP_LABELS: Record<MuscleGroup, string> = {
   chest: '胸部',
   back: '背部',
@@ -169,6 +175,11 @@ export interface Exercise {
   isCustom: boolean;
   /** 動作步驟（舊 exercises.ts 中叫 instructions，這裡統一為 steps） */
   steps?: string[];
+  /**
+   * N-5：力量動作家族（選填）。
+   * 自訂動作可明確指定以正確歸入力量軌成就；未指定時由 getLiftFamily 從 ID/名稱推斷。
+   */
+  liftFamily?: LiftFamily;
   /** @deprecated 兼容舊 exercises.ts：等同 steps */
   instructions?: string[];
   tips?: string[];
@@ -322,7 +333,8 @@ export interface WorkoutSession {
 export interface UserProfile {
   id: string;
   name: string;
-  bodyWeight?: number;
+  /** D3：null 表示未填寫（舊 default 75 視為未填）；BW 軌成就於 null 時鎖定 */
+  bodyWeight: number | null;
   createdAt: string;
 }
 
@@ -335,6 +347,8 @@ export interface PersonalRecord {
   muscleGroup?: MuscleGroup;
   /** v2：器械 snapshot */
   equipmentType?: EquipmentType;
+  /** N-5：力量家族 snapshot（自訂動作可明確指定） */
+  liftFamily?: LiftFamily;
   weight: number;
   reps: number;
   date: string;

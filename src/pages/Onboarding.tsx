@@ -21,13 +21,11 @@ import { Button } from '@/components/ui/Button';
 import { Card, Badge } from '@/components/ui/Card';
 import { useProfileStore, TRAINING_GOAL_LABELS, type TrainingGoalValue } from '@/store/profileStore';
 import { useWorkoutStore } from '@/store/workoutStore';
-import { trainingPlans, getPlanById } from '@/data/plans';
+import { trainingPlans, getPlanById, DEFAULT_BEGINNER_PLAN_ID } from '@/data/plans';
 import { usePartnerStore } from '@/features/partner/stores/partnerStore';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { CAT_DEFAULT_NAMES, DOG_DEFAULT_NAMES } from '@/features/partner/data/partnerNames';
 import type { PartnerSpecies } from '@/features/partner/types';
-
-const DEFAULT_BEGINNER_PLAN_ID = '5x5-strength';
 
 // 加入 Partner 選擇步驟（§19 文檔要求）
 const STEPS = ['welcome', 'partner', 'goal', 'recommend', 'tutorial'] as const;

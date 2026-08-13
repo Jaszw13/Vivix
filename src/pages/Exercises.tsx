@@ -5,6 +5,7 @@ import { Search, Dumbbell, Edit3, Trash2, AlertTriangle, Plus } from 'lucide-rea
 import { PageShell } from '@/components/layout/PageShell';
 import { Card, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { settleTaxonomyChange } from '@/features/stats/settleAll';
 import { exercises as builtinExercises } from '@/data/exercises';
 import {
   CATEGORY_LABELS,
@@ -127,8 +128,8 @@ export default function Exercises() {
         {filtered.map((ex, i) => {
           const isUncategorized =
             ex.isCustom &&
-            ((ex as any).muscleGroupDesc?.includes('尚未分類') ||
-              (ex as any).equipmentDesc?.includes('尚未分類'));
+            (ex.muscleGroupDesc?.includes('尚未分類') ||
+              ex.equipmentDesc?.includes('尚未分類'));
           return (
             <motion.button
               key={ex.id}
@@ -180,6 +181,8 @@ export default function Exercises() {
                           onClick={() => {
                             if (confirm(`確定要刪除自訂動作「${ex.name}」嗎？\n（已保存的訓練記錄不會被刪除）`)) {
                               deleteCustomExercise(ex.id);
+                              // C5：分類變更後結算 achievements/quests（可能補解鎖 group_pr 類成就）
+                              settleTaxonomyChange();
                             }
                           }}
                           className="w-5 h-5 flex items-center justify-center text-text-secondary hover:text-auxiliary transition-colors"
@@ -218,6 +221,8 @@ export default function Exercises() {
             onClose={() => setEditingId(null)}
             onSave={(patch) => {
               editCustomExercise(editingId, patch);
+              // C5：分類變更後結算 achievements/quests
+              settleTaxonomyChange();
               setEditingId(null);
             }}
           />

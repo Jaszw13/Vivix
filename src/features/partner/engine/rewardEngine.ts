@@ -64,7 +64,7 @@ export function handleWorkoutCompleted(ctx: RewardContext): RewardResult {
   if (!valid) {
     return {
       xpGained: 0,
-      newLevel: partnerStore.level,
+      newLevel: partnerStore.getLevel(),
       leveledUp: false,
       newCosmeticIds: [],
       newFormId: undefined,
@@ -73,7 +73,7 @@ export function handleWorkoutCompleted(ctx: RewardContext): RewardResult {
     };
   }
 
-  // 1. 記錄訓練次數
+  // 1. 記錄訓練次數（C4：noop — totalWorkouts 由 sessions 派生）
   partnerStore.recordWorkout();
 
   // 2. Workout completed XP（每日上限 1）
@@ -125,7 +125,7 @@ export function handleWorkoutCompleted(ctx: RewardContext): RewardResult {
   //    需要從 workoutStore 獲取 recentWorkoutDates + streak 等數據
   //    由 caller 傳入（簡化：暫時用 ctx 裡面嘅資料）
   const questCtx = {
-    totalWorkouts: partnerStore.totalWorkouts,
+    totalWorkouts: partnerStore.getTotalWorkouts(),
     totalPRs: 0, // 由 caller 補充
     streakDays: 0, // 由 caller 補充
     warmupCount: ctx.warmupCompleted ? 1 : 0, // 簡化
@@ -149,27 +149,6 @@ export function handleWorkoutCompleted(ctx: RewardContext): RewardResult {
     newTitleId,
     questRewards,
   };
-}
-
-/**
- * 處理 streak 更新獎勵
- */
-export function handleStreakUpdated(streakDays: number): { xpGained: number } {
-  const partnerStore = usePartnerStore.getState();
-  const telemetry = useTelemetryStore.getState();
-  let xp = 0;
-
-  if (streakDays === 2) xp += XP_RULES.streak_day_2;
-  else if (streakDays === 3) xp += XP_RULES.streak_day_3;
-  else if (streakDays === 7) xp += XP_RULES.streak_day_7;
-  else if (streakDays === 14) xp += XP_RULES.streak_day_14;
-
-  if (xp > 0) {
-    partnerStore.addXp(xp);
-    telemetry.log('streak_updated', { streakDays, xpGained: xp });
-  }
-
-  return { xpGained: xp };
 }
 
 /**

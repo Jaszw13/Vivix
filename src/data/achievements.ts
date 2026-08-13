@@ -2,10 +2,11 @@
  * Vivix 成就目錄 v1.3 — 58 個成就，四軌 × 分級
  * 對應《執行規格 v1.3》§3 完整成就目錄 TS
  */
-import type { MuscleGroup } from '@/types';
+import type { MuscleGroup, LiftFamily } from '@/types';
 
 export type AchievementTrack = 'strength' | 'consistency' | 'progress' | 'behavior';
-export type LiftFamily = 'bench' | 'squat' | 'deadlift' | 'ohp';
+// N-5：LiftFamily 權威定義已移至 @/types，此處 re-export 保持既有 import 兼容
+export type { LiftFamily };
 
 export type AchievementMetric =
   | 'est1RM_kg' | 'est1RM_bw' | 'est1RM_delta'
@@ -140,7 +141,13 @@ const LIFT_FAMILY_KEYWORDS: Record<LiftFamily, string[]> = {
   ohp: ['肩推', 'overhead', 'ohp', 'military'],
 };
 
-export function getLiftFamily(exerciseId: string, exerciseName?: string): LiftFamily | undefined {
+export function getLiftFamily(
+  exerciseId: string,
+  exerciseName?: string,
+  explicitFamily?: LiftFamily,
+): LiftFamily | undefined {
+  // N-5：優先明確欄位（自訂動作可指定）
+  if (explicitFamily) return explicitFamily;
   // 先查內建 ID
   if (exerciseId === 'bench-press') return 'bench';
   if (exerciseId === 'squat') return 'squat';

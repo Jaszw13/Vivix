@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { PartnerState, PartnerSpecies } from '../types';
 import { getFormForWorkouts, getNextForm } from '../data/forms';
 import { getLevelForXp, getXpProgress } from '../engine/level';
+import { useWorkoutStore } from '@/store/workoutStore';
 
 interface PartnerStoreState extends PartnerState {
   // 初始化
@@ -25,15 +26,19 @@ interface PartnerStoreState extends PartnerState {
   resetPartner: () => void;
   getLevelProgress: () => ReturnType<typeof getXpProgress>;
   getNextMilestone: () => string | null;
+  // C4：衍生讀取（不 persist）
+  getLevel: () => number;
+  getTotalWorkouts: () => number;
+  getTotalTrainingDays: () => number;
 }
 
 const DEFAULT_PARTNER: PartnerState = {
   species: 'cat',
   name: '',
-  level: 1,
+  level: 1, // C4：保留於型別，實際由 getLevel() 派生；state 中不再寫入
   xp: 0,
-  totalWorkouts: 0,
-  totalTrainingDays: 0,
+  totalWorkouts: 0, // C4：保留於型別，實際由 getTotalWorkouts() 派生
+  totalTrainingDays: 0, // C4：同上
   currentFormId: 'stage_0',
   unlockedFormIds: ['stage_0'],
   unlockedCosmeticIds: [],
@@ -61,10 +66,11 @@ export const usePartnerStore = create<PartnerStoreState>()(
 
       addXp: (amount) => {
         const state = get();
-        const oldLevel = state.level;
+        const oldLevel = getLevelForXp(state.xp);
         const newXp = state.xp + amount;
         const newLevel = getLevelForXp(newXp);
-        set({ xp: newXp, level: newLevel });
+        // C4：只 set xp；level 由 getLevel() 派生（getLevelForXp(xp)）
+        set({ xp: newXp });
         return {
           xpGained: amount,
           newLevel,
@@ -72,19 +78,20 @@ export const usePartnerStore = create<PartnerStoreState>()(
         };
       },
 
+      // C4：noop — totalWorkouts 由 getTotalWorkouts() 從 sessions 派生
       recordWorkout: () => {
-        const state = get();
-        set({ totalWorkouts: state.totalWorkouts + 1 });
+        /* no-op */
       },
 
+      // C4：noop — totalTrainingDays 由 getTotalTrainingDays() 從 sessions 派生
       recordTrainingDay: () => {
-        const state = get();
-        set({ totalTrainingDays: state.totalTrainingDays + 1 });
+        /* no-op */
       },
 
       checkFormUnlock: () => {
         const state = get();
-        const correctForm = getFormForWorkouts(state.totalWorkouts);
+        const totalWorkouts = get().getTotalWorkouts();
+        const correctForm = getFormForWorkouts(totalWorkouts);
         if (state.currentFormId === correctForm.id) {
           return { unlocked: false };
         }
@@ -142,21 +149,53 @@ export const usePartnerStore = create<PartnerStoreState>()(
         const state = get();
         const nextForm = getNextForm(state.currentFormId);
         if (!nextForm) return null;
-        const remaining = nextForm.requiredWorkouts - state.totalWorkouts;
+        const totalWorkouts = get().getTotalWorkouts();
+        const remaining = nextForm.requiredWorkouts - totalWorkouts;
         if (remaining <= 0) return null;
         return `再完成 ${remaining} 次訓練，Partner 將進入「${nextForm.name}」形態`;
+      },
+
+      // ── C4：衍生讀取（從 workoutStore.sessions 派生） ──
+      getLevel: () => getLevelForXp(get().xp),
+      getTotalWorkouts: () => useWorkoutStore.getState().sessions.length,
+      getTotalTrainingDays: () => {
+        const sessions = useWorkoutStore.getState().sessions;
+        return new Set(sessions.map((s) => new Date(s.date).toDateString())).size;
       },
     }),
     {
       name: 'vivix-partner-store-v1',
-      version: 1,
-      // 安全 migrate：未來版本變更時保留現有數據
+      version: 2,
+      // C4 / L1：排除衍生欄位（level/totalWorkouts/totalTrainingDays）；只 persist 永久決定
+      partialize: (state) => ({
+        species: state.species,
+        name: state.name,
+        xp: state.xp,
+        currentFormId: state.currentFormId,
+        unlockedFormIds: state.unlockedFormIds,
+        unlockedCosmeticIds: state.unlockedCosmeticIds,
+        equippedCosmeticIds: state.equippedCosmeticIds,
+        unlockedTitleIds: state.unlockedTitleIds,
+        equippedTitleId: state.equippedTitleId,
+        createdAt: state.createdAt,
+      }),
       migrate: (persistedState, version) => {
-        const s = (persistedState ?? {}) as Partial<PartnerStoreState>;
+        const s = (persistedState ?? {}) as Record<string, unknown>;
+        // C4：移除舊持久化的 level/totalWorkouts/totalTrainingDays（改為派生）
+        const { level, totalWorkouts, totalTrainingDays, ...rest } = s;
+        // 只回傳 partialize 會持久化的欄位
         return {
-          ...DEFAULT_PARTNER,
-          ...s,
-        } as Partial<PartnerStoreState>;
+          species: (rest.species as PartnerSpecies) ?? DEFAULT_PARTNER.species,
+          name: (rest.name as string) ?? DEFAULT_PARTNER.name,
+          xp: (rest.xp as number) ?? DEFAULT_PARTNER.xp,
+          currentFormId: (rest.currentFormId as string) ?? DEFAULT_PARTNER.currentFormId,
+          unlockedFormIds: (rest.unlockedFormIds as string[]) ?? DEFAULT_PARTNER.unlockedFormIds,
+          unlockedCosmeticIds: (rest.unlockedCosmeticIds as string[]) ?? DEFAULT_PARTNER.unlockedCosmeticIds,
+          equippedCosmeticIds: (rest.equippedCosmeticIds as string[]) ?? DEFAULT_PARTNER.equippedCosmeticIds,
+          unlockedTitleIds: (rest.unlockedTitleIds as string[]) ?? DEFAULT_PARTNER.unlockedTitleIds,
+          equippedTitleId: (rest.equippedTitleId as string) ?? DEFAULT_PARTNER.equippedTitleId,
+          createdAt: (rest.createdAt as string) ?? DEFAULT_PARTNER.createdAt,
+        };
       },
     }
   )

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Unlock, Zap, AlertCircle, Smartphone } from 'lucide-react';
 import { useTrialStore, STANDARD_STAGES, DEV_STAGES } from '@/store/trialStore';
+import { DAY_MS } from '@/utils/time';
 
 interface TrialLockProps {
   children: React.ReactNode;
@@ -132,7 +133,7 @@ function LockedScreen() {
           <div className="flex justify-between mt-2">
             {stages.map((s, i) => (
               <span key={i} className="text-[9px] text-text-secondary">
-                {s.durationMs === -1 ? '∞' : devMode ? Math.round(s.durationMs / 1000) + 's' : Math.round(s.durationMs / 86400000) + 'd'}
+                {s.durationMs === -1 ? '∞' : devMode ? Math.round(s.durationMs / 1000) + 's' : Math.round(s.durationMs / DAY_MS) + 'd'}
               </span>
             ))}
           </div>
@@ -151,7 +152,7 @@ function LockedScreen() {
               <p className="text-xs text-text-secondary mb-3">
                 {nextStage.durationMs === -1
                   ? '輸入永久會員碼，解鎖無限期使用'
-                  : `輸入續用碼，延長 ${devMode ? (nextStage.durationMs / 1000) + ' 秒' : (nextStage.durationMs / 86400000) + ' 天'}試用`}
+                  : `輸入續用碼，延長 ${devMode ? (nextStage.durationMs / 1000) + ' 秒' : (nextStage.durationMs / DAY_MS) + ' 天'}試用`}
               </p>
               <input
                 type="text"

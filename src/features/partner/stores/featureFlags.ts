@@ -9,10 +9,6 @@ interface FeatureFlagsState extends FeatureFlags {
 
 const DEFAULT_FLAGS: FeatureFlags = {
   partnerEnabled: true,
-  partnerQuestsEnabled: true,
-  warmupEnabled: true,
-  telemetryEnabled: true,
-  debugPanelEnabled: true,
 };
 
 export const useFeatureFlags = create<FeatureFlagsState>()(
@@ -24,7 +20,14 @@ export const useFeatureFlags = create<FeatureFlagsState>()(
     }),
     {
       name: 'vivix-feature-flags-v1',
-      version: 1,
+      version: 2,
+      // C6：補 migrate — 合併預設 + 欄位校驗，避免舊 payload 缺欄位 crash
+      migrate: (persistedState) => {
+        const s = (persistedState ?? {}) as Partial<FeatureFlags>;
+        return {
+          partnerEnabled: typeof s.partnerEnabled === 'boolean' ? s.partnerEnabled : DEFAULT_FLAGS.partnerEnabled,
+        };
+      },
     }
   )
 );

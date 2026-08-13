@@ -34,7 +34,7 @@ interface ProfileState {
 const defaultProfile: UserProfile = {
   id: 'user-default',
   name: '鐵人',
-  bodyWeight: 75,
+  bodyWeight: null,
   createdAt: new Date().toISOString(),
 };
 
@@ -76,16 +76,25 @@ export const useProfileStore = create<ProfileState>()(
     }),
     {
       name: 'ironpulse-profile',
-      version: 1,
+      version: 2,
       partialize: (state) => ({
         profile: state.profile,
         onboardingCompleted: state.onboardingCompleted,
         goal: state.goal,
       }),
-      migrate: (persistedState) => {
+      migrate: (persistedState: unknown) => {
         const s = (persistedState ?? {}) as Partial<ProfileState>;
+        const oldProfile = s.profile;
+        // D3：舊 default 75 視為未填 → null（真 75kg 用戶需重填，UI 會提示）
+        const migratedProfile: UserProfile = oldProfile
+          ? {
+              ...oldProfile,
+              bodyWeight:
+                oldProfile.bodyWeight === 75 ? null : (oldProfile.bodyWeight ?? null),
+            }
+          : { ...defaultProfile, createdAt: new Date().toISOString() };
         return {
-          profile: s.profile ?? { ...defaultProfile, createdAt: new Date().toISOString() },
+          profile: migratedProfile,
           onboardingCompleted: s.onboardingCompleted ?? false,
           goal: s.goal ?? null,
         };

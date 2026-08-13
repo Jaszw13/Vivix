@@ -8,6 +8,8 @@ import { useThemeStore } from '@/store/themeStore';
 import { useProfileStore } from '@/store/profileStore';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { useTrialStore, STANDARD_STAGES, DEV_STAGES } from '@/store/trialStore';
+import { DAY_MS } from '@/utils/time';
+import { THEME_DEFINITIONS } from '@/data/theme';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { usePartnerStore } from '@/features/partner/stores/partnerStore';
 import { cn } from '@/lib/utils';
@@ -135,18 +137,18 @@ export default function Settings() {
             name="工業電力"
             description="深黑 · 電力綠"
             preview={
-              <div className="bg-[#0A0A0B] h-full flex flex-col p-3">
+              <div className="h-full flex flex-col p-3" style={{ background: THEME_DEFINITIONS.dark.bg }}>
                 <div
-                  className="text-[#FFFFFF] font-bold text-xs mb-2"
-                  style={{ fontFamily: 'Bebas Neue' }}
+                  className="font-bold text-xs mb-2"
+                  style={{ fontFamily: 'Bebas Neue', color: THEME_DEFINITIONS.dark.text }}
                 >
                   IRONPULSE
                 </div>
-                <div className="bg-[#2C2C2E] flex-1 rounded-sm p-2 flex flex-col gap-1">
-                  <div className="h-1.5 w-8 bg-[#D4FF00] rounded-sm" />
-                  <div className="h-1 w-6 bg-[#8E8E93] rounded-sm" />
+                <div className="flex-1 rounded-sm p-2 flex flex-col gap-1" style={{ background: THEME_DEFINITIONS.dark.card }}>
+                  <div className="h-1.5 w-8 rounded-sm" style={{ background: THEME_DEFINITIONS.dark.accent }} />
+                  <div className="h-1 w-6 rounded-sm" style={{ background: THEME_DEFINITIONS.dark.muted }} />
                 </div>
-                <div className="mt-2 bg-[#D4FF00] h-3 rounded-sm" />
+                <div className="mt-2 h-3 rounded-sm" style={{ background: THEME_DEFINITIONS.dark.accent }} />
               </div>
             }
             icon={<Moon size={16} />}
@@ -157,18 +159,18 @@ export default function Settings() {
             name="高雅米白"
             description="米白 · 香檳金"
             preview={
-              <div className="bg-[#F8F5F0] h-full flex flex-col p-3">
+              <div className="h-full flex flex-col p-3" style={{ background: THEME_DEFINITIONS.light.bg }}>
                 <div
-                  className="text-[#2C2B28] font-bold text-xs mb-2"
-                  style={{ fontFamily: 'Playfair Display' }}
+                  className="font-bold text-xs mb-2"
+                  style={{ fontFamily: 'Playfair Display', color: THEME_DEFINITIONS.light.text }}
                 >
                   IRONPULSE
                 </div>
-                <div className="bg-[#FFFFFF] flex-1 rounded-lg p-2 flex flex-col gap-1 shadow-sm">
-                  <div className="h-1.5 w-8 bg-[#C9A96E] rounded-sm" />
-                  <div className="h-1 w-6 bg-[#7A756D] rounded-sm" />
+                <div className="flex-1 rounded-lg p-2 flex flex-col gap-1 shadow-sm" style={{ background: THEME_DEFINITIONS.light.card }}>
+                  <div className="h-1.5 w-8 rounded-sm" style={{ background: THEME_DEFINITIONS.light.accent }} />
+                  <div className="h-1 w-6 rounded-sm" style={{ background: THEME_DEFINITIONS.light.muted }} />
                 </div>
-                <div className="mt-2 bg-[#C9A96E] h-3 rounded-md" />
+                <div className="mt-2 h-3 rounded-md" style={{ background: THEME_DEFINITIONS.light.accent }} />
               </div>
             }
             icon={<Sun size={16} />}
@@ -209,14 +211,21 @@ export default function Settings() {
               <input
                 type="number"
                 value={profile.bodyWeight ?? ''}
-                onChange={(e) =>
-                  updateProfile({ bodyWeight: parseFloat(e.target.value) || undefined })
-                }
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value);
+                  updateProfile({ bodyWeight: Number.isNaN(v) ? null : v });
+                }}
                 className="bg-transparent font-mono text-2xl font-bold text-text-primary w-24 focus:outline-none"
                 inputMode="decimal"
+                placeholder="—"
               />
               <span className="text-sm text-text-secondary">kg</span>
             </div>
+            {profile.bodyWeight === null && (
+              <div className="text-[9px] text-text-secondary/70 mt-1">
+                未填體重：相對力量（xBW）成就將鎖定，輸入體重即可解鎖
+              </div>
+            )}
           </div>
         </Card>
       </motion.div>
@@ -335,7 +344,7 @@ export default function Settings() {
                       ? '∞'
                       : devMode
                       ? Math.round(s.durationMs / 1000) + 's'
-                      : Math.round(s.durationMs / 86400000) + 'd'}
+                      : Math.round(s.durationMs / DAY_MS) + 'd'}
                   </div>
                 </div>
               ))}

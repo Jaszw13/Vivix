@@ -24,11 +24,6 @@ export function getLevelForXp(xp: number): number {
   return Math.min(level, LEVEL_CAP);
 }
 
-export function getXpForNextLevel(currentLevel: number): number {
-  if (currentLevel >= LEVEL_CAP) return LEVEL_THRESHOLDS[LEVEL_CAP - 1];
-  return LEVEL_THRESHOLDS[currentLevel]; // index = currentLevel (0-based: Lv.1=idx0, next=idx1=currentLevel)
-}
-
 export function getXpProgress(xp: number): {
   currentLevel: number;
   xpInCurrentLevel: number;

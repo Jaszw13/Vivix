@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Card';
 import { TIER_COLORS, TRACK_LABELS, type AchievementDef } from '@/data/achievements';
 import type { AchievementProgress } from '@/store/achievementsStore';
+import { formatUnlockDate } from '@/utils/format';
 
 interface Props {
   def: AchievementDef | null;
@@ -114,7 +115,7 @@ export function AchievementDetailSheet({ def, progress, formattedCopy, open, onC
 
                   {unlocked && progress?.unlockedAt && (
                     <p className="text-[10px] uppercase tracking-widest font-bold mb-4" style={{ color: tier.color }}>
-                      於 {new Date(progress.unlockedAt).toLocaleDateString('zh-TW')} 解鎖
+                      於 {formatUnlockDate(progress.unlockedAt)} 解鎖
                     </p>
                   )}
 

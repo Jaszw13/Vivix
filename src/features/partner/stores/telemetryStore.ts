@@ -1,12 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { TelemetryEvent } from '../types';
+import { generateId } from '@/utils/workout';
 
 const MAX_EVENTS = 1000;
-
-function generateId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
 
 interface TelemetryState {
   events: TelemetryEvent[];
@@ -27,7 +24,7 @@ export const useTelemetryStore = create<TelemetryState>()(
         const state = get();
         if (!state.enabled) return;
         const event: TelemetryEvent = {
-          id: generateId(),
+          id: generateId('event'),
           name,
           timestamp: new Date().toISOString(),
           payload,
@@ -50,7 +47,16 @@ export const useTelemetryStore = create<TelemetryState>()(
     }),
     {
       name: 'vivix-telemetry-store-v1',
-      version: 1,
+      version: 2,
+      // C6：補 migrate — 欄位校驗，避免舊 payload 損壞 crash
+      migrate: (persistedState) => {
+        const s = (persistedState ?? {}) as Partial<TelemetryState>;
+        const events = Array.isArray(s.events) ? s.events : [];
+        return {
+          events,
+          enabled: typeof s.enabled === 'boolean' ? s.enabled : true,
+        };
+      },
     }
   )
 );

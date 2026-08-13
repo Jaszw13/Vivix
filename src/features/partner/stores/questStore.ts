@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { QuestProgress } from '../types';
 import { QUESTS, QUEST_MAP } from '../data/quests';
+import { DAY_MS } from '@/utils/time';
 
 interface QuestState {
   progress: Record<string, QuestProgress>;
@@ -42,7 +43,7 @@ function computeQuestCurrent(
     case 'weekly_workouts':
     case 'workouts_in_days': {
       if (!windowDays) return 0;
-      const cutoff = Date.now() - windowDays * 86400000;
+      const cutoff = Date.now() - windowDays * DAY_MS;
       return ctx.recentWorkoutDates.filter((d) => new Date(d).getTime() >= cutoff).length;
     }
     default:
@@ -98,7 +99,37 @@ export const useQuestStore = create<QuestState>()(
     }),
     {
       name: 'vivix-quest-store-v1',
-      version: 1,
+      version: 2,
+      // C4 / L1：只 persist 永久決定（claimed、completedAt）；current 為衍生，不 persist
+      partialize: (state) => ({
+        progress: Object.fromEntries(
+          Object.entries(state.progress).map(([id, p]) => [
+            id,
+            {
+              questId: p.questId,
+              completed: p.completed,
+              claimed: p.claimed,
+              completedAt: p.completedAt,
+            } as QuestProgress,
+          ]),
+        ),
+      }),
+      migrate: (persistedState) => {
+        const s = (persistedState ?? {}) as Partial<QuestState>;
+        const incoming = s.progress ?? {};
+        // C4：移除 current（live 計算），保留 claimed/completedAt
+        const cleaned: Record<string, QuestProgress> = {};
+        for (const [id, p] of Object.entries(incoming)) {
+          cleaned[id] = {
+            questId: p.questId,
+            completed: p.completed,
+            claimed: p.claimed,
+            current: 0,
+            completedAt: p.completedAt,
+          };
+        }
+        return { progress: cleaned };
+      },
     }
   )
 );

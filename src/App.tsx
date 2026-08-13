@@ -17,6 +17,7 @@ import { TrialLock } from '@/components/TrialLock';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { useTrialStore } from '@/store/trialStore';
 import { useProfileStore } from '@/store/profileStore';
+import { settleOnLoad } from '@/features/stats/settleAll';
 
 /**
  * App 級 ErrorBoundary：
@@ -129,6 +130,8 @@ function AppContent() {
 
   // 啟動時檢查是否需要顯示反饋
   useEffect(() => {
+    // C5：載入後一次性補結算（silent — 不彈慶祝，僅補解锁）
+    settleOnLoad();
     const timer = setTimeout(() => {
       if (shouldShowFeedback()) {
         setShowFeedback(true);

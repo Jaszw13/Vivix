@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Play, Pause, RotateCcw, X, Plus, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useThemeStore } from '@/store/themeStore';
+import { REST_TIMER_THEME as THEME_COLORS } from '@/data/theme';
 
 interface RestTimerProps {
   initialSeconds?: number;
@@ -53,35 +54,8 @@ function playCompletionFeedback(theme: 'light' | 'dark') {
   }
 }
 
-// ============ 主題色值 ============
-const THEME_COLORS = {
-  light: {
-    bgBase: 'rgba(248, 245, 240, 0.98)',     // #F8F5F0
-    ringTrack: 'rgba(201, 169, 110, 0.15)',  // 淡金軌道
-    ringActive: '#C9A96E',                    // 進行中：暖金
-    ringPreheat: '#D4B886',                   // 預熱：稍微提亮
-    ringComplete: '#E8D5A8',                   // 完成：奶油米白 #FFFAD2 偏柔
-    breathGlow: 'rgba(232, 213, 168, 0.18)',  // 呼吸光暈
-    textPrimary: '#2A2520',
-    textSecondary: '#8B7E6E',
-    textComplete: '#8B6F2E',
-    label: '休息結束',
-    progressFilter: 'none',
-  },
-  dark: {
-    bgBase: 'rgba(10, 10, 11, 0.98)',          // #0A0A0B
-    ringTrack: 'rgba(30, 70, 100, 0.2)',       // 暗冰藍軌道
-    ringActive: '#1E4664',                     // 進行中：暗冰藍
-    ringPreheat: '#2A5A7F',                    // 預熱：稍提亮
-    ringComplete: '#23553F',                   // 完成：工業暗苔綠
-    breathGlow: 'rgba(35, 85, 63, 0.22)',      // 暗綠呼吸光暈
-    textPrimary: '#F0F0F0',
-    textSecondary: '#8A8A8A',
-    textComplete: '#3A7A5A',
-    label: '就緒',
-    progressFilter: 'drop-shadow(0 0 6px rgba(35,85,63,0.5))',
-  },
-};
+// ============ 主題色值（C7：搬移至 data/theme.ts，此處 alias 保持原變數名） ============
+// THEME_COLORS 已自頂部 import
 
 // ============ 主元件 ============
 export function RestTimer({ initialSeconds = 90, onClose }: RestTimerProps) {
@@ -376,7 +350,7 @@ export function RestTimer({ initialSeconds = 90, onClose }: RestTimerProps) {
             className="w-16 h-16 rounded-button flex items-center justify-center shadow-button transition-all"
             style={{
               backgroundColor: colors.ringActive,
-              color: theme === 'light' ? '#FFF' : '#0A0A0B',
+              color: colors.buttonFg,
             }}
           >
             {running ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" />}

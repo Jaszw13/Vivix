@@ -17,17 +17,16 @@ import {
 import { useEquipmentMemoryStore } from '@/store/equipmentMemoryStore';
 import {
   exercises as builtinExercises,
-  exerciseCategories,
 } from '@/data/exercises';
 import { getPlanById } from '@/data/plans';
 import { formatDuration } from '@/utils/workout';
 import type {
   ExerciseCategory, WarmupItem, MuscleGroup, EquipmentType,
-  PlannedExercise, Exercise,
+  PlannedExercise, Exercise, LiftFamily,
 } from '@/types';
 import {
   CATEGORY_LABELS, EQUIPMENT_TYPE_LABELS,
-  MUSCLE_GROUP_OPTIONS, EQUIPMENT_TYPE_OPTIONS,
+  MUSCLE_GROUP_OPTIONS, EQUIPMENT_TYPE_OPTIONS, exerciseCategories,
 } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -447,6 +446,8 @@ function AddExerciseSheet({ onClose, onSelect }: AddExerciseSheetProps) {
   const [customEquip, setCustomEquip] = useState<EquipmentType | ''>('');
   const [customSteps, setCustomSteps] = useState('');
   const [customTips, setCustomTips] = useState('');
+  // N-5：選填力量家族（指定後正確歸入力量軌成就）
+  const [customLiftFamily, setCustomLiftFamily] = useState<LiftFamily | ''>('');
 
   const { customExercises, addCustomExerciseV2 } = useWorkoutStore();
 
@@ -489,6 +490,7 @@ function AddExerciseSheet({ onClose, onSelect }: AddExerciseSheetProps) {
         .split(/\n|；|;/)
         .map((s) => s.trim())
         .filter(Boolean),
+      liftFamily: customLiftFamily || undefined,
     });
     onSelect(created.id, created.name);
   };
@@ -673,6 +675,46 @@ function AddExerciseSheet({ onClose, onSelect }: AddExerciseSheetProps) {
                   </button>
                 ))}
               </div>
+            </Field>
+
+            <Field label="力量家族（選填）">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCustomLiftFamily('')}
+                  className={cn(
+                    'py-1.5 px-3 text-[11px] rounded-button border transition-colors',
+                    customLiftFamily === ''
+                      ? 'bg-accent text-bg-primary border-accent'
+                      : 'bg-bg-card text-text-secondary border-border hover:text-text-primary'
+                  )}
+                >
+                  自動推斷
+                </button>
+                {([
+                  { value: 'bench', label: '臥推' },
+                  { value: 'squat', label: '深蹲' },
+                  { value: 'deadlift', label: '硬舉' },
+                  { value: 'ohp', label: '肩推' },
+                ] as { value: LiftFamily; label: string }[]).map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    onClick={() => setCustomLiftFamily(o.value)}
+                    className={cn(
+                      'py-1.5 px-3 text-[11px] rounded-button border transition-colors',
+                      customLiftFamily === o.value
+                        ? 'bg-accent text-bg-primary border-accent'
+                        : 'bg-bg-card text-text-secondary border-border hover:text-text-primary'
+                    )}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[9px] text-text-secondary/70 mt-1">
+                指定後此動作將歸入對應力量軌成就；未指定則依名稱自動推斷
+              </p>
             </Field>
 
             <Field label="步驟（選填，每行一步驟）">

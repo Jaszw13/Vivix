@@ -14,7 +14,7 @@ import {
 } from '@/store/achievementsStore';
 import { ACHIEVEMENTS, TIER_COLORS, type AchievementDef } from '@/data/achievements';
 import { CelebrationModal, type CelebrationItem } from '@/features/achievements/components/CelebrationModal';
-import { trainingPlans } from '@/data/plans';
+import { trainingPlans, DEFAULT_BEGINNER_PLAN_ID } from '@/data/plans';
 import { usePlansStore } from '@/store/plansStore';
 import { formatDate } from '@/utils/workout';
 import { cn } from '@/lib/utils';
@@ -24,9 +24,8 @@ import { getXpProgress } from '@/features/partner/engine/level';
 import { getFormForWorkouts } from '@/features/partner/data/forms';
 import { PartnerSetupModal } from '@/features/partner/components/PartnerSetupModal';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
-
-// 新手預設計畫：5x5 力量基礎 (beginner)
-const DEFAULT_BEGINNER_PLAN_ID = '5x5-strength';
+import { settleTaxonomyChange } from '@/features/stats/settleAll';
+import { formatWeekdayShort } from '@/utils/format';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -48,7 +47,8 @@ export default function Dashboard() {
   const partner = usePartnerStore();
   const xpProgress = getXpProgress(partner.xp);
   const milestone = partner.getNextMilestone();
-  const currentForm = getFormForWorkouts(partner.totalWorkouts);
+  // C4：totalWorkouts 由 sessions 派生（getTotalWorkouts）
+  const currentForm = getFormForWorkouts(partner.getTotalWorkouts());
   // 舊用戶（Partner 系統上線前已完成 onboarding）補建立 Partner 的 modal
   const [setupModalOpen, setSetupModalOpen] = useState(false);
 
@@ -56,7 +56,7 @@ export default function Dashboard() {
   //   zustand 如果直接 useXxxStore() 唔傳 selector → 每 render 都有新 object ref，
   //   放落 useEffect deps 會每次都視為變化 → 觸發 recompute() → recompute set state →
   //   re-render → deps 又新 → infinite loop → React error #185。
-  const recompute = useAchievementsStore((s) => s.recompute);
+  // C5：改透過 settleTaxonomyChange 統一編排
   const markUnlockSeen = useAchievementsStore((s) => s.markUnlockSeen);
   const pendingUnlockIds = useAchievementsStore((s) => s.pendingUnlockIds);
   const progress = useAchievementsStore((s) => s.progress);
@@ -73,7 +73,7 @@ export default function Dashboard() {
     return {
       sessions,
       personalRecords,
-      bodyWeight: profile.bodyWeight ?? 75,
+      bodyWeight: profile.bodyWeight,
       hasCustomExercises: useWorkoutStore.getState().customExercises.length > 0,
       hasCustomPlans: false, // T-05 尚未實作 custom plans
       groupStats,
@@ -81,8 +81,9 @@ export default function Dashboard() {
   }, [sessions, personalRecords, profile.bodyWeight, getGroupStats]);
 
   useEffect(() => {
-    recompute(achieveCtx);
-  }, [achieveCtx, recompute]);
+    // C5：統一透過 settleTaxonomyChange 結算（保證 achievements + quests 同源）
+    settleTaxonomyChange();
+  }, [achieveCtx]);
 
   // 解鎖慶祝清單（支援同一 session 多解鎖）
   const celebrationItems: CelebrationItem[] = useMemo(() => {
@@ -219,7 +220,7 @@ export default function Dashboard() {
                     {partner.name}
                   </span>
                   <Badge variant="default" className="border border-accent/30 text-accent">
-                    Lv.{partner.level}
+                    Lv.{partner.getLevel()}
                   </Badge>
                   <span className="text-[10px] text-text-secondary/80 truncate">
                     {currentForm.name}
@@ -315,7 +316,7 @@ export default function Dashboard() {
                 {today.getMonth() + 1}.{today.getDate()}
               </div>
               <div className="font-display text-2xl text-accent mt-1">
-                {today.toLocaleDateString('zh-TW', { weekday: 'short' })}
+                {formatWeekdayShort(today)}
               </div>
             </div>
           </div>

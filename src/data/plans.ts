@@ -286,10 +286,9 @@ export const trainingPlans: TrainingPlan[] = [
 ];
 
 /**
- * 取得所有預設計畫（不含自訂）。
- * 注意：customPlans 存於 workoutStore，這裡只提供靜態 preset。
+ * A-011：新手預設計畫 ID 單一來源（Onboarding / Dashboard 共用）
  */
-export const PRESET_PLAN_IDS = trainingPlans.filter((p) => p.isPreset).map((p) => p.id);
+export const DEFAULT_BEGINNER_PLAN_ID = '5x5-strength';
 
 export function getPlanById(id: string): TrainingPlan | undefined {
   return trainingPlans.find((p) => p.id === id);
@@ -305,7 +304,7 @@ export function migratePlanToV2(plan: Partial<TrainingPlan>): TrainingPlan {
     exercises: (d.exercises ?? []).map((pe) =>
       buildPlannedExercise(pe.id, pe.exerciseId, pe.name, pe.targetSets, pe.targetReps, {
         targetWeight: pe.targetWeight,
-        restSeconds: (pe as any).restSeconds,
+        restSeconds: pe.restSeconds,
       })
     ),
   }));

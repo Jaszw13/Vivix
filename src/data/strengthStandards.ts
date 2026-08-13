@@ -77,22 +77,6 @@ export const STRENGTH_STANDARDS: StrengthStandard[] = [
   },
 ];
 
-export const STANDARDS_META = {
-  sources: [
-    'ExRx.net — https://exrx.net/Testing/WeightLifting/StrengthStandards',
-    'StrengthLevel.com — https://strengthlevel.com',
-    'Jeff Nippard (YouTube) — Realistic Strength Standards',
-  ],
-  fetchedAt: '2026-08-12',
-  verifiedBy: 'AI Agent',
-  notes: [
-    '所有門檻以男性標準為基準（女性約為男性的 60-70%）',
-    'plate 門檻 = 20kg 槓 + N×20kg per side（60=1片, 100=2片, 140=3片, 180=4片）',
-    '不鼓勵測 1RM 最大值；一律用 Epley 公式估算',
-    '體重比成就需要用戶填寫體重；未填時顯示為挑戰、不誤觸發',
-  ],
-};
-
 export function getStandardByFamily(family: string): StrengthStandard | undefined {
   return STRENGTH_STANDARDS.find((s) => s.family === family);
 }

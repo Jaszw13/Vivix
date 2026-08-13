@@ -11,6 +11,7 @@ import type {
   EquipmentType,
   GroupStats,
   Exercise,
+  LiftFamily,
 } from '@/types';
 import { DEFAULT_MEDIA, resolveEquipmentType } from '@/types';
 import {
@@ -20,12 +21,22 @@ import {
   createExerciseLog as _createExerciseLog,
   estimate1RM,
 } from '@/utils/workout';
+import { FOURTEEN_DAYS_MS } from '@/utils/time';
+import { getStreakDays as getStreakDaysSelector } from '@/features/stats/selectors';
 import { getPlanById } from '@/data/plans';
 import {
   exercises as builtinExercises,
   getExerciseById,
   patchExerciseWithClassifications,
 } from '@/data/exercises';
+// C1：分類權威模組 — workoutStore re-export 保持 import 兼容
+import {
+  resolveCurrentTaxonomy,
+  resolveExerciseSnapshot,
+  getAllExercisesWith,
+  findExerciseById,
+} from '@/features/exercises/taxonomy';
+export { resolveCurrentTaxonomy, resolveExerciseSnapshot, findExerciseById };
 
 // ============ 自訂動作 v2（完整分類） ============
 // 與 Exercise 同結構，強制 isCustom: true。
@@ -38,11 +49,6 @@ interface LegacyCustomExercise {
   name: string;
   createdAt: string;
 }
-
-/**
- * @deprecated 僅作為舊 UI 調用的兼容介面；已更名為 CustomExercise。
- */
-export type OldCustomExerciseShape = LegacyCustomExercise;
 
 // ============ 工具：建立分類齊全的自訂動作 ============
 function createCustomExerciseV2(
@@ -67,6 +73,8 @@ function createCustomExerciseV2(
     steps: extras.steps ?? extras.instructions,
     instructions: extras.instructions ?? extras.steps,
     tips: extras.tips,
+    /** N-5：自訂動作可指定力量家族 */
+    liftFamily: extras.liftFamily,
     media: extras.media ?? { ...DEFAULT_MEDIA },
     createdAt: extras.createdAt ?? new Date().toISOString(),
   };
@@ -87,55 +95,8 @@ function migrateLegacyCustomExercise(leg: LegacyCustomExercise): CustomExercise 
 }
 
 // ============ P-01：分類回寫 — 當前分類優先 ============
-// 優先序：當前 exercise 定義（builtin + custom）→ 記錄 snapshot → fallback
-// 這是保證「分類變更後所有統計即時遷移」的核心函數
-function resolveCurrentTaxonomy(
-  exerciseId: string,
-  customExercises: CustomExercise[],
-  fallback?: { muscleGroup?: MuscleGroup; equipmentType?: EquipmentType; name?: string },
-) {
-  // 1. 查內建動作
-  const builtin = getExerciseById(exerciseId);
-  if (builtin) {
-    return {
-      muscleGroup: builtin.muscleGroup as MuscleGroup,
-      equipmentType: builtin.equipmentType as EquipmentType,
-      name: builtin.name,
-    };
-  }
-  // 2. 查自訂動作（可能已被用戶改過分類）
-  const custom = customExercises.find((e) => e.id === exerciseId);
-  if (custom) {
-    return {
-      muscleGroup: custom.muscleGroup as MuscleGroup,
-      equipmentType: custom.equipmentType as EquipmentType,
-      name: custom.name,
-    };
-  }
-  // 3. fallback：記錄中的 snapshot 或空
-  return {
-    muscleGroup: fallback?.muscleGroup,
-    equipmentType: fallback?.equipmentType,
-    name: fallback?.name ?? '動作',
-  };
-}
-
-// 舊版保留：僅查內建（migrate 用）
-function resolveExerciseSnapshot(exerciseId: string, fallbackName?: string) {
-  const builtin = getExerciseById(exerciseId);
-  if (builtin) {
-    return {
-      muscleGroup: builtin.muscleGroup as MuscleGroup,
-      equipmentType: builtin.equipmentType,
-      name: builtin.name,
-    };
-  }
-  return {
-    muscleGroup: undefined as MuscleGroup | undefined,
-    equipmentType: undefined as EquipmentType | undefined,
-    name: fallbackName ?? '動作',
-  };
-}
+// 權威實作已移至 @/features/exercises/taxonomy（C1）；此處 re-export 保持兼容。
+// resolveCurrentTaxonomy / resolveExerciseSnapshot 由上方 import re-export。
 
 // ============ Store 介面 ============
 interface WorkoutState {
@@ -154,18 +115,18 @@ interface WorkoutState {
   startSession: (planId: string, planName: string, day: PlanDay) => void;
   startEmptySession: () => void;
   addExerciseToActive: (pe: PlannedExercise) => void;
-  /** @deprecated 改用 addCustomExerciseV2（強制分類）。舊方法僅保留兼容，會走默認 chest/other */
-  addCustomExercise: (name: string) => CustomExercise;
   addCustomExerciseV2: (args: {
     name: string;
     muscleGroup: MuscleGroup;
     equipmentType: EquipmentType;
     steps?: string[];
     tips?: string[];
+    /** N-5：選填力量家族，指定後正確歸入力量軌成就 */
+    liftFamily?: LiftFamily;
   }) => CustomExercise;
   editCustomExercise: (
     id: string,
-    patch: Partial<Pick<CustomExercise, 'name' | 'muscleGroup' | 'equipmentType' | 'steps' | 'tips' | 'muscleGroupDesc' | 'equipmentDesc' | 'secondaryGroups'>>
+    patch: Partial<Pick<CustomExercise, 'name' | 'muscleGroup' | 'equipmentType' | 'steps' | 'tips' | 'muscleGroupDesc' | 'equipmentDesc' | 'secondaryGroups' | 'liftFamily'>>
   ) => void;
   deleteCustomExercise: (id: string) => void;
 
@@ -215,8 +176,8 @@ function computePRsFromSessions(
     for (const pr of sessionPRs) {
       // P-01：優先使用當前 exercise 定義的分類，snapshot 僅兜底
       const cur = resolveCurrentTaxonomy(pr.exerciseId, customExercises, {
-        muscleGroup: (pr as any).muscleGroup,
-        equipmentType: (pr as any).equipmentType,
+        muscleGroup: pr.muscleGroup,
+        equipmentType: pr.equipmentType,
         name: pr.exerciseName,
       });
       const existing = map.get(pr.exerciseId);
@@ -225,6 +186,7 @@ function computePRsFromSessions(
           ...pr,
           muscleGroup: cur.muscleGroup,
           equipmentType: cur.equipmentType,
+          liftFamily: cur.liftFamily,
         });
       }
     }
@@ -348,17 +310,11 @@ export const useWorkoutStore = create<WorkoutState>()(
         });
       },
 
-      addCustomExercise: (name) => {
-        // 舊介面兼容：隨便填 chest/other 先通過 schema
-        const custom = createCustomExerciseV2(name, 'chest', 'other');
-        set({ customExercises: [...get().customExercises, custom] });
-        return custom;
-      },
-
-      addCustomExerciseV2: ({ name, muscleGroup, equipmentType, steps, tips }) => {
+      addCustomExerciseV2: ({ name, muscleGroup, equipmentType, steps, tips, liftFamily }) => {
         const custom = createCustomExerciseV2(name, muscleGroup, equipmentType, {
           steps,
           tips,
+          liftFamily,
         });
         set({ customExercises: [...get().customExercises, custom] });
         return custom;
@@ -379,6 +335,7 @@ export const useWorkoutStore = create<WorkoutState>()(
               return next;
             }),
             // P-01：分類變更 → bump taxonomyVersion，觸發所有派生 selector 重算
+            // C4：personalRecords 由 subscribe 自動派生
             taxonomyVersion: classificationChanged
               ? state.taxonomyVersion + 1
               : state.taxonomyVersion,
@@ -388,6 +345,7 @@ export const useWorkoutStore = create<WorkoutState>()(
 
       deleteCustomExercise: (id) => {
         // 僅從動作庫移除，已存在的 sessions/plans snapshot 保留不動（符合 §7 邊界處理）
+        // C4：personalRecords 由 subscribe 自動派生（已刪動作的 PR 透過 snapshot fallback 保留）
         set((state) => ({
           customExercises: state.customExercises.filter((ce) => ce.id !== id),
         }));
@@ -496,17 +454,15 @@ export const useWorkoutStore = create<WorkoutState>()(
         const newSessions = [...get().sessions, finished].sort(
           (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
         );
-        // 重建 PR（P-01：使用當前分類）
-        const newPRs = computePRsFromSessions(newSessions, get().customExercises);
         const state = get();
         let nextIndex = state.nextDayIndex;
         if (active.planId && state.activePlanId === active.planId) {
           const plan = getPlanById(active.planId);
           if (plan) nextIndex = (state.nextDayIndex + 1) % plan.days.length;
         }
+        // C4：不再寫 personalRecords；由底部 subscribe 自動派生（sessions 變化 → 重算 PR）
         set({
           sessions: newSessions,
-          personalRecords: newPRs,
           activeSession: null,
           nextDayIndex: nextIndex,
         });
@@ -522,32 +478,7 @@ export const useWorkoutStore = create<WorkoutState>()(
           get().sessions.reduce((sum, s) => sum + s.totalVolume, 0) / 1000
         ),
 
-      getStreakDays: () => {
-        const sessions = get().sessions;
-        if (sessions.length === 0) return 0;
-        const dates = sessions
-          .map((s) => new Date(s.date).toDateString())
-          .filter((d, i, arr) => arr.indexOf(d) === i)
-          .map((d) => new Date(d))
-          .sort((a, b) => b.getTime() - a.getTime());
-        let streak = 0;
-        let cursor = new Date();
-        cursor.setHours(0, 0, 0, 0);
-        for (const d of dates) {
-          const day = new Date(d);
-          day.setHours(0, 0, 0, 0);
-          const diff = Math.round((cursor.getTime() - day.getTime()) / 86400000);
-          if (diff === 0) {
-            streak++;
-          } else if (diff === 1) {
-            streak++;
-            cursor = day;
-          } else {
-            break;
-          }
-        }
-        return streak;
-      },
+      getStreakDays: () => getStreakDaysSelector(get().sessions),
 
       getExerciseProgress: (exerciseId) => {
         const sessions = get().sessions;
@@ -737,11 +668,10 @@ export const useWorkoutStore = create<WorkoutState>()(
         // 至少有 1 次訓練的部位視為已接觸；否則偏低
         // 另：最近 14 天沒碰且 volume 偏低者也標示
         const now = Date.now();
-        const FOURTEEN_DAYS = 14 * 86400000;
         return groups.filter((g) => {
           const s = stats[g];
           if (s.workoutCount === 0) return true;
-          if (s.lastTrainedAt && now - new Date(s.lastTrainedAt).getTime() > FOURTEEN_DAYS) {
+          if (s.lastTrainedAt && now - new Date(s.lastTrainedAt).getTime() > FOURTEEN_DAYS_MS) {
             return true;
           }
           return false;
@@ -750,53 +680,60 @@ export const useWorkoutStore = create<WorkoutState>()(
     }),
     {
       name: 'ironpulse-workouts',
-      version: 6,
+      version: 7,
       partialize: (state) => ({
         sessions: state.sessions,
-        personalRecords: state.personalRecords,
         customExercises: state.customExercises,
         activePlanId: state.activePlanId,
         nextDayIndex: state.nextDayIndex,
         taxonomyVersion: state.taxonomyVersion,
+        // C4 / L1：personalRecords 為衍生資料，不 persist；讀取時由 sessions + customExercises 派生
       }),
       migrate: (persistedState, version) => {
-        const raw = (persistedState ?? {}) as any;
-        const sessions = Array.isArray(raw.sessions) ? raw.sessions : [];
-        const personalRecords = Array.isArray(raw.personalRecords) ? raw.personalRecords : [];
+        const raw = (persistedState ?? {}) as Record<string, unknown>;
+        const sessions: unknown = Array.isArray(raw.sessions) ? raw.sessions : [];
+        // C4：忽略舊 persist 的 personalRecords（v6 之前有寫），改由 sessions 派生
+        const safeSessions = sessions as WorkoutSession[];
 
         // v5：CustomExercise 升級為強制分類結構
         let customExercises: CustomExercise[] = [];
-        const incomingCustom: any[] = Array.isArray(raw.customExercises) ? raw.customExercises : [];
+        const incomingCustom: unknown[] = Array.isArray(raw.customExercises) ? raw.customExercises : [];
         for (const item of incomingCustom) {
+          if (typeof item !== 'object' || item === null) continue;
+          const obj = item as Record<string, unknown>;
           // 舊版只有 id/name/createdAt（LegacyCustomExercise）
           const isLegacy =
-            typeof item === 'object' &&
-            item !== null &&
-            typeof item.id === 'string' &&
-            typeof item.name === 'string' &&
-            typeof item.muscleGroup !== 'string'; // 舊版無 muscleGroup
+            typeof obj.id === 'string' &&
+            typeof obj.name === 'string' &&
+            typeof obj.muscleGroup !== 'string'; // 舊版無 muscleGroup
           if (isLegacy) {
-            customExercises.push(migrateLegacyCustomExercise(item as LegacyCustomExercise));
-          } else if (typeof item === 'object' && item !== null) {
+            customExercises.push(migrateLegacyCustomExercise(obj as unknown as LegacyCustomExercise));
+          } else {
             // v2 已有分類（或部分分類）：走 patchExerciseWithClassifications 補齊
             try {
-              const patched = patchExerciseWithClassifications(item);
+              const patched = patchExerciseWithClassifications(obj as object);
               customExercises.push({ ...patched, isCustom: true });
             } catch {
               // 損壞條目：建立最小可用條目
               customExercises.push(
-                createCustomExerciseV2(item.name ?? '遺失名稱動作', 'chest', 'other', {
-                  id: item.id ?? generateId('custom'),
-                  createdAt: item.createdAt,
-                })
+                createCustomExerciseV2(
+                  typeof obj.name === 'string' ? obj.name : '遺失名稱動作',
+                  'chest',
+                  'other',
+                  {
+                    id: typeof obj.id === 'string' ? obj.id : generateId('custom'),
+                    createdAt: typeof obj.createdAt === 'string' ? obj.createdAt : new Date().toISOString(),
+                  }
+                )
               );
             }
           }
         }
 
+        // A-002 / C4：personalRecords 由 subscribe 自動派生，migrate 不需處理
+
         return {
-          sessions,
-          personalRecords,
+          sessions: safeSessions,
           customExercises,
           activePlanId: typeof raw.activePlanId === 'string' ? raw.activePlanId : null,
           nextDayIndex: typeof raw.nextDayIndex === 'number' ? raw.nextDayIndex : 0,
@@ -807,10 +744,21 @@ export const useWorkoutStore = create<WorkoutState>()(
   )
 );
 
+// C4：personalRecords 為衍生資料 — 監聽 sessions / customExercises 變化自動派生
+// 觸發點：finishSession、editCustomExercise（分類變更）、deleteCustomExercise、migrate
+useWorkoutStore.subscribe((state, prevState) => {
+  if (state.sessions === prevState.sessions && state.customExercises === prevState.customExercises) {
+    return;
+  }
+  const prs = computePRsFromSessions(state.sessions, state.customExercises);
+  // 避免無變化時無謂 setState
+  if (prs !== state.personalRecords) {
+    useWorkoutStore.setState({ personalRecords: prs });
+  }
+});
+
 // 彙出 helper：取所有動作（內建 + 自訂），供 UI/替換選單使用
+// C1：委派至 taxonomy 權威模組
 export function getAllExercises(): Exercise[] {
-  return [
-    ...builtinExercises,
-    ...useWorkoutStore.getState().customExercises,
-  ];
+  return getAllExercisesWith(useWorkoutStore.getState().customExercises);
 }

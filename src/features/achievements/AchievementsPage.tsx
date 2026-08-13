@@ -33,6 +33,7 @@ import {
   type LiftFamily,
 } from '@/data/achievements';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
+import { settleTaxonomyChange } from '@/features/stats/settleAll';
 import { NextAchievementCard } from './components/NextAchievementCard';
 import { TrackTabs } from './components/TrackTabs';
 import { StrengthLadder } from './components/StrengthLadder';
@@ -41,6 +42,7 @@ import { AchievementDetailSheet } from './components/AchievementDetailSheet';
 import { TimelineView } from './components/TimelineView';
 import { pickNextAchievement } from './engine/nextAchievement';
 import { cn } from '@/lib/utils';
+import { formatUnlockDate } from '@/utils/format';
 
 const LIFT_FAMILIES: { family: LiftFamily; label: string }[] = [
   { family: 'bench', label: '臥推' },
@@ -50,10 +52,9 @@ const LIFT_FAMILIES: { family: LiftFamily; label: string }[] = [
 ];
 
 export default function AchievementsPage() {
-  const { sessions, personalRecords, getGroupStats } = useWorkoutStore();
+  const { sessions, personalRecords } = useWorkoutStore();
   const { profile } = useProfileStore();
   const progress = useAchievementsStore((s) => s.progress);
-  const recompute = useAchievementsStore((s) => s.recompute);
   const lastMetrics = useAchievementsStore((s) => s.lastMetrics);
   const log = useTelemetryStore((s) => s.log);
 
@@ -63,17 +64,10 @@ export default function AchievementsPage() {
 
   // 進入頁面時重算（確保分類變更後即時反映）
   useEffect(() => {
-    const groupStats = getGroupStats();
-    recompute({
-      sessions,
-      personalRecords,
-      bodyWeight: profile.bodyWeight ?? 75,
-      hasCustomExercises: useWorkoutStore.getState().customExercises.length > 0,
-      hasCustomPlans: false,
-      groupStats,
-    });
+    // C5：統一透過 settleTaxonomyChange 結算（保證 achievements + quests 同源）
+    settleTaxonomyChange();
     log('achievement_wall_viewed');
-  }, [recompute, getGroupStats, sessions, personalRecords, profile.bodyWeight, log]);
+  }, [sessions, personalRecords, profile.bodyWeight, log]);
 
   // 格式化 copy
   const formatCopy = useCallback(
@@ -198,7 +192,7 @@ export default function AchievementsPage() {
               </h2>
               {lastUnlockDate && (
                 <p className="text-[10px] text-text-secondary mt-1">
-                  最近解鎖 {new Date(lastUnlockDate).toLocaleDateString('zh-TW')}
+                  最近解鎖 {formatUnlockDate(lastUnlockDate)}
                 </p>
               )}
             </div>
@@ -271,6 +265,12 @@ export default function AchievementsPage() {
           {/* 內容區 */}
           {activeTrack === 'strength' ? (
             <div className="flex flex-col gap-4">
+              {/* D3：未填體重時 BW 軌成就鎖定提示 */}
+              {profile.bodyWeight === null && (
+                <div className="px-3 py-2 rounded-card border border-dashed border-auxiliary/40 bg-auxiliary/5 text-[10px] text-text-secondary leading-relaxed">
+                  未填體重：相對力量（×BW）成就已鎖定。請至「設定」輸入體重即可解鎖。
+                </div>
+              )}
               {LIFT_FAMILIES.map(({ family, label }) => {
                 const tiers = strengthByFamily[family];
                 if (!tiers || tiers.length === 0) return null;

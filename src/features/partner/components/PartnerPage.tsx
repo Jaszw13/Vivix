@@ -21,7 +21,7 @@ import { handleQuestClaimed } from '../engine/rewardEngine';
 import { QUESTS } from '../data/quests';
 import { COSMETICS, COSMETIC_MAP } from '../data/cosmetics';
 import { PARTNER_FORMS, getFormForWorkouts } from '../data/forms';
-import { getXpProgress, LEVEL_CAP } from '../engine/level';
+import { getXpProgress, LEVEL_CAP, getLevelForXp } from '../engine/level';
 import { QuestList } from './QuestList';
 import { CosmeticGrid } from './CosmeticGrid';
 
@@ -31,9 +31,12 @@ export function PartnerPage() {
   // ---- Partner store（細粒度 selector） ----
   const name = usePartnerStore((s) => s.name);
   const species = usePartnerStore((s) => s.species);
-  const level = usePartnerStore((s) => s.level);
   const xp = usePartnerStore((s) => s.xp);
-  const totalWorkouts = usePartnerStore((s) => s.totalWorkouts);
+  // C4：level 由 xp 派生（getLevelForXp）
+  const level = useMemo(() => getLevelForXp(xp), [xp]);
+  // C4：totalWorkouts 由 sessions 派生
+  const sessions = useWorkoutStore((s) => s.sessions);
+  const totalWorkouts = sessions.length;
   const currentFormId = usePartnerStore((s) => s.currentFormId);
   const unlockedFormIds = usePartnerStore((s) => s.unlockedFormIds);
   const unlockedCosmeticIds = usePartnerStore((s) => s.unlockedCosmeticIds);
@@ -48,7 +51,6 @@ export function PartnerPage() {
   // ---- Quest / workout / profile ----
   const questProgress = useQuestStore((s) => s.progress);
   const recomputeQuests = useQuestStore((s) => s.recompute);
-  const sessions = useWorkoutStore((s) => s.sessions);
   const personalRecords = useWorkoutStore((s) => s.personalRecords);
   const getStreakDays = useWorkoutStore((s) => s.getStreakDays);
   const goal = useProfileStore((s) => s.goal);

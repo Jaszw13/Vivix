@@ -66,10 +66,6 @@ export interface TelemetryEvent {
 
 export interface FeatureFlags {
   partnerEnabled: boolean;
-  partnerQuestsEnabled: boolean;
-  warmupEnabled: boolean;
-  telemetryEnabled: boolean;
-  debugPanelEnabled: boolean;
 }
 
 // XP 獎勵事件類型

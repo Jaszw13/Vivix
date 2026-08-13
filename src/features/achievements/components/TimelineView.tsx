@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { TIER_COLORS, TRACK_LABELS, ACHIEVEMENTS, type AchievementDef } from '@/data/achievements';
 import type { AchievementProgress } from '@/store/achievementsStore';
 import { cn } from '@/lib/utils';
+import { formatUnlockDate } from '@/utils/format';
 
 interface Props {
   progress: Record<string, AchievementProgress>;
@@ -17,9 +18,9 @@ function TimelineViewImpl({ progress }: Props) {
     return ACHIEVEMENTS
       .filter((a) => progress[a.id]?.unlocked && progress[a.id]?.unlockedAt)
       .sort((a, b) => {
-        const ta = new Date(progress[a.id]!.unlockedAt!).getTime();
-        const tb = new Date(progress[b.id]!.unlockedAt!).getTime();
-        return tb - ta; // 最新在前
+        const ta = progress[a.id]?.unlockedAt;
+        const tb = progress[b.id]?.unlockedAt;
+        return (tb ? new Date(tb).getTime() : 0) - (ta ? new Date(ta).getTime() : 0); // 最新在前
       });
   }, [progress]);
 
@@ -44,7 +45,8 @@ function TimelineViewImpl({ progress }: Props) {
       <div className="flex flex-col gap-4">
         {unlocked.map((def, i) => {
           const tier = TIER_COLORS[def.tier];
-          const p = progress[def.id]!;
+          const p = progress[def.id];
+          const unlockedAt = p?.unlockedAt;
           return (
             <motion.div
               key={def.id}
@@ -78,7 +80,7 @@ function TimelineViewImpl({ progress }: Props) {
                 </div>
                 <h4 className="font-bold text-sm text-text-primary">{def.title}</h4>
                 <p className="font-mono text-[10px] text-text-secondary tabular-nums mt-0.5">
-                  {new Date(p.unlockedAt!).toLocaleDateString('zh-TW')}
+                  {unlockedAt ? formatUnlockDate(unlockedAt) : '—'}
                 </p>
               </div>
             </motion.div>

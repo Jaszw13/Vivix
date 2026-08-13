@@ -16,7 +16,6 @@ import { Trophy, TrendingUp, BarChart3, AlertCircle, Dumbbell } from 'lucide-rea
 import { PageShell } from '@/components/layout/PageShell';
 import { Card, SectionHeader, Badge } from '@/components/ui/Card';
 import { useWorkoutStore, getAllExercises } from '@/store/workoutStore';
-import { getExerciseById } from '@/data/exercises';
 import { formatDate } from '@/utils/workout';
 import {
   MUSCLE_GROUP_LABELS,
@@ -25,6 +24,7 @@ import {
 } from '@/types';
 import type { MuscleGroup, PersonalRecord } from '@/types';
 import { cn } from '@/lib/utils';
+import { CHART_WEEK_COLORS } from '@/data/theme';
 
 type ProgressScope = 'all' | MuscleGroup;
 
@@ -50,8 +50,7 @@ export default function Progress() {
   const defaultEx = allExercises[0]?.id ?? 'bench-press';
   const [selectedExerciseId, setSelectedExerciseId] = useState(defaultEx);
   const progress = getExerciseProgress(selectedExerciseId);
-  const selectedExercise = getExerciseById(selectedExerciseId) ??
-    allExercises.find((e) => e.id === selectedExerciseId);
+  const selectedExercise = allExercises.find((e) => e.id === selectedExerciseId);
 
   // ----- 分部位數據 -----
   const groupStats = useMemo(() => getGroupStats(), [getGroupStats]);
@@ -69,10 +68,10 @@ export default function Progress() {
     return personalRecords.filter((pr) => {
       const g =
         (pr.muscleGroup as MuscleGroup | undefined) ??
-        getExerciseById(pr.exerciseId)?.muscleGroup;
+        allExercises.find((e) => e.id === pr.exerciseId)?.muscleGroup;
       return g === scope;
     });
-  }, [personalRecords, scope]);
+  }, [personalRecords, scope, allExercises]);
 
   // ----- 部位分佈（部位體積） -----
   const groupVolumeData = useMemo(
@@ -86,7 +85,8 @@ export default function Progress() {
     [groupStats]
   );
 
-  const WEEK_COLORS = ['#D4FF00', '#FF6B35', '#4A7C7A', '#C9A96E', '#E8A87C', '#8E8E93'];
+  // C7：週色盤改讀 data/theme.ts（原 inline hex）
+  const WEEK_COLORS = CHART_WEEK_COLORS;
 
   return (
     <PageShell title="進度追蹤">
@@ -209,7 +209,7 @@ export default function Progress() {
             scopedPRs.map((pr) => {
               const mg: MuscleGroup | undefined =
                 (pr.muscleGroup as MuscleGroup) ??
-                getExerciseById(pr.exerciseId)?.muscleGroup;
+                allExercises.find((e) => e.id === pr.exerciseId)?.muscleGroup;
               return (
                 <div key={pr.exerciseId} className="p-3 flex items-center gap-3">
                   <div className="w-8 h-8 rounded bg-auxiliary/15 flex items-center justify-center">

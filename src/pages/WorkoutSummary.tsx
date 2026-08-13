@@ -10,7 +10,7 @@ import { PageShell } from '@/components/layout/PageShell';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { usePartnerStore } from '@/features/partner/stores/partnerStore';
 import { useFeatureFlags } from '@/features/partner/stores/featureFlags';
-import { handleWorkoutCompleted } from '@/features/partner/engine/rewardEngine';
+import { settleAll } from '@/features/stats/settleAll';
 import { PARTNER_FORMS } from '@/features/partner/data/forms';
 import { COSMETIC_MAP } from '@/features/partner/data/cosmetics';
 import type { RewardResult } from '@/features/partner/types';
@@ -49,7 +49,8 @@ export default function WorkoutSummary() {
     const personalRecords = useWorkoutStore.getState().personalRecords;
     const hasPR = personalRecords.some((pr) => pr.date === session.date);
 
-    const result = handleWorkoutCompleted({
+    // C5：統一透過 settleAll 編排（partner + achievements + quests + telemetry）
+    const settleResult = settleAll({
       date: session.date,
       completedSets,
       plannedSets,
@@ -57,11 +58,14 @@ export default function WorkoutSummary() {
       durationSeconds: session.duration,
       warmupCompleted: session.warmupCompletedIds.length > 0,
     });
-    setReward(result);
-    // 升級時延遲彈出 LevelUpModal，等用戶先看到獎勵卡
-    if (result.leveledUp) {
-      const t = window.setTimeout(() => setLevelUpVisible(true), 900);
-      return () => window.clearTimeout(t);
+    const result = settleResult.partnerReward;
+    if (result) {
+      setReward(result);
+      // 升級時延遲彈出 LevelUpModal，等用戶先看到獎勵卡
+      if (result.leveledUp) {
+        const t = window.setTimeout(() => setLevelUpVisible(true), 900);
+        return () => window.clearTimeout(t);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

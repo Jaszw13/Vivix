@@ -192,15 +192,16 @@ function computePRsFromSessions(sessions: WorkoutSession[]): PersonalRecord[] {
   return Array.from(map.values()).sort((a, b) => b.estimated1RM - a.estimated1RM);
 }
 
-const sampleSessions = buildSampleHistory();
-const samplePRs = computePRsFromSessions(sampleSessions);
+// C6 / D4：mobile-app 凍結為 prototype — 移除 sampleSessions seed，新裝見空狀態
+// const sampleSessions = buildSampleHistory();
+// const samplePRs = computePRsFromSessions(sampleSessions);
 
 export const useWorkoutStore = create<WorkoutState>()(
   persist(
     (set, get) => ({
-      sessions: sampleSessions,
+      sessions: [],
       activeSession: null,
-      personalRecords: samplePRs,
+      personalRecords: [],
       lastFinishedSession: null,
 
       startSession: (planId, planName, day) => {

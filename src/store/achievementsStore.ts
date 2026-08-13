@@ -11,7 +11,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { MuscleGroup, GroupStats, WorkoutSession, PersonalRecord } from '@/types';
 import { estimate1RM } from '@/utils/workout';
-import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
+import { DAY_MS, WEEK_MS } from '@/utils/time';
+import { getStreakDays as getStreakDaysSelector } from '@/features/stats/selectors';
 import {
   ACHIEVEMENTS,
   SORTED_ACHIEVEMENTS,
@@ -50,7 +51,8 @@ export interface AchievementProgress {
 export interface DeriveContext {
   sessions: WorkoutSession[];
   personalRecords: PersonalRecord[];
-  bodyWeight: number;
+  /** D3：null 表示未填體重，BW 軌成就不觸發 */
+  bodyWeight: number | null;
   hasCustomExercises: boolean;
   hasCustomPlans: boolean;
   groupStats: Record<MuscleGroup, GroupStats>;
@@ -89,7 +91,7 @@ function computeMetrics(ctx: DeriveContext): ComputedMetrics {
   const maxEst1RMByFamily: Partial<Record<LiftFamily, number>> = {};
   const startKgByFamily: Partial<Record<LiftFamily, number>> = {};
   for (const pr of personalRecords) {
-    const family = getLiftFamily(pr.exerciseId, pr.exerciseName);
+    const family = getLiftFamily(pr.exerciseId, pr.exerciseName, pr.liftFamily);
     if (!family) continue;
     if (!maxEst1RMByFamily[family] || pr.estimated1RM > maxEst1RMByFamily[family]!) {
       maxEst1RMByFamily[family] = pr.estimated1RM;
@@ -100,9 +102,9 @@ function computeMetrics(ctx: DeriveContext): ComputedMetrics {
     }
   }
 
-  // 2. est1RM / bodyweight
+  // 2. est1RM / bodyweight — D3：bodyWeight 為 null 時 BW 軌指標留空（成就不觸發）
   const maxEst1RMBWByFamily: Partial<Record<LiftFamily, number>> = {};
-  if (bodyWeight > 0) {
+  if (bodyWeight !== null && bodyWeight > 0) {
     for (const [family, kg] of Object.entries(maxEst1RMByFamily)) {
       if (kg !== undefined) {
         maxEst1RMBWByFamily[family as LiftFamily] = kg / bodyWeight;
@@ -145,18 +147,8 @@ function computeMetrics(ctx: DeriveContext): ComputedMetrics {
   // 4. sessions
   const totalSessions = sessions.length;
 
-  // 5. streak (max consecutive days)
-  const sessionDates = new Set(
-    sessions.map((s) => new Date(s.date).toDateString()),
-  );
-  let streak = 0;
-  const today = new Date();
-  // Start from today, walk backwards
-  const cursor = new Date(today);
-  while (sessionDates.has(cursor.toDateString())) {
-    streak++;
-    cursor.setDate(cursor.getDate() - 1);
-  }
+  // 5. streak — C3：統一走 stats/selectors 權威實作（D1 語義）
+  const streak = getStreakDaysSelector(sessions);
 
   // 6. weekly rhythm (consecutive weeks with ≥2 sessions)
   const weekMap = new Map<string, number>();
@@ -180,7 +172,7 @@ function computeMetrics(ctx: DeriveContext): ComputedMetrics {
     if (count >= 2) {
       if (prevWeek) {
         const diff = Math.round(
-          (new Date(weekKey).getTime() - prevWeek.getTime()) / (7 * 86400000),
+          (new Date(weekKey).getTime() - prevWeek.getTime()) / WEEK_MS,
         );
         if (diff === 1) {
           currentRun++;
@@ -301,7 +293,7 @@ function computeMetrics(ctx: DeriveContext): ComputedMetrics {
   if (sessions.length > 0) {
     const first = new Date(sortedSessions[0].date).getTime();
     const now = Date.now();
-    weeksSinceFirst = Math.floor((now - first) / (7 * 86400000));
+    weeksSinceFirst = Math.floor((now - first) / WEEK_MS);
   }
 
   // 16. total volume
@@ -393,24 +385,6 @@ export function formatAchievementCopy(def: AchievementDef, metrics: ComputedMetr
   return copy;
 }
 
-// ── Next achievement (highest progress %, not yet unlocked) ──
-export function getNextAchievement(
-  metrics: ComputedMetrics,
-  progress: Record<string, AchievementProgress>,
-): { def: AchievementDef; ratio: number; current: number; threshold: number } | null {
-  let best: { def: AchievementDef; ratio: number; current: number; threshold: number } | null = null;
-  for (const def of ACHIEVEMENTS) {
-    const p = progress[def.id];
-    if (p?.unlocked) continue;
-    const current = currentOf(metrics, def);
-    const ratio = def.threshold > 0 ? Math.min(current / def.threshold, 1) : 0;
-    if (!best || ratio > best.ratio) {
-      best = { def, ratio, current, threshold: def.threshold };
-    }
-  }
-  return best;
-}
-
 // ── Store interface ──
 interface AchievementsState {
   progress: Record<string, AchievementProgress>;
@@ -432,27 +406,6 @@ function emptyProgress(): Record<string, AchievementProgress> {
   return res;
 }
 
-// ── Backward compat: old TIER_STYLES ──
-export const TIER_STYLES: Record<string, { badge: string; ring: string; title: string }> = {
-  1: { badge: 'bg-stone-500/20 text-stone-400 border-stone-500/40', ring: 'from-stone-500/40', title: '石' },
-  2: { badge: 'bg-amber-700/20 text-amber-600 border-amber-700/40', ring: 'from-amber-700/40', title: '銅' },
-  3: { badge: 'bg-slate-400/20 text-slate-300 border-slate-400/40', ring: 'from-slate-400/50', title: '銀' },
-  4: { badge: 'bg-amber-500/20 text-amber-400 border-amber-500/50', ring: 'from-amber-500/60', title: '金' },
-  5: { badge: 'bg-amber-400/20 text-amber-300 border-amber-400/50', ring: 'from-amber-400/70', title: '電' },
-};
-
-// ── Backward compat: groupAchievementsByCategory ──
-export function groupAchievementsByCategory(): Record<'global' | MuscleGroup, AchievementDef[]> {
-  const out: Record<string, AchievementDef[]> = {
-    global: [], chest: [], back: [], legs: [], shoulders: [], arms: [], core: [],
-  };
-  for (const a of ACHIEVEMENTS) {
-    if (a.muscleGroup) out[a.muscleGroup]?.push(a);
-    else out.global.push(a);
-  }
-  return out as any;
-}
-
 export const useAchievementsStore = create<AchievementsState>()(
   persist(
     (set, get) => ({
@@ -470,35 +423,35 @@ export const useAchievementsStore = create<AchievementsState>()(
         for (const def of ACHIEVEMENTS) {
           const prevP = prev[def.id] ?? { unlocked: false, current: 0 };
           const current = currentOf(metrics, def);
-          const unlocked = current >= def.threshold;
+          const reached = current >= def.threshold;
+          const alreadyUnlocked = !!prevP.unlockedAt;
 
-          if (unlocked && !prevP.unlocked) {
+          // D2：unlocked 永久保存 — 一旦 unlockedAt 被設置就不清除
+          // A-005：current 一律 live 計算（不 Math.max 單調遞增）
+          if (reached && !alreadyUnlocked) {
             newUnlocks.push(def.id);
+            next[def.id] = {
+              unlocked: true,
+              unlockedAt: new Date().toISOString(),
+              current,
+            };
+          } else {
+            next[def.id] = {
+              unlocked: alreadyUnlocked,
+              unlockedAt: prevP.unlockedAt,
+              current,
+            };
           }
-          next[def.id] = {
-            unlocked: unlocked || prevP.unlocked,
-            unlockedAt:
-              unlocked && !prevP.unlocked ? new Date().toISOString() : prevP.unlockedAt,
-            current: Math.max(prevP.current ?? 0, current),
-          };
         }
 
         set({
           progress: next,
           pendingUnlockIds: newUnlocks,
+          // C4：lastMetrics 為衍生資料，記憶體中保留供 UI format 用，不 persist
           lastMetrics: metrics,
         });
 
-        // Telemetry: 記錄新解鎖
-        if (newUnlocks.length > 0) {
-          const log = useTelemetryStore.getState().log;
-          for (const id of newUnlocks) {
-            const def = ACHIEVEMENTS.find((a) => a.id === id);
-            if (def) {
-              log('achievement_unlocked', { id, track: def.track, tier: def.tier });
-            }
-          }
-        }
+        // C5：telemetry 統一由 settleAll 編排點 log（此處不再直接 import telemetryStore）
 
         return newUnlocks;
       },
@@ -523,26 +476,37 @@ export const useAchievementsStore = create<AchievementsState>()(
     }),
     {
       name: 'ironpulse-achievements',
-      version: 3,
+      version: 4,
+      // C4 / L1：只 persist 永久決定（unlockedAt、seen、pending）；lastMetrics 和 current 為衍生，不 persist
+      partialize: (state) => ({
+        // progress 只保留 unlockedAt（D2 永久）；current 不 persist（live 計算）
+        progress: Object.fromEntries(
+          Object.entries(state.progress).map(([id, p]) => [
+            id,
+            { unlockedAt: p.unlockedAt } as AchievementProgress,
+          ]),
+        ),
+        seenUnlockIds: state.seenUnlockIds,
+        pendingUnlockIds: state.pendingUnlockIds,
+      }),
       migrate: (persistedState, version) => {
         const s = (persistedState ?? {}) as Partial<AchievementsState>;
         const base = emptyProgress();
         const incoming = s.progress ?? {};
-        // Merge: keep unlocked state from old progress, reset current to 0 (will be recomputed)
+        // Merge: keep unlockedAt from old progress (D2 永久); current 重設為 0 (recompute 時 live)
         for (const id of Object.keys(base)) {
           if (incoming[id]) {
             base[id] = {
-              unlocked: incoming[id].unlocked ?? false,
+              unlocked: !!incoming[id].unlockedAt,
               unlockedAt: incoming[id].unlockedAt,
-              current: incoming[id].current ?? 0,
+              current: 0,
             };
           }
         }
         // For old achievement IDs that no longer exist, mark as unlocked (preserve old unlocks)
         for (const id of Object.keys(incoming)) {
-          if (!base[id] && incoming[id]?.unlocked) {
-            // Old achievement no longer in catalog — preserve unlock but don't display
-            base[id] = { unlocked: true, unlockedAt: incoming[id].unlockedAt, current: incoming[id].current ?? 0 };
+          if (!base[id] && incoming[id]?.unlockedAt) {
+            base[id] = { unlocked: true, unlockedAt: incoming[id].unlockedAt, current: 0 };
           }
         }
         return {

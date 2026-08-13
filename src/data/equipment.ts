@@ -186,15 +186,3 @@ export const equipmentLibrary: Equipment[] = [
     media: { ...DEFAULT_MEDIA } as MediaRef,
   },
 ];
-
-export function getEquipmentById(id: string): Equipment | undefined {
-  return equipmentLibrary.find((e) => e.id === id);
-}
-
-export function getEquipmentsByCategory(cat: EquipmentType): Equipment[] {
-  return equipmentLibrary.filter((e) => e.category === cat);
-}
-
-export function getEquipmentsForMuscleGroup(group: MuscleGroup): Equipment[] {
-  return equipmentLibrary.filter((e) => e.typicalMuscleGroups.includes(group));
-}
