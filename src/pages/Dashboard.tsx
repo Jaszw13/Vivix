@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
-import { Flame, Plus, TrendingUp, Trophy, Zap, Award, X, Sparkles, Cat, Dog, ChevronRight, Gift } from 'lucide-react';
+import { Flame, Plus, TrendingUp, Trophy, Zap, Award, Cat, Dog, ChevronRight, Gift } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { Button } from '@/components/ui/Button';
 import { Card, SectionHeader, StatTile, Badge } from '@/components/ui/Card';
@@ -9,12 +9,13 @@ import { useWorkoutStore } from '@/store/workoutStore';
 import { useProfileStore } from '@/store/profileStore';
 import {
   useAchievementsStore,
-  ACHIEVEMENTS,
   SORTED_ACHIEVEMENTS,
-  TIER_STYLES,
-  type AchievementDef,
+  formatAchievementCopy,
 } from '@/store/achievementsStore';
-import { trainingPlans, getPlanById } from '@/data/plans';
+import { ACHIEVEMENTS, TIER_COLORS, type AchievementDef } from '@/data/achievements';
+import { CelebrationModal, type CelebrationItem } from '@/features/achievements/components/CelebrationModal';
+import { trainingPlans } from '@/data/plans';
+import { usePlansStore } from '@/store/plansStore';
 import { formatDate } from '@/utils/workout';
 import { cn } from '@/lib/utils';
 import { usePartnerStore } from '@/features/partner/stores/partnerStore';
@@ -22,6 +23,7 @@ import { useFeatureFlags } from '@/features/partner/stores/featureFlags';
 import { getXpProgress } from '@/features/partner/engine/level';
 import { getFormForWorkouts } from '@/features/partner/data/forms';
 import { PartnerSetupModal } from '@/features/partner/components/PartnerSetupModal';
+import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 
 // 新手預設計畫：5x5 力量基礎 (beginner)
 const DEFAULT_BEGINNER_PLAN_ID = '5x5-strength';
@@ -56,40 +58,54 @@ export default function Dashboard() {
   //   re-render → deps 又新 → infinite loop → React error #185。
   const recompute = useAchievementsStore((s) => s.recompute);
   const markUnlockSeen = useAchievementsStore((s) => s.markUnlockSeen);
-  const pendingUnlockId = useAchievementsStore((s) => s.pendingUnlockId);
+  const pendingUnlockIds = useAchievementsStore((s) => s.pendingUnlockIds);
   const progress = useAchievementsStore((s) => s.progress);
+  const lastMetrics = useAchievementsStore((s) => s.lastMetrics);
 
   const totalSessions = getTotalSessions();
   const totalVolume = getTotalVolume(); // 噸
   const streak = getStreakDays();
 
-  // 成就：派生 context 並 recompute（每次統計值變動都會自動更新）
-  // 加入 groupStats：分部位成就只計算對應部位的 workoutCount / prCount
-  //   → 腿部重量不會加速胸部成就（P-01 根因修復）
+  // 成就 v1.3：派生 context 並 recompute
+  // P-01：傳遞 raw data 讓 engine 從當前分類派生所有 metric
   const achieveCtx = useMemo(() => {
-    const varietyIds = new Set<string>();
-    for (const s of sessions) {
-      for (const ex of s.exercises) varietyIds.add(ex.exerciseId);
-    }
     const groupStats = getGroupStats();
     return {
-      totalSessions,
-      streak,
-      totalVolumeTon: totalVolume,
-      prCount: personalRecords.length,
-      exercisesVariety: varietyIds.size,
+      sessions,
+      personalRecords,
+      bodyWeight: profile.bodyWeight ?? 75,
+      hasCustomExercises: useWorkoutStore.getState().customExercises.length > 0,
+      hasCustomPlans: false, // T-05 尚未實作 custom plans
       groupStats,
     };
-  }, [sessions, totalSessions, streak, totalVolume, personalRecords.length, getGroupStats]);
+  }, [sessions, personalRecords, profile.bodyWeight, getGroupStats]);
 
   useEffect(() => {
     recompute(achieveCtx);
   }, [achieveCtx, recompute]);
 
-  // 解鎖彈窗
-  const pendingUnlock = pendingUnlockId
-    ? ACHIEVEMENTS.find((a) => a.id === pendingUnlockId) ?? null
-    : null;
+  // 解鎖慶祝清單（支援同一 session 多解鎖）
+  const celebrationItems: CelebrationItem[] = useMemo(() => {
+    if (!lastMetrics) return [];
+    return pendingUnlockIds
+      .map((id) => ACHIEVEMENTS.find((a) => a.id === id))
+      .filter((a): a is AchievementDef => !!a)
+      .map((def) => ({
+        def,
+        formattedCopy: formatAchievementCopy(def, lastMetrics),
+      }));
+  }, [pendingUnlockIds, lastMetrics]);
+
+  const [celebrationOpen, setCelebrationOpen] = useState(false);
+  useEffect(() => {
+    setCelebrationOpen(celebrationItems.length > 0);
+  }, [celebrationItems.length]);
+
+  const handleCelebrationContinue = () => {
+    setCelebrationOpen(false);
+    for (const item of celebrationItems) markUnlockSeen(item.def.id);
+    useTelemetryStore.getState().log('celebration_skipped');
+  };
 
   // 成就牆摘要（前 4 個）
   const unlockedCount = SORTED_ACHIEVEMENTS.filter(
@@ -102,11 +118,12 @@ export default function Dashboard() {
   const greeting =
     hour < 12 ? '早安' : hour < 18 ? '午後' : '夜晚';
 
-  // 決定今日訓練日與所屬計畫
+  // 決定今日訓練日與所屬計畫（T-05：支援自訂計畫）
+  const plansGetPlanById = usePlansStore((s) => s.getPlanById);
   const selectedPlanId = activePlanId ?? DEFAULT_BEGINNER_PLAN_ID;
-  let selectedPlan = getPlanById(selectedPlanId);
+  let selectedPlan = plansGetPlanById(selectedPlanId);
   // 防呆：若 activePlanId 不存在（被刪除等），fallback 到 5x5
-  if (!selectedPlan) selectedPlan = getPlanById(DEFAULT_BEGINNER_PLAN_ID)!;
+  if (!selectedPlan) selectedPlan = plansGetPlanById(DEFAULT_BEGINNER_PLAN_ID)!;
   const todayPlan = selectedPlan;
   const todayDayIndex = Math.min(
     Math.max(0, nextDayIndex),
@@ -520,77 +537,16 @@ export default function Dashboard() {
         </div>
       </motion.div>
 
-      {/* 成就解鎖彈窗（N2） */}
-      {pendingUnlock && (
-        <motion.div
-          key={pendingUnlock.id}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-md flex items-center justify-center p-6"
-          onClick={() => markUnlockSeen(pendingUnlock.id)}
-        >
-          <motion.div
-            initial={{ scale: 0.7, y: 40, rotateX: -15 }}
-            animate={{ scale: 1, y: 0, rotateX: 0 }}
-            transition={{
-              type: 'spring',
-              damping: 18,
-              stiffness: 260,
-              mass: 0.9,
-            }}
-            className="w-full max-w-xs bg-bg-primary rounded-3xl p-6 text-center border border-accent/30 relative overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* 背景光暈 */}
-            <div
-              className={`absolute inset-0 bg-gradient-to-br ${TIER_STYLES[pendingUnlock.tier].ring} opacity-60 pointer-events-none blur-2xl`}
-            />
-            <motion.div
-              initial={{ rotate: -30, scale: 0.5 }}
-              animate={{ rotate: 0, scale: 1 }}
-              transition={{ delay: 0.15, type: 'spring', stiffness: 300, damping: 15 }}
-              className="relative w-24 h-24 mx-auto rounded-full bg-bg-card flex items-center justify-center border border-border shadow-2xl"
-            >
-              <span className="text-5xl drop-shadow-lg">{pendingUnlock.icon}</span>
-              <Sparkles
-                size={18}
-                className="absolute -top-1 -right-1 text-yellow-400"
-                strokeWidth={2.5}
-              />
-              <Sparkles
-                size={14}
-                className="absolute -bottom-1 -left-2 text-accent"
-                strokeWidth={2.5}
-              />
-            </motion.div>
-            <div className="relative mt-5">
-              <Badge
-                variant="default"
-                className={
-                  'border ' + TIER_STYLES[pendingUnlock.tier].badge
-                }
-              >
-                {TIER_STYLES[pendingUnlock.tier].title}牌成就解鎖
-              </Badge>
-            </div>
-            <h3 className="relative font-display text-2xl tracking-wide uppercase text-text-primary mt-3">
-              {pendingUnlock.title}
-            </h3>
-            <p className="relative text-sm text-text-secondary mt-2 leading-relaxed">
-              {pendingUnlock.description}
-            </p>
-            <Button
-              fullWidth
-              size="lg"
-              className="relative mt-6"
-              onClick={() => markUnlockSeen(pendingUnlock.id)}
-            >
-              <Award size={18} /> 繼續訓練
-            </Button>
-          </motion.div>
-        </motion.div>
-      )}
+      {/* 成就解鎖慶祝儀式（v1.3：支援多解鎖合併） */}
+      <CelebrationModal
+        items={celebrationItems}
+        open={celebrationOpen}
+        onContinue={handleCelebrationContinue}
+        onViewWall={() => {
+          handleCelebrationContinue();
+          navigate('/achievements');
+        }}
+      />
 
       {/* 舊用戶補建立 Partner 的 Modal */}
       <PartnerSetupModal
@@ -605,24 +561,37 @@ export default function Dashboard() {
 function AchievementThumb({ def }: { def: AchievementDef }) {
   const prog = useAchievementsStore((s) => s.progress[def.id]) ?? { unlocked: false, current: 0 };
   const ratio = Math.min(1, prog.current / Math.max(1, def.threshold));
-  const style = TIER_STYLES[def.tier];
+  const tier = TIER_COLORS[def.tier];
   return (
     <div
       className={cn(
         'relative aspect-square rounded-card border p-2 flex flex-col items-center justify-center overflow-hidden transition-all',
         prog.unlocked
-          ? `bg-gradient-to-br ${style.ring} border-transparent`
-          : 'bg-bg-card border-border/40 opacity-60 grayscale'
+          ? 'border-transparent'
+          : 'bg-bg-card border-border/40 border-dashed',
       )}
+      style={prog.unlocked ? {
+        background: `linear-gradient(135deg, ${tier.color}25, transparent)`,
+      } : undefined}
     >
-      <span className="text-3xl leading-none">{def.icon}</span>
-      <div className="w-full mt-2 h-1 bg-black/10 rounded-full overflow-hidden">
+      <span
+        className="font-display text-lg tracking-wider font-bold"
+        style={{ color: prog.unlocked ? tier.color : 'var(--text-secondary)' }}
+      >
+        {tier.label}
+      </span>
+      <span className="text-[8px] text-text-secondary mt-0.5 truncate w-full text-center leading-tight">
+        {def.title}
+      </span>
+      <div className="w-full mt-1.5 h-1 bg-bg-secondary rounded-full overflow-hidden">
         <div
-          className={cn(
-            'h-full rounded-full transition-all',
-            prog.unlocked ? 'bg-accent' : 'bg-text-secondary/40'
-          )}
-          style={{ width: `${Math.round(ratio * 100)}%` }}
+          className="h-full rounded-full transition-all"
+          style={{
+            width: `${Math.round(ratio * 100)}%`,
+            background: prog.unlocked
+              ? `linear-gradient(90deg, ${tier.color}, var(--accent))`
+              : 'var(--text-secondary)',
+          }}
         />
       </div>
     </div>

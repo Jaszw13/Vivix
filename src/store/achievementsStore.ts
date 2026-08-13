@@ -1,318 +1,422 @@
+/**
+ * Vivix 成就引擎 v1.3 — pure functions over workout history + taxonomy
+ *
+ * 設計原則：
+ *   - state 只存 { unlockedAt, progress } 快取
+ *   - recompute 時從 raw data 派生所有 metric
+ *   - 分部位；自訂動作分類後自動計入（P-01 回寫）
+ *   - 首 session 保證 ≥2 解鎖（第一步 + 熱身先鋒）
+ */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { MuscleGroup, GroupStats } from '@/types';
-import { MUSCLE_GROUP_LABELS } from '@/types';
+import type { MuscleGroup, GroupStats, WorkoutSession, PersonalRecord } from '@/types';
+import { estimate1RM } from '@/utils/workout';
+import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
+import {
+  ACHIEVEMENTS,
+  SORTED_ACHIEVEMENTS,
+  TIER_COLORS,
+  TRACK_LABELS,
+  TRACK_ICONS,
+  groupByTrack,
+  groupByLine,
+  getLiftFamily,
+  type AchievementDef,
+  type AchievementTrack,
+  type LiftFamily,
+  type AchievementMetric,
+} from '@/data/achievements';
 
-export type AchievementTier = 'bronze' | 'silver' | 'gold';
+// ── Re-export for backward compat ──
+export {
+  ACHIEVEMENTS,
+  SORTED_ACHIEVEMENTS,
+  TIER_COLORS,
+  TRACK_LABELS,
+  TRACK_ICONS,
+  groupByTrack,
+  groupByLine,
+  getLiftFamily,
+};
+export type { AchievementDef, AchievementTrack, LiftFamily, AchievementMetric };
 
-export interface AchievementDef {
-  id: string;
-  tier: AchievementTier;
-  icon: string;
-  title: string;
-  description: string;
-  kind:
-    | 'sessions'          // 全局：總訓練次數
-    | 'streak'            // 全局：連續天數
-    | 'volume_ton'        // 全局：總噸數（保留但不新增）
-    | 'pr_count'          // 全局：總 PR 數（保留但不新增）
-    | 'exercises_variety' // 全局：動作多樣性
-    // ---- T-02 分部位 ----
-    | 'group_workouts'    // 部位：訓練日數
-    | 'group_pr_count'    // 部位：PR 次數
-    | 'group_volume_ton'; // 部位：體積噸數（乘上 WEIGHT_MILESTONE_MULTIPLIERS 做公平校準）
-  threshold: number;
-  /** 若為分部位成就，綁定的 muscleGroup */
-  muscleGroup?: MuscleGroup;
-}
-
+// ── Types ──
 export interface AchievementProgress {
   unlocked: boolean;
   unlockedAt?: string;
   current: number;
 }
 
-/**
- * 全局 + 分部位成就的 derive 上下文。
- * 由 Dashboard / Achievements 頁從 workoutStore 拉出 groupStats 後傳入 recompute。
- */
-interface DeriveContext {
-  // 全局
-  totalSessions: number;
-  streak: number;
-  totalVolumeTon: number;
-  prCount: number;
-  exercisesVariety: number;
-  // 分部位（T-02 新增）
+export interface DeriveContext {
+  sessions: WorkoutSession[];
+  personalRecords: PersonalRecord[];
+  bodyWeight: number;
+  hasCustomExercises: boolean;
+  hasCustomPlans: boolean;
   groupStats: Record<MuscleGroup, GroupStats>;
 }
 
-// ============ 成就清單：全局 + 分部位 ============
-// 核心原則（§6 T-02）：
-//   1. 不使用跨部位全局重量門檻，重量型成就一律按部位校準
-//   2. 優先使用次數型成就（workoutCount / PR次數 / 連續週數）
-//   3. 腿部里程碑系數 1.8，確保腿部大重量不會加速胸部成就
-// ============
-
-export const ACHIEVEMENTS: AchievementDef[] = [
-  // ---------- 全局成就（與舊版一致，保留已驗證體驗） ----------
-  {
-    id: 'first-sweat',
-    tier: 'bronze',
-    icon: '🌱',
-    title: '第一次流汗',
-    description: '完成你的第一次訓練',
-    kind: 'sessions',
-    threshold: 1,
-  },
-  {
-    id: 'habit-3',
-    tier: 'bronze',
-    icon: '🫡',
-    title: '3 天連續',
-    description: '連續 3 天訓練，習慣開始成型',
-    kind: 'streak',
-    threshold: 3,
-  },
-  {
-    id: 'first-pr',
-    tier: 'bronze',
-    icon: '🏋️',
-    title: '第一個 PR',
-    description: '解鎖第一個個人紀錄',
-    kind: 'pr_count',
-    threshold: 1,
-  },
-  {
-    id: 'sessions-10',
-    tier: 'silver',
-    icon: '🔥',
-    title: '累計 10 次訓練',
-    description: '10 次認真訓練，新手村畢業',
-    kind: 'sessions',
-    threshold: 10,
-  },
-  {
-    id: 'streak-7',
-    tier: 'silver',
-    icon: '⚡',
-    title: '一周不間斷',
-    description: '連續 7 天訓練，Duolingo 級自律',
-    kind: 'streak',
-    threshold: 7,
-  },
-  {
-    id: 'variety-10',
-    tier: 'gold',
-    icon: '🧩',
-    title: '動作萬花筒',
-    description: '嘗試 10 種不同的動作',
-    kind: 'exercises_variety',
-    threshold: 10,
-  },
-
-  // ---------- 分部位成就：每部位 3 個（銅 3 次 → 銀 8 次 → 金 1 PR + 校準體積） ----------
-  // 胸部
-  {
-    id: 'chest_workouts_3',
-    tier: 'bronze',
-    icon: '💪',
-    title: '胸部穩定訓練',
-    description: '完成 3 次含胸部主項目的訓練',
-    kind: 'group_workouts',
-    muscleGroup: 'chest',
-    threshold: 3,
-  },
-  {
-    id: 'chest_workouts_8',
-    tier: 'silver',
-    icon: '🏔️',
-    title: '胸部堅持者',
-    description: '完成 8 次胸部訓練',
-    kind: 'group_workouts',
-    muscleGroup: 'chest',
-    threshold: 8,
-  },
-  {
-    id: 'chest_first_pr',
-    tier: 'silver',
-    icon: '🎯',
-    title: '胸部第一次突破',
-    description: '胸部動作達成 1 次 PR',
-    kind: 'group_pr_count',
-    muscleGroup: 'chest',
-    threshold: 1,
-  },
-  // 背部
-  {
-    id: 'back_workouts_3',
-    tier: 'bronze',
-    icon: '🦾',
-    title: '背部入門',
-    description: '完成 3 次背部訓練',
-    kind: 'group_workouts',
-    muscleGroup: 'back',
-    threshold: 3,
-  },
-  {
-    id: 'back_workouts_8',
-    tier: 'silver',
-    icon: '🐉',
-    title: '闊背養成',
-    description: '完成 8 次背部訓練',
-    kind: 'group_workouts',
-    muscleGroup: 'back',
-    threshold: 8,
-  },
-  {
-    id: 'back_first_pr',
-    tier: 'silver',
-    icon: '🎯',
-    title: '背部第一次突破',
-    description: '背部動作達成 1 次 PR',
-    kind: 'group_pr_count',
-    muscleGroup: 'back',
-    threshold: 1,
-  },
-  // 腿部（里程碑校準：1.8 倍系數，避免大重量快速刷成就）
-  {
-    id: 'legs_workouts_3',
-    tier: 'bronze',
-    icon: '🦵',
-    title: '腿部起步',
-    description: '完成 3 次腿部訓練',
-    kind: 'group_workouts',
-    muscleGroup: 'legs',
-    threshold: 3,
-  },
-  {
-    id: 'legs_workouts_8',
-    tier: 'silver',
-    icon: '🏗️',
-    title: '腿部堅持者',
-    description: '完成 8 次腿部訓練',
-    kind: 'group_workouts',
-    muscleGroup: 'legs',
-    threshold: 8,
-  },
-  {
-    id: 'legs_first_pr',
-    tier: 'silver',
-    icon: '🎯',
-    title: '腿部第一次突破',
-    description: '腿部動作達成 1 次 PR',
-    kind: 'group_pr_count',
-    muscleGroup: 'legs',
-    threshold: 1,
-  },
-  // 肩膀
-  {
-    id: 'shoulders_workouts_3',
-    tier: 'bronze',
-    icon: '🏛️',
-    title: '肩膀基礎',
-    description: '完成 3 次肩膀訓練',
-    kind: 'group_workouts',
-    muscleGroup: 'shoulders',
-    threshold: 3,
-  },
-  {
-    id: 'shoulders_workouts_8',
-    tier: 'silver',
-    icon: '⚓',
-    title: '肩寬養成',
-    description: '完成 8 次肩膀訓練',
-    kind: 'group_workouts',
-    muscleGroup: 'shoulders',
-    threshold: 8,
-  },
-  // 手臂
-  {
-    id: 'arms_workouts_3',
-    tier: 'bronze',
-    icon: '💪',
-    title: '手臂覺醒',
-    description: '完成 3 次手臂訓練',
-    kind: 'group_workouts',
-    muscleGroup: 'arms',
-    threshold: 3,
-  },
-  {
-    id: 'arms_workouts_8',
-    tier: 'silver',
-    icon: '⚔️',
-    title: '手臂雕刻',
-    description: '完成 8 次手臂訓練',
-    kind: 'group_workouts',
-    muscleGroup: 'arms',
-    threshold: 8,
-  },
-  // 核心
-  {
-    id: 'core_workouts_3',
-    tier: 'bronze',
-    icon: '🧱',
-    title: '核心啟動',
-    description: '完成 3 次核心訓練',
-    kind: 'group_workouts',
-    muscleGroup: 'core',
-    threshold: 3,
-  },
-  {
-    id: 'core_workouts_8',
-    tier: 'silver',
-    icon: '🏆',
-    title: '核心鋼鐵',
-    description: '完成 8 次核心訓練',
-    kind: 'group_workouts',
-    muscleGroup: 'core',
-    threshold: 8,
-  },
-];
-
-export const TIER_STYLES: Record<AchievementTier, { badge: string; ring: string; title: string }> = {
-  bronze: {
-    badge: 'bg-amber-500/20 text-amber-600 border-amber-500/40',
-    ring: 'from-amber-500/60 via-amber-400/40 to-amber-500/10',
-    title: '銅',
-  },
-  silver: {
-    badge: 'bg-slate-300/20 text-slate-400 border-slate-300/40',
-    ring: 'from-slate-300/70 via-slate-200/40 to-slate-400/10',
-    title: '銀',
-  },
-  gold: {
-    badge: 'bg-yellow-400/20 text-yellow-500 border-yellow-400/50',
-    ring: 'from-yellow-400/80 via-amber-300/50 to-orange-500/20',
-    title: '金',
-  },
-};
-
-const TIER_ORDER: Record<AchievementTier, number> = { bronze: 1, silver: 2, gold: 3 };
-
-export const SORTED_ACHIEVEMENTS: AchievementDef[] = [...ACHIEVEMENTS].sort(
-  (a, b) => TIER_ORDER[a.tier] - TIER_ORDER[b.tier] || a.threshold - b.threshold
-);
-
-/**
- * 把成就按 muscleGroup 分組（全局放 'global'）
- * 用於 Achievements 頁 UI 分區顯示
- */
-export function groupAchievementsByCategory(): Record<'global' | MuscleGroup, AchievementDef[]> {
-  const out: Record<string, AchievementDef[]> = {
-    global: [], chest: [], back: [], legs: [], shoulders: [], arms: [], core: [],
-  };
-  for (const a of ACHIEVEMENTS) {
-    if (a.muscleGroup) out[a.muscleGroup]?.push(a);
-    else out.global.push(a);
-  }
-  return out as any;
+// ── Pre-computed metrics (避免 per-achievement 重算) ──
+interface ComputedMetrics {
+  maxEst1RMByFamily: Partial<Record<LiftFamily, number>>;
+  maxEst1RMBWByFamily: Partial<Record<LiftFamily, number>>;
+  maxDelta: number;
+  firstEst1RMByExercise: Map<string, number>;
+  sessions: number;
+  streak: number;
+  weeklyRhythm: number;
+  volumeDeltaMonths: number;
+  maxPRsPerSession: number;
+  groupPR: Partial<Record<MuscleGroup, number>>;
+  groupPRAll: number;
+  groupCoverage1: number;
+  groupCoverage3: number;
+  warmupCount: number;
+  fullPlanCount: number;
+  perfectLogCount: number;
+  explorer: number;
+  // For copy formatting
+  totalVolumeKg: number;
+  startKgByFamily: Partial<Record<LiftFamily, number>>;
+  weeksSinceFirst: number;
 }
 
+// ── Compute all metrics from raw data ──
+function computeMetrics(ctx: DeriveContext): ComputedMetrics {
+  const { sessions, personalRecords, bodyWeight, hasCustomExercises, hasCustomPlans, groupStats } = ctx;
+
+  // 1. est1RM by family (from PRs)
+  const maxEst1RMByFamily: Partial<Record<LiftFamily, number>> = {};
+  const startKgByFamily: Partial<Record<LiftFamily, number>> = {};
+  for (const pr of personalRecords) {
+    const family = getLiftFamily(pr.exerciseId, pr.exerciseName);
+    if (!family) continue;
+    if (!maxEst1RMByFamily[family] || pr.estimated1RM > maxEst1RMByFamily[family]!) {
+      maxEst1RMByFamily[family] = pr.estimated1RM;
+    }
+    // Track first recorded 1RM for delta + startKg copy
+    if (!startKgByFamily[family]) {
+      startKgByFamily[family] = pr.estimated1RM;
+    }
+  }
+
+  // 2. est1RM / bodyweight
+  const maxEst1RMBWByFamily: Partial<Record<LiftFamily, number>> = {};
+  if (bodyWeight > 0) {
+    for (const [family, kg] of Object.entries(maxEst1RMByFamily)) {
+      if (kg !== undefined) {
+        maxEst1RMBWByFamily[family as LiftFamily] = kg / bodyWeight;
+      }
+    }
+  }
+
+  // 3. est1RM delta (max improvement ratio across all exercises)
+  const firstEst1RMByExercise = new Map<string, number>();
+  const maxEst1RMByExercise = new Map<string, number>();
+  // Sort sessions chronologically
+  const sortedSessions = [...sessions].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+  );
+  for (const s of sortedSessions) {
+    for (const ex of s.exercises) {
+      const completed = ex.sets.filter((set) => set.completed && set.weight > 0 && set.reps > 0);
+      if (completed.length === 0) continue;
+      let max1RM = 0;
+      for (const set of completed) {
+        const rm = estimate1RM(set.weight, set.reps);
+        if (rm > max1RM) max1RM = rm;
+      }
+      if (!firstEst1RMByExercise.has(ex.exerciseId)) {
+        firstEst1RMByExercise.set(ex.exerciseId, max1RM);
+      }
+      const prev = maxEst1RMByExercise.get(ex.exerciseId) ?? 0;
+      if (max1RM > prev) maxEst1RMByExercise.set(ex.exerciseId, max1RM);
+    }
+  }
+  let maxDelta = 0;
+  for (const [exId, max1RM] of maxEst1RMByExercise) {
+    const first = firstEst1RMByExercise.get(exId);
+    if (first && first > 0) {
+      const delta = (max1RM - first) / first;
+      if (delta > maxDelta) maxDelta = delta;
+    }
+  }
+
+  // 4. sessions
+  const totalSessions = sessions.length;
+
+  // 5. streak (max consecutive days)
+  const sessionDates = new Set(
+    sessions.map((s) => new Date(s.date).toDateString()),
+  );
+  let streak = 0;
+  const today = new Date();
+  // Start from today, walk backwards
+  const cursor = new Date(today);
+  while (sessionDates.has(cursor.toDateString())) {
+    streak++;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+
+  // 6. weekly rhythm (consecutive weeks with ≥2 sessions)
+  const weekMap = new Map<string, number>();
+  for (const s of sessions) {
+    const d = new Date(s.date);
+    const day = d.getDay();
+    const diff = day === 0 ? 6 : day - 1;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() - diff);
+    const key = monday.toDateString();
+    weekMap.set(key, (weekMap.get(key) ?? 0) + 1);
+  }
+  const sortedWeeks = Array.from(weekMap.keys()).sort(
+    (a, b) => new Date(a).getTime() - new Date(b).getTime(),
+  );
+  let weeklyRhythm = 0;
+  let currentRun = 0;
+  let prevWeek: Date | null = null;
+  for (const weekKey of sortedWeeks) {
+    const count = weekMap.get(weekKey)!;
+    if (count >= 2) {
+      if (prevWeek) {
+        const diff = Math.round(
+          (new Date(weekKey).getTime() - prevWeek.getTime()) / (7 * 86400000),
+        );
+        if (diff === 1) {
+          currentRun++;
+        } else {
+          currentRun = 1;
+        }
+      } else {
+        currentRun = 1;
+      }
+      if (currentRun > weeklyRhythm) weeklyRhythm = currentRun;
+      prevWeek = new Date(weekKey);
+    } else {
+      currentRun = 0;
+      prevWeek = null;
+    }
+  }
+
+  // 7. volume delta months (consecutive months with increasing volume)
+  const monthMap = new Map<string, number>();
+  for (const s of sessions) {
+    const d = new Date(s.date);
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    monthMap.set(key, (monthMap.get(key) ?? 0) + s.totalVolume);
+  }
+  const sortedMonths = Array.from(monthMap.keys()).sort(
+    (a, b) => {
+      const [ay, am] = a.split('-').map(Number);
+      const [by, bm] = b.split('-').map(Number);
+      return ay !== by ? ay - by : am - bm;
+    },
+  );
+  let volumeDeltaMonths = 0;
+  let currentVolRun = 0;
+  let prevVol = 0;
+  for (const monthKey of sortedMonths) {
+    const vol = monthMap.get(monthKey)!;
+    if (prevVol > 0 && vol > prevVol) {
+      currentVolRun++;
+    } else {
+      currentVolRun = vol > 0 ? 1 : 0;
+    }
+    if (currentVolRun > volumeDeltaMonths) volumeDeltaMonths = currentVolRun;
+    prevVol = vol;
+  }
+
+  // 8. max PRs per session
+  // Count: for each session, how many exercises had a new all-time max 1RM
+  const runningMaxByExercise = new Map<string, number>();
+  let maxPRsPerSession = 0;
+  for (const s of sortedSessions) {
+    let sessionPRs = 0;
+    for (const ex of s.exercises) {
+      const completed = ex.sets.filter((set) => set.completed && set.weight > 0 && set.reps > 0);
+      if (completed.length === 0) continue;
+      let max1RM = 0;
+      for (const set of completed) {
+        const rm = estimate1RM(set.weight, set.reps);
+        if (rm > max1RM) max1RM = rm;
+      }
+      const prev = runningMaxByExercise.get(ex.exerciseId) ?? 0;
+      if (max1RM > prev) {
+        sessionPRs++;
+        runningMaxByExercise.set(ex.exerciseId, max1RM);
+      }
+    }
+    if (sessionPRs > maxPRsPerSession) maxPRsPerSession = sessionPRs;
+  }
+
+  // 9. group PR counts
+  const groupPR: Partial<Record<MuscleGroup, number>> = {};
+  let groupPRAll = 0;
+  const groups: MuscleGroup[] = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
+  for (const g of groups) {
+    const count = groupStats[g]?.prCount ?? 0;
+    groupPR[g] = count;
+    if (count > 0) groupPRAll++;
+  }
+
+  // 10. group coverage
+  let groupCoverage1 = 0;
+  let groupCoverage3 = 0;
+  for (const g of groups) {
+    const wc = groupStats[g]?.workoutCount ?? 0;
+    if (wc >= 1) groupCoverage1++;
+    if (wc >= 3) groupCoverage3++;
+  }
+
+  // 11. warmup count
+  const warmupCount = sessions.reduce(
+    (sum, s) => sum + (s.warmupCompletedIds?.length ?? 0),
+    0,
+  );
+
+  // 12. full plan count (sessions where all sets completed)
+  let fullPlanCount = 0;
+  for (const s of sessions) {
+    if (!s.planId) continue;
+    const allCompleted = s.exercises.length > 0 && s.exercises.every((ex) =>
+      ex.sets.length > 0 && ex.sets.every((set) => set.completed),
+    );
+    if (allCompleted) fullPlanCount++;
+  }
+
+  // 13. perfect log count (all sets have weight > 0 and reps > 0)
+  let perfectLogCount = 0;
+  for (const s of sessions) {
+    const allLogged = s.exercises.length > 0 && s.exercises.every((ex) =>
+      ex.sets.length > 0 && ex.sets.every((set) => set.weight > 0 && set.reps > 0),
+    );
+    if (allLogged) perfectLogCount++;
+  }
+
+  // 14. explorer
+  const explorer = hasCustomExercises || hasCustomPlans ? 1 : 0;
+
+  // 15. weeks since first session
+  let weeksSinceFirst = 0;
+  if (sessions.length > 0) {
+    const first = new Date(sortedSessions[0].date).getTime();
+    const now = Date.now();
+    weeksSinceFirst = Math.floor((now - first) / (7 * 86400000));
+  }
+
+  // 16. total volume
+  const totalVolumeKg = sessions.reduce((sum, s) => sum + s.totalVolume, 0);
+
+  return {
+    maxEst1RMByFamily,
+    maxEst1RMBWByFamily,
+    maxDelta,
+    firstEst1RMByExercise,
+    sessions: totalSessions,
+    streak,
+    weeklyRhythm,
+    volumeDeltaMonths,
+    maxPRsPerSession,
+    groupPR,
+    groupPRAll,
+    groupCoverage1,
+    groupCoverage3,
+    warmupCount,
+    fullPlanCount,
+    perfectLogCount,
+    explorer,
+    totalVolumeKg,
+    startKgByFamily,
+    weeksSinceFirst,
+  };
+}
+
+// ── Lookup metric value for a specific achievement ──
+function currentOf(metrics: ComputedMetrics, def: AchievementDef): number {
+  switch (def.metric) {
+    case 'est1RM_kg': {
+      if (!def.liftFamily) return 0;
+      return metrics.maxEst1RMByFamily[def.liftFamily] ?? 0;
+    }
+    case 'est1RM_bw': {
+      if (!def.liftFamily) return 0;
+      return metrics.maxEst1RMBWByFamily[def.liftFamily] ?? 0;
+    }
+    case 'est1RM_delta':
+      return metrics.maxDelta;
+    case 'sessions':
+      return metrics.sessions;
+    case 'streak':
+      return metrics.streak;
+    case 'weekly_rhythm':
+      return metrics.weeklyRhythm;
+    case 'volume_delta_months':
+      return metrics.volumeDeltaMonths;
+    case 'pr_count_session':
+      return metrics.maxPRsPerSession;
+    case 'group_pr': {
+      if (!def.muscleGroup) return 0;
+      return metrics.groupPR[def.muscleGroup] ?? 0;
+    }
+    case 'group_pr_all':
+      return metrics.groupPRAll;
+    case 'group_coverage':
+      // threshold 1 → groups with ≥1 workout; threshold 3 → groups with ≥3 workouts
+      return def.threshold <= 1 ? metrics.groupCoverage1 : metrics.groupCoverage3;
+    case 'warmup_count':
+      return metrics.warmupCount;
+    case 'full_plan_count':
+      return metrics.fullPlanCount;
+    case 'perfect_log_count':
+      return metrics.perfectLogCount;
+    case 'explorer':
+      return metrics.explorer;
+    default:
+      return 0;
+  }
+}
+
+// ── Format copy template ──
+export function formatAchievementCopy(def: AchievementDef, metrics: ComputedMetrics): string {
+  let copy = def.copy;
+  if (def.liftFamily) {
+    const kg = metrics.maxEst1RMByFamily[def.liftFamily];
+    const startKg = metrics.startKgByFamily[def.liftFamily];
+    copy = copy.replace(/\{kg\}/g, kg ? Math.round(kg).toString() : '—');
+    copy = copy.replace(/\{startKg\}/g, startKg ? Math.round(startKg).toString() : '—');
+    copy = copy.replace(/\{weeks\}/g, metrics.weeksSinceFirst.toString());
+    copy = copy.replace(/\{sessions\}/g, metrics.sessions.toString());
+    const bw = metrics.maxEst1RMBWByFamily[def.liftFamily];
+    copy = copy.replace(/\{ratio\}/g, bw ? bw.toFixed(2) : '—');
+  }
+  copy = copy.replace(/\{sessions\}/g, metrics.sessions.toString());
+  return copy;
+}
+
+// ── Next achievement (highest progress %, not yet unlocked) ──
+export function getNextAchievement(
+  metrics: ComputedMetrics,
+  progress: Record<string, AchievementProgress>,
+): { def: AchievementDef; ratio: number; current: number; threshold: number } | null {
+  let best: { def: AchievementDef; ratio: number; current: number; threshold: number } | null = null;
+  for (const def of ACHIEVEMENTS) {
+    const p = progress[def.id];
+    if (p?.unlocked) continue;
+    const current = currentOf(metrics, def);
+    const ratio = def.threshold > 0 ? Math.min(current / def.threshold, 1) : 0;
+    if (!best || ratio > best.ratio) {
+      best = { def, ratio, current, threshold: def.threshold };
+    }
+  }
+  return best;
+}
+
+// ── Store interface ──
 interface AchievementsState {
   progress: Record<string, AchievementProgress>;
   seenUnlockIds: string[];
-  pendingUnlockId: string | null;
+  pendingUnlockIds: string[]; // 改為陣列支援多解鎖
+  lastMetrics: ComputedMetrics | null;
 
   recompute: (ctx: DeriveContext) => string[];
   markUnlockSeen: (id: string) => void;
@@ -328,41 +432,25 @@ function emptyProgress(): Record<string, AchievementProgress> {
   return res;
 }
 
-/**
- * 計算單個成就的 current 值。
- * 核心：分部位成就只計算對應 muscleGroup 的數據，
- *      腿部重量不會加速胸部成就（P-01 根因修復）。
- */
-function currentOf(ctx: DeriveContext, a: AchievementDef): number {
-  switch (a.kind) {
-    case 'sessions':
-      return ctx.totalSessions;
-    case 'streak':
-      return ctx.streak;
-    case 'volume_ton':
-      return ctx.totalVolumeTon;
-    case 'pr_count':
-      return ctx.prCount;
-    case 'exercises_variety':
-      return ctx.exercisesVariety;
-    // ---- 分部位 ----
-    case 'group_workouts': {
-      if (!a.muscleGroup) return 0;
-      return ctx.groupStats[a.muscleGroup]?.workoutCount ?? 0;
-    }
-    case 'group_pr_count': {
-      if (!a.muscleGroup) return 0;
-      return ctx.groupStats[a.muscleGroup]?.prCount ?? 0;
-    }
-    case 'group_volume_ton': {
-      if (!a.muscleGroup) return 0;
-      // 未來若啟用：已校準門檻 + 這裡不乘系數，或乘系數都可。
-      // 目前版本優先使用次數型成就，此 kind 保留不開 UI。
-      return Math.round((ctx.groupStats[a.muscleGroup]?.totalVolumeKg ?? 0) / 1000);
-    }
-    default:
-      return 0;
+// ── Backward compat: old TIER_STYLES ──
+export const TIER_STYLES: Record<string, { badge: string; ring: string; title: string }> = {
+  1: { badge: 'bg-stone-500/20 text-stone-400 border-stone-500/40', ring: 'from-stone-500/40', title: '石' },
+  2: { badge: 'bg-amber-700/20 text-amber-600 border-amber-700/40', ring: 'from-amber-700/40', title: '銅' },
+  3: { badge: 'bg-slate-400/20 text-slate-300 border-slate-400/40', ring: 'from-slate-400/50', title: '銀' },
+  4: { badge: 'bg-amber-500/20 text-amber-400 border-amber-500/50', ring: 'from-amber-500/60', title: '金' },
+  5: { badge: 'bg-amber-400/20 text-amber-300 border-amber-400/50', ring: 'from-amber-400/70', title: '電' },
+};
+
+// ── Backward compat: groupAchievementsByCategory ──
+export function groupAchievementsByCategory(): Record<'global' | MuscleGroup, AchievementDef[]> {
+  const out: Record<string, AchievementDef[]> = {
+    global: [], chest: [], back: [], legs: [], shoulders: [], arms: [], core: [],
+  };
+  for (const a of ACHIEVEMENTS) {
+    if (a.muscleGroup) out[a.muscleGroup]?.push(a);
+    else out.global.push(a);
   }
+  return out as any;
 }
 
 export const useAchievementsStore = create<AchievementsState>()(
@@ -370,16 +458,20 @@ export const useAchievementsStore = create<AchievementsState>()(
     (set, get) => ({
       progress: emptyProgress(),
       seenUnlockIds: [],
-      pendingUnlockId: null,
+      pendingUnlockIds: [],
+      lastMetrics: null,
 
       recompute: (ctx) => {
         const prev = get().progress ?? {};
         const next = { ...prev };
+        const metrics = computeMetrics(ctx);
         const newUnlocks: string[] = [];
+
         for (const def of ACHIEVEMENTS) {
           const prevP = prev[def.id] ?? { unlocked: false, current: 0 };
-          const current = currentOf(ctx, def);
+          const current = currentOf(metrics, def);
           const unlocked = current >= def.threshold;
+
           if (unlocked && !prevP.unlocked) {
             newUnlocks.push(def.id);
           }
@@ -390,14 +482,24 @@ export const useAchievementsStore = create<AchievementsState>()(
             current: Math.max(prevP.current ?? 0, current),
           };
         }
-        // 彈窗優先：銅牌 > 第一個
-        let pending: string | null = null;
-        const bronze = newUnlocks.find((id) => {
-          const d = ACHIEVEMENTS.find((x) => x.id === id);
-          return d?.tier === 'bronze';
+
+        set({
+          progress: next,
+          pendingUnlockIds: newUnlocks,
+          lastMetrics: metrics,
         });
-        pending = bronze ?? newUnlocks[0] ?? null;
-        set({ progress: next, pendingUnlockId: pending });
+
+        // Telemetry: 記錄新解鎖
+        if (newUnlocks.length > 0) {
+          const log = useTelemetryStore.getState().log;
+          for (const id of newUnlocks) {
+            const def = ACHIEVEMENTS.find((a) => a.id === id);
+            if (def) {
+              log('achievement_unlocked', { id, track: def.track, tier: def.tier });
+            }
+          }
+        }
+
         return newUnlocks;
       },
 
@@ -406,32 +508,48 @@ export const useAchievementsStore = create<AchievementsState>()(
           seenUnlockIds: state.seenUnlockIds.includes(id)
             ? state.seenUnlockIds
             : [...state.seenUnlockIds, id],
-          pendingUnlockId: state.pendingUnlockId === id ? null : state.pendingUnlockId,
+          pendingUnlockIds: state.pendingUnlockIds.filter((x) => x !== id),
         })),
 
-      clearPending: () => set({ pendingUnlockId: null }),
+      clearPending: () => set({ pendingUnlockIds: [] }),
 
       reset: () =>
         set({
           progress: emptyProgress(),
           seenUnlockIds: [],
-          pendingUnlockId: null,
+          pendingUnlockIds: [],
+          lastMetrics: null,
         }),
     }),
     {
       name: 'ironpulse-achievements',
-      version: 2,
+      version: 3,
       migrate: (persistedState, version) => {
         const s = (persistedState ?? {}) as Partial<AchievementsState>;
         const base = emptyProgress();
         const incoming = s.progress ?? {};
+        // Merge: keep unlocked state from old progress, reset current to 0 (will be recomputed)
         for (const id of Object.keys(base)) {
-          if (incoming[id]) base[id] = { ...base[id], ...incoming[id] };
+          if (incoming[id]) {
+            base[id] = {
+              unlocked: incoming[id].unlocked ?? false,
+              unlockedAt: incoming[id].unlockedAt,
+              current: incoming[id].current ?? 0,
+            };
+          }
+        }
+        // For old achievement IDs that no longer exist, mark as unlocked (preserve old unlocks)
+        for (const id of Object.keys(incoming)) {
+          if (!base[id] && incoming[id]?.unlocked) {
+            // Old achievement no longer in catalog — preserve unlock but don't display
+            base[id] = { unlocked: true, unlockedAt: incoming[id].unlockedAt, current: incoming[id].current ?? 0 };
+          }
         }
         return {
           progress: base,
           seenUnlockIds: s.seenUnlockIds ?? [],
-          pendingUnlockId: null,
+          pendingUnlockIds: [],
+          lastMetrics: null,
         };
       },
     }

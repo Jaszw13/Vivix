@@ -86,7 +86,41 @@ function migrateLegacyCustomExercise(leg: LegacyCustomExercise): CustomExercise 
   });
 }
 
-// ============ Derive 輔助：取得動作的部位 / 器械快照 ============
+// ============ P-01：分類回寫 — 當前分類優先 ============
+// 優先序：當前 exercise 定義（builtin + custom）→ 記錄 snapshot → fallback
+// 這是保證「分類變更後所有統計即時遷移」的核心函數
+function resolveCurrentTaxonomy(
+  exerciseId: string,
+  customExercises: CustomExercise[],
+  fallback?: { muscleGroup?: MuscleGroup; equipmentType?: EquipmentType; name?: string },
+) {
+  // 1. 查內建動作
+  const builtin = getExerciseById(exerciseId);
+  if (builtin) {
+    return {
+      muscleGroup: builtin.muscleGroup as MuscleGroup,
+      equipmentType: builtin.equipmentType as EquipmentType,
+      name: builtin.name,
+    };
+  }
+  // 2. 查自訂動作（可能已被用戶改過分類）
+  const custom = customExercises.find((e) => e.id === exerciseId);
+  if (custom) {
+    return {
+      muscleGroup: custom.muscleGroup as MuscleGroup,
+      equipmentType: custom.equipmentType as EquipmentType,
+      name: custom.name,
+    };
+  }
+  // 3. fallback：記錄中的 snapshot 或空
+  return {
+    muscleGroup: fallback?.muscleGroup,
+    equipmentType: fallback?.equipmentType,
+    name: fallback?.name ?? '動作',
+  };
+}
+
+// 舊版保留：僅查內建（migrate 用）
 function resolveExerciseSnapshot(exerciseId: string, fallbackName?: string) {
   const builtin = getExerciseById(exerciseId);
   if (builtin) {
@@ -96,7 +130,6 @@ function resolveExerciseSnapshot(exerciseId: string, fallbackName?: string) {
       name: builtin.name,
     };
   }
-  // 查不到就留空，migrate 時會以其他管道補
   return {
     muscleGroup: undefined as MuscleGroup | undefined,
     equipmentType: undefined as EquipmentType | undefined,
@@ -112,6 +145,8 @@ interface WorkoutState {
   customExercises: CustomExercise[];
   activePlanId: string | null;
   nextDayIndex: number;
+  /** P-01：分類版本號，每次 editCustomExercise 改 muscleGroup/equipmentType 時 +1，用於 cache key */
+  taxonomyVersion: number;
 
   // 動作 / 計畫
   setActivePlan: (planId: string) => void;
@@ -169,20 +204,27 @@ interface WorkoutState {
   getUnderTrainedGroups: () => MuscleGroup[];
 }
 
-// ============ PR 從 sessions rebuild ============
-function computePRsFromSessions(sessions: WorkoutSession[]): PersonalRecord[] {
+// ============ PR 從 sessions rebuild（P-01：優先讀取當前分類） ============
+function computePRsFromSessions(
+  sessions: WorkoutSession[],
+  customExercises: CustomExercise[] = [],
+): PersonalRecord[] {
   const map = new Map<string, PersonalRecord>();
   for (const session of sessions) {
     const sessionPRs = getSessionPRs(session);
     for (const pr of sessionPRs) {
-      // 嘗試補齊 muscleGroup / equipmentType（若 session 中沒快照）
-      const snap = resolveExerciseSnapshot(pr.exerciseId, pr.exerciseName);
+      // P-01：優先使用當前 exercise 定義的分類，snapshot 僅兜底
+      const cur = resolveCurrentTaxonomy(pr.exerciseId, customExercises, {
+        muscleGroup: (pr as any).muscleGroup,
+        equipmentType: (pr as any).equipmentType,
+        name: pr.exerciseName,
+      });
       const existing = map.get(pr.exerciseId);
       if (!existing || pr.estimated1RM > existing.estimated1RM) {
         map.set(pr.exerciseId, {
           ...pr,
-          muscleGroup: (pr as any).muscleGroup ?? snap.muscleGroup,
-          equipmentType: (pr as any).equipmentType ?? snap.equipmentType,
+          muscleGroup: cur.muscleGroup,
+          equipmentType: cur.equipmentType,
         });
       }
     }
@@ -216,6 +258,7 @@ export const useWorkoutStore = create<WorkoutState>()(
       customExercises: [],
       activePlanId: null,
       nextDayIndex: 0,
+      taxonomyVersion: 0,
 
       setActivePlan: (planId) => {
         set({ activePlanId: planId, nextDayIndex: 0 });
@@ -322,15 +365,25 @@ export const useWorkoutStore = create<WorkoutState>()(
       },
 
       editCustomExercise: (id, patch) => {
-        set((state) => ({
-          customExercises: state.customExercises.map((ce) => {
-            if (ce.id !== id) return ce;
-            const next: CustomExercise = { ...ce, ...patch };
-            // 若 muscleGroup 有變，同步 category 保持一致
-            if (patch.muscleGroup) next.category = patch.muscleGroup;
-            return next;
-          }),
-        }));
+        set((state) => {
+          const ce = state.customExercises.find((e) => e.id === id);
+          const classificationChanged = ce && (
+            (patch.muscleGroup && patch.muscleGroup !== ce.muscleGroup) ||
+            (patch.equipmentType && patch.equipmentType !== ce.equipmentType)
+          );
+          return {
+            customExercises: state.customExercises.map((ce) => {
+              if (ce.id !== id) return ce;
+              const next: CustomExercise = { ...ce, ...patch };
+              if (patch.muscleGroup) next.category = patch.muscleGroup;
+              return next;
+            }),
+            // P-01：分類變更 → bump taxonomyVersion，觸發所有派生 selector 重算
+            taxonomyVersion: classificationChanged
+              ? state.taxonomyVersion + 1
+              : state.taxonomyVersion,
+          };
+        });
       },
 
       deleteCustomExercise: (id) => {
@@ -443,8 +496,8 @@ export const useWorkoutStore = create<WorkoutState>()(
         const newSessions = [...get().sessions, finished].sort(
           (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
         );
-        // 重建 PR（並補部位/器械快照）
-        const newPRs = computePRsFromSessions(newSessions);
+        // 重建 PR（P-01：使用當前分類）
+        const newPRs = computePRsFromSessions(newSessions, get().customExercises);
         const state = get();
         let nextIndex = state.nextDayIndex;
         if (active.planId && state.activePlanId === active.planId) {
@@ -553,6 +606,7 @@ export const useWorkoutStore = create<WorkoutState>()(
       getGroupStats: () => {
         const sessions = get().sessions;
         const prs = get().personalRecords;
+        const customExs = get().customExercises;
         const out = emptyGroupStatsMap();
 
         // 每個部位的 unique 訓練日期 set 與 unique 動作 set
@@ -572,8 +626,13 @@ export const useWorkoutStore = create<WorkoutState>()(
           const dateKey = new Date(session.date).toDateString();
           const ts = new Date(session.date).getTime();
           for (const ex of session.exercises) {
-            const group = (ex.muscleGroup as MuscleGroup | undefined) ??
-              resolveExerciseSnapshot(ex.exerciseId, ex.name).muscleGroup;
+            // P-01：優先讀取當前 exercise 定義的分類，snapshot 僅兜底
+            const cur = resolveCurrentTaxonomy(ex.exerciseId, customExs, {
+              muscleGroup: ex.muscleGroup as MuscleGroup | undefined,
+              equipmentType: ex.equipmentType,
+              name: ex.name,
+            });
+            const group = cur.muscleGroup;
             if (!group) continue;
             const completed = ex.sets.filter((s) => s.completed);
             if (completed.length === 0) continue;
@@ -590,9 +649,13 @@ export const useWorkoutStore = create<WorkoutState>()(
           chest: 0, back: 0, legs: 0, shoulders: 0, arms: 0, core: 0,
         };
         for (const pr of prs) {
-          const g = (pr.muscleGroup as MuscleGroup | undefined) ??
-            resolveExerciseSnapshot(pr.exerciseId, pr.exerciseName).muscleGroup;
-          if (g) prCountByGroup[g]++;
+          // P-01：PR 分類也跟隨當前 taxonomy
+          const cur = resolveCurrentTaxonomy(pr.exerciseId, customExs, {
+            muscleGroup: pr.muscleGroup as MuscleGroup | undefined,
+            equipmentType: pr.equipmentType,
+            name: pr.exerciseName,
+          });
+          if (cur.muscleGroup) prCountByGroup[cur.muscleGroup]++;
         }
 
         const groups: MuscleGroup[] = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
@@ -609,6 +672,7 @@ export const useWorkoutStore = create<WorkoutState>()(
 
       getGroupWeeklyVolume: (group) => {
         const sessions = get().sessions;
+        const customExs = get().customExercises;
         const weeklyMap = new Map<string, number>();
         for (const s of sessions) {
           const d = new Date(s.date);
@@ -619,9 +683,11 @@ export const useWorkoutStore = create<WorkoutState>()(
           const key = `${monday.getMonth() + 1}/${monday.getDate()}`;
           let weekVol = 0;
           for (const ex of s.exercises) {
-            const g = (ex.muscleGroup as MuscleGroup | undefined) ??
-              resolveExerciseSnapshot(ex.exerciseId, ex.name).muscleGroup;
-            if (g !== group) continue;
+            // P-01：使用當前分類
+            const cur = resolveCurrentTaxonomy(ex.exerciseId, customExs, {
+              muscleGroup: ex.muscleGroup as MuscleGroup | undefined,
+            });
+            if (cur.muscleGroup !== group) continue;
             weekVol += ex.sets
               .filter((x) => x.completed)
               .reduce((sum, x) => sum + x.weight * x.reps, 0);
@@ -637,12 +703,15 @@ export const useWorkoutStore = create<WorkoutState>()(
 
       getGroupExerciseProgress: (group) => {
         const sessions = get().sessions;
+        const customExs = get().customExercises;
         const points: { date: string; normalized1RM: number; exercises: number }[] = [];
         for (const s of sessions) {
           const exs = s.exercises.filter((ex) => {
-            const g = (ex.muscleGroup as MuscleGroup | undefined) ??
-              resolveExerciseSnapshot(ex.exerciseId, ex.name).muscleGroup;
-            return g === group && ex.sets.some((set) => set.completed);
+            // P-01：使用當前分類
+            const cur = resolveCurrentTaxonomy(ex.exerciseId, customExs, {
+              muscleGroup: ex.muscleGroup as MuscleGroup | undefined,
+            });
+            return cur.muscleGroup === group && ex.sets.some((set) => set.completed);
           });
           if (exs.length === 0) continue;
           let total1RM = 0;
@@ -681,13 +750,14 @@ export const useWorkoutStore = create<WorkoutState>()(
     }),
     {
       name: 'ironpulse-workouts',
-      version: 5,
+      version: 6,
       partialize: (state) => ({
         sessions: state.sessions,
         personalRecords: state.personalRecords,
         customExercises: state.customExercises,
         activePlanId: state.activePlanId,
         nextDayIndex: state.nextDayIndex,
+        taxonomyVersion: state.taxonomyVersion,
       }),
       migrate: (persistedState, version) => {
         const raw = (persistedState ?? {}) as any;
@@ -730,6 +800,7 @@ export const useWorkoutStore = create<WorkoutState>()(
           customExercises,
           activePlanId: typeof raw.activePlanId === 'string' ? raw.activePlanId : null,
           nextDayIndex: typeof raw.nextDayIndex === 'number' ? raw.nextDayIndex : 0,
+          taxonomyVersion: typeof raw.taxonomyVersion === 'number' ? raw.taxonomyVersion : 0,
         };
       },
     }
