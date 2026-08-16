@@ -1,6 +1,6 @@
-# IRONPULSE — iPhone 安裝教學
+# Vivix — iPhone 安裝教學
 
-完全免費、不用 App Store、不用 Expo Go，把 IRONPULSE 變成 iPhone 上的 App。
+完全免費、不用 App Store、不用 Expo Go，把 Vivix 變成 iPhone 上的 App。
 
 ---
 
@@ -22,19 +22,19 @@
 # 在專案根目錄
 git add -A
 git commit -m "feat: PWA 改造完成"
-git remote add origin https://github.com/<你的帳號>/ironpulse.git
+git remote add origin https://github.com/<你的帳號>/vivix.git
 git push -u origin main
 ```
 
 ### 2. 接入 Vercel
 1. 註冊/登入 https://vercel.com (可用 GitHub 帳號)
 2. 點 **Add New → Project**
-3. 選擇你的 `ironpulse` repo
+3. 選擇你的 `vivix` repo
 4. Vercel 會自動偵測 Vite 框架
 5. 直接按 **Deploy**
 6. 等 1-2 分鐘完成，會給你一個網址：
    ```
-   https://ironpulse-xxxxx.vercel.app
+   https://vivix-xxxxx.vercel.app
    ```
 
 ### 3. 自訂網域(可選)
@@ -49,20 +49,22 @@ git push -u origin main
 
 打開部署好的網址，例如：
 ```
-https://ironpulse-xxxxx.vercel.app
+https://vivix-xxxxx.vercel.app
 ```
 
 ### 2. 加入主畫面
 1. 點 Safari 底部的 **分享圖示**（方形＋向上箭頭）
 2. 滑動清單，找到 **「加入主畫面」**（Add to Home Screen）
-3. 改名為 `IRONPULSE`（或保持預設）
+3. 改名為 `Vivix`（或保持預設）
 4. 點 **新增**
 
 ### 3. 啟動 App
-桌面會出現一個黑色圖示、寫著 `IRONPULSE` 的 App：
+桌面會出現一個 App 圖示、寫著 `Vivix`：
 - 點擊啟動 → 全螢幕開啟，無 Safari 地址列
-- 啟動畫面為黑底
+- 啟動畫面為米白/深色主題
 - 跟原生 App 體驗完全一致
+
+> 🔴 **重要（舊朋友數據保留）**：若你之前安裝過舊品牌 Ironpulse，請先**刪除舊 PWA**，再重新加入新 Vivix 網站。舊數據仍會保留，因為底層 localStorage key（`ironpulse-*`）沒有變更。
 
 ---
 
@@ -94,7 +96,7 @@ https://ironpulse-xxxxx.vercel.app
 
 ### 升級後沒看到新功能
 - 等 30 秒讓背景自動更新
-- 或長按 App 圖示 → 刪除 → 重新加入主畫面
+- 或長按 App 圖示 → 刪除 → 重新加入主畫面（**舊數據仍會保留**，因為 localStorage 是獨立的）
 
 ---
 

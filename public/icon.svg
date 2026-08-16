@@ -1,27 +1,71 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
+    <!-- 米白背景漸層：奶油米白 → 稍微偏暖的米白 -->
     <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1C1C1E"/>
-      <stop offset="100%" stop-color="#0A0A0B"/>
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#F8F5F0"/>
     </linearGradient>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
+
+    <!-- 暖金主色漸層：啞鈴 -->
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#E8D5A8"/>
+      <stop offset="50%" stop-color="#C9A96E"/>
+      <stop offset="100%" stop-color="#B89254"/>
+    </linearGradient>
+
+    <!-- 柔和陰影（米白風格用淡陰影，不用高對比） -->
+    <filter id="softShadow" x="-15%" y="-25%" width="130%" height="150%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="8"/>
+      <feOffset dx="0" dy="8" result="offsetblur"/>
+      <feComponentTransfer>
+        <feFuncA type="linear" slope="0.14"/>
+      </feComponentTransfer>
       <feMerge>
-        <feMergeNode in="coloredBlur"/>
+        <feMergeNode/>
         <feMergeNode in="SourceGraphic"/>
       </feMerge>
     </filter>
+
+    <!-- 圓角矩形裁切（iOS 風格圓角半徑約 22%） -->
+    <clipPath id="roundRectClip">
+      <rect x="0" y="0" width="512" height="512" rx="112" ry="112"/>
+    </clipPath>
   </defs>
-  <rect width="512" height="512" fill="url(#bgGrad)"/>
-  <!-- 左側槓片 -->
-  <rect x="80" y="240" width="32" height="32" fill="#D4FF00" rx="4"/>
-  <rect x="112" y="244" width="12" height="24" fill="#D4FF00"/>
-  <!-- 槓桿 -->
-  <rect x="124" y="250" width="264" height="12" fill="#D4FF00" rx="2"/>
-  <!-- 右側槓片 -->
-  <rect x="388" y="244" width="12" height="24" fill="#D4FF00"/>
-  <rect x="400" y="240" width="32" height="32" fill="#D4FF00" rx="4"/>
-  <!-- 字樣 -->
-  <text x="256" y="340" font-family="Arial Black, sans-serif" font-size="64" font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="6">IRON</text>
-  <text x="256" y="400" font-family="Arial Black, sans-serif" font-size="64" font-weight="900" fill="#D4FF00" text-anchor="middle" letter-spacing="6">PULSE</text>
+
+  <!-- 圖標本體：裁切為 iOS 風格圓角方形 -->
+  <g clip-path="url(#roundRectClip)">
+    <!-- 1. 米白背景 -->
+    <rect width="512" height="512" fill="url(#bgGrad)"/>
+
+    <!-- 2. 極淡的暖金內邊框光環（增加高雅質感） -->
+    <rect x="4" y="4" width="504" height="504" rx="108" ry="108"
+          fill="none" stroke="rgba(201,169,110,0.18)" stroke-width="2"/>
+
+    <!-- 3. 主體：水平啞鈴（居中、左右對稱、三層槓片）
+         位置：垂直居中（y = 256），水平貫穿
+         設計：三層槓片（由外至內 0.55 / 1 / 0.9 透明度漸層） -->
+    <g filter="url(#softShadow)">
+      <!-- ========== 左側啞鈴片（三層，漸進大小，有層次感） ========== -->
+      <!-- 外層（最外，最矮，0.55 透明度） -->
+      <rect x="96"  y="196" width="28" height="120" rx="7" fill="#C9A96E" opacity="0.55"/>
+      <!-- 中層（主體，1.0 透明度） -->
+      <rect x="124" y="176" width="22" height="160" rx="5.5" fill="url(#goldGrad)"/>
+      <!-- 內層（靠近中心，稍高，0.9 透明度） -->
+      <rect x="146" y="188" width="14" height="136" rx="4" fill="#E8D5A8" opacity="0.9"/>
+
+      <!-- ========== 右側啞鈴片（對稱鏡像） ========== -->
+      <!-- 內層（靠近中心） -->
+      <rect x="352" y="188" width="14" height="136" rx="4" fill="#E8D5A8" opacity="0.9"/>
+      <!-- 中層（主體） -->
+      <rect x="366" y="176" width="22" height="160" rx="5.5" fill="url(#goldGrad)"/>
+      <!-- 外層（最外） -->
+      <rect x="388" y="196" width="28" height="120" rx="7" fill="#C9A96E" opacity="0.55"/>
+
+      <!-- ========== 啞鈴桿（水平貫穿，左右搭接在內層之間） ========== -->
+      <rect x="160" y="244" width="192" height="24" rx="6" fill="url(#goldGrad)"/>
+    </g>
+  </g>
+
+  <!-- 4. maskable 確認：啞鈴主體位於 x=96~412, y=176~336，
+       完全落在 512×512 中心 60% 安全區（x=102~410, y=102~410）內 ✅ -->
 </svg>

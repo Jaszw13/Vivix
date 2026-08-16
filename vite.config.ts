@@ -22,9 +22,9 @@ export default defineConfig({
       injectRegister: 'auto',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'IRONPULSE — 力量訓練',
-        short_name: 'IRONPULSE',
-        description: '專為力量訓練設計的記錄工具：1RM 估算、PR 追蹤、圖表分析、雙主題切換。',
+        name: 'Vivix - 你的新手訓練夥伴',
+        short_name: 'Vivix',
+        description: 'Vivix - 給健身新手的陪伴型教練 App，完整力量訓練紀錄、進度追蹤與 Partner 陪伴系統。',
         start_url: '/',
         scope: '/',
         display: 'standalone',

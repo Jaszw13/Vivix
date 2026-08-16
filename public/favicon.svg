@@ -1,8 +1,32 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="4" fill="#0A0A0B"/>
-  <path d="M9 16 L23 16" stroke="#D4FF00" stroke-width="3" stroke-linecap="round"/>
-  <circle cx="9" cy="16" r="3" fill="none" stroke="#D4FF00" stroke-width="2"/>
-  <circle cx="23" cy="16" r="3" fill="none" stroke="#D4FF00" stroke-width="2"/>
-  <rect x="6" y="14" width="2" height="4" fill="#D4FF00"/>
-  <rect x="24" y="14" width="2" height="4" fill="#D4FF00"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#F8F5F0"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#E8D5A8"/>
+      <stop offset="50%" stop-color="#C9A96E"/>
+      <stop offset="100%" stop-color="#B89254"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 米白底，圓角 -->
+  <rect width="32" height="32" rx="6" fill="url(#bg)"/>
+  <rect x="0.5" y="0.5" width="31" height="31" rx="5.5"
+        fill="none" stroke="rgba(201,169,110,0.25)" stroke-width="0.5"/>
+
+  <!-- 水平啞鈴（三層槓片對稱） -->
+  <!-- 左：外層 0.55 → 中層 1.0 → 內層 0.9 -->
+  <rect x="4.5"  y="11"   width="1.8" height="10" rx="0.5" fill="#C9A96E" opacity="0.55"/>
+  <rect x="6.3"  y="9.5"  width="1.4" height="13" rx="0.4" fill="url(#gold)"/>
+  <rect x="7.7"  y="10.5" width="0.9" height="11" rx="0.25" fill="#E8D5A8" opacity="0.9"/>
+
+  <!-- 右：內層 0.9 → 中層 1.0 → 外層 0.55 -->
+  <rect x="23.4" y="10.5" width="0.9" height="11" rx="0.25" fill="#E8D5A8" opacity="0.9"/>
+  <rect x="24.3" y="9.5"  width="1.4" height="13" rx="0.4" fill="url(#gold)"/>
+  <rect x="25.7" y="11"   width="1.8" height="10" rx="0.5" fill="#C9A96E" opacity="0.55"/>
+
+  <!-- 啞鈴桿 -->
+  <rect x="8.6" y="15" width="14.8" height="2" rx="0.6" fill="url(#gold)"/>
 </svg>

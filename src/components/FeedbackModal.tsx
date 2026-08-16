@@ -19,7 +19,7 @@ export function FeedbackModal({ show }: FeedbackModalProps) {
 
   const buildMessage = () => {
     const lines = [
-      '📱 IRONPULSE 反饋',
+      '📱 Vivix 反饋',
       '',
       `⭐ 評分：${rating}/5`,
       `🔢 使用頻率：${frequency || '未填'}`,
@@ -84,7 +84,7 @@ export function FeedbackModal({ show }: FeedbackModalProps) {
 
             <div className="px-5 py-4 space-y-4">
               <p className="text-xs text-text-secondary">
-                感謝使用 IRONPULSE！花 30 秒告訴我們你的想法，幫助我們做得更好。
+                感謝使用 Vivix！花 30 秒告訴我們你的想法，幫助我們做得更好。
               </p>
 
               {/* 評分 */}

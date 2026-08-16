@@ -39,7 +39,7 @@ export default function Settings() {
   const partnerName = usePartnerStore((s) => s.name);
   const partnerReset = usePartnerStore((s) => s.resetPartner);
 
-  // 開發者選單隱藏開關：連點 IRONPULSE 5 次
+  // 開發者選單隱藏開關：連點 VIVIX 5 次
   const tapCountRef = useRef(0);
   const tapTimerRef = useRef<number | null>(null);
   const [devMenuOpen, setDevMenuOpen] = useState(false);
@@ -142,7 +142,7 @@ export default function Settings() {
                   className="font-bold text-xs mb-2"
                   style={{ fontFamily: 'Bebas Neue', color: THEME_DEFINITIONS.dark.text }}
                 >
-                  IRONPULSE
+                  VIVIX
                 </div>
                 <div className="flex-1 rounded-sm p-2 flex flex-col gap-1" style={{ background: THEME_DEFINITIONS.dark.card }}>
                   <div className="h-1.5 w-8 rounded-sm" style={{ background: THEME_DEFINITIONS.dark.accent }} />
@@ -164,7 +164,7 @@ export default function Settings() {
                   className="font-bold text-xs mb-2"
                   style={{ fontFamily: 'Playfair Display', color: THEME_DEFINITIONS.light.text }}
                 >
-                  IRONPULSE
+                  VIVIX
                 </div>
                 <div className="flex-1 rounded-lg p-2 flex flex-col gap-1 shadow-sm" style={{ background: THEME_DEFINITIONS.light.card }}>
                   <div className="h-1.5 w-8 rounded-sm" style={{ background: THEME_DEFINITIONS.light.accent }} />
@@ -373,7 +373,7 @@ export default function Settings() {
         >
           <SectionHeader
             title="開發者選單"
-            subtitle="連點 5 次 IRONPULSE Logo 開啟"
+            subtitle="連點 5 次 VIVIX Logo 開啟"
             action={
               <Badge variant="auxiliary">
                 <Bug size={10} /> DEV
@@ -496,9 +496,9 @@ export default function Settings() {
             <Dumbbell size={20} className="text-accent flex-shrink-0" />
             <div>
               <div className="font-display text-xl tracking-wide uppercase text-text-primary select-none">
-                IRONPULSE
+                VIVIX
               </div>
-              <div className="text-[10px] text-text-secondary">v1.0.0 · 力量訓練</div>
+              <div className="text-[10px] text-text-secondary">v1.0.0 · 你的訓練夥伴</div>
             </div>
           </button>
           <p className="text-xs text-text-secondary leading-relaxed">
