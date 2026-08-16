@@ -61,7 +61,7 @@
 | `src/utils/time.ts` | `DAY_MS` / `WEEK_MS` / `FOURTEEN_DAYS_MS` / `dayKey` / `diffDays` | grep `86400000` 僅出現於此 |
 | `src/utils/format.ts` | `formatDateShort` / `formatDateFull` / `formatUnlockDate` / `formatWeekdayShort` | grep `toLocaleDateString` 於 pages/components = 0 |
 | `src/data/theme.ts` | `REST_TIMER_THEME` / `THEME_DEFINITIONS` / `CHART_WEEK_COLORS` / `OVERLAY_SCRIM` | grep hex 於 components/pages = 0 |
-| `src/features/stats/selectors.ts` | `getStreakDays`（D1 語義）；後續 PR/groupStats/volume 持續移入 | store/元件不得 inline 重算 |
+| `src/features/stats/selectors.ts` | `getStreakDays`（D1 語義）；PR／groupStats／volume 現仍為 workoutStore 單一函數（`computePRsFromSessions`／`getGroupStats`），無重複實作；漸進移入為 backlog B-01 | store/元件不得 inline 重算 |
 | `src/features/stats/settleAll.ts` | `settleAll` / `settleTaxonomyChange` / `settleOnLoad` | 跨 store 結算唯一入口（L3） |
 
 ## 4. 分類回寫機制（P-01 / C2）
@@ -95,6 +95,8 @@
 - `finishSession` 後（WorkoutSummary mount）
 - `editCustomExercise` / `deleteCustomExercise` 後（走 `settleTaxonomyChange`）
 - load / migrate 後一次（`settleOnLoad`，`silent: true` 不彈慶祝）
+
+註：頁面進入（Dashboard／AchievementsPage mount）呼叫 `settleTaxonomyChange` 為冪等安全網 — `unlockedAt` 永久，不會重複慶祝／重複 telemetry。
 
 ## 6. 去快取化（C4 / D2）
 

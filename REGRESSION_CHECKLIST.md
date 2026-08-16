@@ -32,6 +32,7 @@ npx vite build
 | as any | `grep "as any" src` | 0 |
 | 死 export | `grep "STANDARDS_META\|TIER_STYLES\|groupAchievementsByCategory\|getNextAchievement" src` | 0 |
 | 無消費端 flag | `grep "partnerQuestsEnabled\|warmupEnabled\|telemetryEnabled\|debugPanelEnabled" src` | 0 |
+| 非空斷言 | `grep -rnE "(\w\|\)\|\])!(\.\|\)\|,\|;\|$)" src`（扣除純文字 false positive 如 `LEVEL UP!`） | 0 |
 
 ## 2. 功能回歸（手動）
 

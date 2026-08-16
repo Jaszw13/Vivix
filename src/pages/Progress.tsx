@@ -150,9 +150,13 @@ export default function Progress() {
                 unit="次"
               />
             </div>
-            {groupStats[scope].lastTrainedAt && (
+            {groupStats[scope].lastTrainedAt ? (
               <p className="mt-3 text-[10px] uppercase tracking-widest text-text-secondary">
-                上次訓練：{formatDate(groupStats[scope].lastTrainedAt!)}
+                上次訓練：{formatDate(groupStats[scope].lastTrainedAt)}
+              </p>
+            ) : (
+              <p className="mt-3 text-[10px] uppercase tracking-widest text-text-secondary">
+                上次訓練：—
               </p>
             )}
           </Card>

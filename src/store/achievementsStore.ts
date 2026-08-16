@@ -93,7 +93,8 @@ function computeMetrics(ctx: DeriveContext): ComputedMetrics {
   for (const pr of personalRecords) {
     const family = getLiftFamily(pr.exerciseId, pr.exerciseName, pr.liftFamily);
     if (!family) continue;
-    if (!maxEst1RMByFamily[family] || pr.estimated1RM > maxEst1RMByFamily[family]!) {
+    const prev = maxEst1RMByFamily[family];
+    if (prev === undefined || pr.estimated1RM > prev) {
       maxEst1RMByFamily[family] = pr.estimated1RM;
     }
     // Track first recorded 1RM for delta + startKg copy
@@ -168,7 +169,7 @@ function computeMetrics(ctx: DeriveContext): ComputedMetrics {
   let currentRun = 0;
   let prevWeek: Date | null = null;
   for (const weekKey of sortedWeeks) {
-    const count = weekMap.get(weekKey)!;
+    const count = weekMap.get(weekKey) ?? 0;
     if (count >= 2) {
       if (prevWeek) {
         const diff = Math.round(
@@ -208,7 +209,7 @@ function computeMetrics(ctx: DeriveContext): ComputedMetrics {
   let currentVolRun = 0;
   let prevVol = 0;
   for (const monthKey of sortedMonths) {
-    const vol = monthMap.get(monthKey)!;
+    const vol = monthMap.get(monthKey) ?? 0;
     if (prevVol > 0 && vol > prevVol) {
       currentVolRun++;
     } else {

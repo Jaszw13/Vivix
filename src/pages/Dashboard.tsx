@@ -123,8 +123,8 @@ export default function Dashboard() {
   const plansGetPlanById = usePlansStore((s) => s.getPlanById);
   const selectedPlanId = activePlanId ?? DEFAULT_BEGINNER_PLAN_ID;
   let selectedPlan = plansGetPlanById(selectedPlanId);
-  // 防呆：若 activePlanId 不存在（被刪除等），fallback 到 5x5
-  if (!selectedPlan) selectedPlan = plansGetPlanById(DEFAULT_BEGINNER_PLAN_ID)!;
+  // 防呆：若 activePlanId 不存在（被刪除等），fallback 到 5x5；再不行取 trainingPlans[0]
+  if (!selectedPlan) selectedPlan = plansGetPlanById(DEFAULT_BEGINNER_PLAN_ID) ?? trainingPlans[0];
   const todayPlan = selectedPlan;
   const todayDayIndex = Math.min(
     Math.max(0, nextDayIndex),

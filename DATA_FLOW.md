@@ -51,6 +51,8 @@ WorkoutSummary 顯示慶祝批次（一次完成只一批）
 
 **保證**：一次 finish 只產生一組慶祝批次；順序確定可測；不依賴進度差。
 
+註：頁面進入（Dashboard／AchievementsPage mount）呼叫 `settleTaxonomyChange` 為冪等安全網 — `unlockedAt` 永久，不會重複慶祝／重複 telemetry。
+
 ## 3. PR 派生與分類回寫（P-01 / C2）
 
 ### 3.1 讀取時派生

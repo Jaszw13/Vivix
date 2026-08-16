@@ -33,9 +33,14 @@
 
 統計一律出自 `src/features/stats/selectors.ts`；分類一律出自 taxonomy 權威模組。
 
+### 現況註記
+
+- streak 權威在 selectors.ts（D1 語義）。
+- PR／groupStats／volume 現仍為 workoutStore 單一函數（`computePRsFromSessions`／`getGroupStats`），無重複實作；漸進移入 selectors 為 backlog **B-01**。
+
 ### 規則
 
-1. 統計計算禁止散落於 store/元件；集中 selectors。
+1. 統計計算禁止散落於 store/元件；集中 selectors（或 workoutStore 單一函數，依 B-01 漸進移入）。
 2. 分類查找禁止用 `getExerciseById` 作 fallback；走 `resolveCurrentTaxonomy`。
 3. memo key = `(sessions ref, taxonomyVersion, profileVersion)`。
 4. 元件不得 inline 計算統計（如 inline 算 streak、inline 算 volume）。
@@ -67,6 +72,8 @@
 - `finishSession` 後（WorkoutSummary mount）→ `settleAll(rewardCtx)`
 - `editCustomExercise` / `deleteCustomExercise` 後 → `settleTaxonomyChange()`
 - load / migrate 後一次 → `settleOnLoad()`（`silent: true` 不彈慶祝）
+
+註：頁面進入（Dashboard／AchievementsPage mount）呼叫 `settleTaxonomyChange` 為冪等安全網 — `unlockedAt` 永久，不會重複慶祝／重複 telemetry。
 
 ### 規則
 
@@ -192,6 +199,13 @@ mobile-app 為 prototype，不加功能。`FROZEN.md` 聲明；sampleSessions se
 - iPhone PWA 可能需刪除重裝以載入新版（舊 SW cache）
 - 全局 weight metrics 造成腿成就獨霸；需按肌群計算
 - koa-connect wrapper 造成 ctx 洩漏；需 native Koa rewrite（歷史）
+
+## Backlog
+
+| ID | 項目 | 說明 |
+|----|------|------|
+| B-01 | stats 移入 selectors | `computePRsFromSessions`／`getGroupStats` 等函數從 workoutStore 漸進移入 `features/stats/selectors.ts`；保持單一實作，優先不重構 |
+| B-02 | 孤兒 key 清理機制 | 見 R-3 一次性清理（`vivix-equipment-memory`）；下次升級 store 版本時，可擴充 `ORPHAN_KEYS` 陣列集中管理 |
 
 ## 部署
 

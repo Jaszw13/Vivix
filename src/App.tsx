@@ -130,6 +130,8 @@ function AppContent() {
 
   // 啟動時檢查是否需要顯示反饋
   useEffect(() => {
+    // R-3：C4 後 equipment memory 改派生，清理 v2 前遺留孤兒 key（一次性、冪等）
+    try { localStorage.removeItem('vivix-equipment-memory'); } catch {}
     // C5：載入後一次性補結算（silent — 不彈慶祝，僅補解锁）
     settleOnLoad();
     const timer = setTimeout(() => {
