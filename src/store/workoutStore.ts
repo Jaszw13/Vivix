@@ -23,6 +23,7 @@ import {
 } from '@/utils/workout';
 import { FOURTEEN_DAYS_MS } from '@/utils/time';
 import { getStreakDays as getStreakDaysSelector } from '@/features/stats/selectors';
+import { useCardioStore } from '@/store/cardioStore';
 import { getPlanById } from '@/data/plans';
 import {
   exercises as builtinExercises,
@@ -260,6 +261,8 @@ export const useWorkoutStore = create<WorkoutState>()(
           duration: 0,
           totalVolume: 0,
           exercises,
+          startedAt: new Date().toISOString(),
+          finishedAt: null,
         };
         set({ activeSession: session });
       },
@@ -272,6 +275,8 @@ export const useWorkoutStore = create<WorkoutState>()(
           duration: 0,
           totalVolume: 0,
           exercises: [],
+          startedAt: new Date().toISOString(),
+          finishedAt: null,
         };
         set({ activeSession: session });
       },
@@ -447,8 +452,14 @@ export const useWorkoutStore = create<WorkoutState>()(
       finishSession: () => {
         const active = get().activeSession;
         if (!active) return null;
+        const now = new Date().toISOString();
+        const startedAt = active.startedAt ?? now;
+        const durationSec = Math.max(0, Math.floor((new Date(now).getTime() - new Date(startedAt).getTime()) / 1000));
         const finished: WorkoutSession = {
           ...active,
+          startedAt,
+          finishedAt: now,
+          duration: durationSec > 0 ? durationSec : active.duration,
           totalVolume: calculateTotalVolume(active),
         };
         const newSessions = [...get().sessions, finished].sort(
@@ -478,7 +489,8 @@ export const useWorkoutStore = create<WorkoutState>()(
           get().sessions.reduce((sum, s) => sum + s.totalVolume, 0) / 1000
         ),
 
-      getStreakDays: () => getStreakDaysSelector(get().sessions),
+      // C3：統一走 selectors 權威（避免 inline 重算）；E-D3：streak = 力量日 ∪ 有氧日
+      getStreakDays: () => getStreakDaysSelector(get().sessions, useCardioStore.getState().sessions),
 
       getExerciseProgress: (exerciseId) => {
         const sessions = get().sessions;
@@ -680,7 +692,7 @@ export const useWorkoutStore = create<WorkoutState>()(
     }),
     {
       name: 'ironpulse-workouts',
-      version: 7,
+      version: 8,
       partialize: (state) => ({
         sessions: state.sessions,
         customExercises: state.customExercises,
@@ -691,9 +703,14 @@ export const useWorkoutStore = create<WorkoutState>()(
       }),
       migrate: (persistedState, version) => {
         const raw = (persistedState ?? {}) as Record<string, unknown>;
-        const sessions: unknown = Array.isArray(raw.sessions) ? raw.sessions : [];
+        const sessionsIn: unknown = Array.isArray(raw.sessions) ? raw.sessions : [];
         // C4：忽略舊 persist 的 personalRecords（v6 之前有寫），改由 sessions 派生
-        const safeSessions = sessions as WorkoutSession[];
+        // E-01 v8：為舊 session 補 startedAt/finishedAt = null（體重為 null 時熱量會 fallback 到 set 數公式）
+        const safeSessions: WorkoutSession[] = (sessionsIn as WorkoutSession[]).map((s) => ({
+          ...s,
+          startedAt: typeof s.startedAt === 'string' ? s.startedAt : null,
+          finishedAt: typeof s.finishedAt === 'string' ? s.finishedAt : null,
+        }));
 
         // v5：CustomExercise 升級為強制分類結構
         let customExercises: CustomExercise[] = [];

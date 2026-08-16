@@ -9,10 +9,10 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { MuscleGroup, GroupStats, WorkoutSession, PersonalRecord } from '@/types';
+import type { MuscleGroup, GroupStats, WorkoutSession, PersonalRecord, CardioSession } from '@/types';
 import { estimate1RM } from '@/utils/workout';
 import { DAY_MS, WEEK_MS } from '@/utils/time';
-import { getStreakDays as getStreakDaysSelector } from '@/features/stats/selectors';
+import { getStreakDays as getStreakDaysSelector, getConsecutiveWeeksWithCardio } from '@/features/stats/selectors';
 import {
   ACHIEVEMENTS,
   SORTED_ACHIEVEMENTS,
@@ -56,6 +56,8 @@ export interface DeriveContext {
   hasCustomExercises: boolean;
   hasCustomPlans: boolean;
   groupStats: Record<MuscleGroup, GroupStats>;
+  /** E-D3：有氧 session（事實；用於 streak union + cardio 成就） */
+  cardioSessions: CardioSession[];
 }
 
 // ── Pre-computed metrics (避免 per-achievement 重算) ──
@@ -77,15 +79,18 @@ interface ComputedMetrics {
   fullPlanCount: number;
   perfectLogCount: number;
   explorer: number;
-  // For copy formatting
   totalVolumeKg: number;
   startKgByFamily: Partial<Record<LiftFamily, number>>;
   weeksSinceFirst: number;
+  // E-05：cardio 指標
+  cardioMinutesTotal: number;
+  cardioSessionsTotal: number;
+  cardioWeeklyRhythmWeeks: number;
 }
 
 // ── Compute all metrics from raw data ──
 function computeMetrics(ctx: DeriveContext): ComputedMetrics {
-  const { sessions, personalRecords, bodyWeight, hasCustomExercises, hasCustomPlans, groupStats } = ctx;
+  const { sessions, personalRecords, bodyWeight, hasCustomExercises, hasCustomPlans, groupStats, cardioSessions } = ctx;
 
   // 1. est1RM by family (from PRs)
   const maxEst1RMByFamily: Partial<Record<LiftFamily, number>> = {};
@@ -149,7 +154,7 @@ function computeMetrics(ctx: DeriveContext): ComputedMetrics {
   const totalSessions = sessions.length;
 
   // 5. streak — C3：統一走 stats/selectors 權威實作（D1 語義）
-  const streak = getStreakDaysSelector(sessions);
+  const streak = getStreakDaysSelector(sessions, cardioSessions);
 
   // 6. weekly rhythm (consecutive weeks with ≥2 sessions)
   const weekMap = new Map<string, number>();
@@ -300,6 +305,11 @@ function computeMetrics(ctx: DeriveContext): ComputedMetrics {
   // 16. total volume
   const totalVolumeKg = sessions.reduce((sum, s) => sum + s.totalVolume, 0);
 
+  // 17. cardio（E-05）：時長加總、次數、連續週節律
+  const cardioMinutesTotal = cardioSessions.reduce((s, c) => s + (Number.isFinite(c.durationMin) ? c.durationMin : 0), 0);
+  const cardioSessionsTotal = cardioSessions.length;
+  const cardioWeeklyRhythmWeeks = getConsecutiveWeeksWithCardio(cardioSessions);
+
   return {
     maxEst1RMByFamily,
     maxEst1RMBWByFamily,
@@ -321,6 +331,9 @@ function computeMetrics(ctx: DeriveContext): ComputedMetrics {
     totalVolumeKg,
     startKgByFamily,
     weeksSinceFirst,
+    cardioMinutesTotal,
+    cardioSessionsTotal,
+    cardioWeeklyRhythmWeeks,
   };
 }
 
@@ -364,6 +377,12 @@ function currentOf(metrics: ComputedMetrics, def: AchievementDef): number {
       return metrics.perfectLogCount;
     case 'explorer':
       return metrics.explorer;
+    case 'cardio_minutes':
+      return metrics.cardioMinutesTotal;
+    case 'cardio_sessions':
+      return metrics.cardioSessionsTotal;
+    case 'cardio_weekly_rhythm':
+      return metrics.cardioWeeklyRhythmWeeks;
     default:
       return 0;
   }

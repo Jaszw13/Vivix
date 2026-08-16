@@ -10,13 +10,14 @@
 
 | Store | persist | 不 persist（衍生） |
 |-------|---------|------------------|
-| workoutStore v7 | sessions, customExercises, activePlanId, nextDayIndex, taxonomyVersion | personalRecords |
+| workoutStore v8 | sessions（含 startedAt/finishedAt）、customExercises、activePlanId、nextDayIndex、taxonomyVersion | personalRecords |
 | achievementsStore v4 | progress[id].unlockedAt（永久 D2）、seen、pending | lastMetrics、current |
 | questStore v2 | claimed、completedAt | current |
 | partnerStore v2 | species、name、unlockedFormIds、cosmetics | level、totalWorkouts、totalTrainingDays |
 | equipmentMemoryStore v2 | （改讀取時派生） | memories |
 | profileStore v2 | profile、onboardingCompleted、goal | — |
 | plansStore v1 | customPlans | — |
+| cardioStore v1 | sessions（id/date/machine/durationMin/kcal/avgHr/distanceKm/createdAt） | —（皆原始事實） |
 | themeStore | theme | — |
 | trialStore v5 | stage、usedCodes、... | — |
 | featureFlags v2 | partnerEnabled | （已刪 4 個無消費端 flag） |
@@ -28,6 +29,7 @@
 2. `partialize` 必須明確列舉持久化欄位，禁止 `...state` 全存。
 3. `migrate` 必須剝除舊衍生欄位（如 v6 的 personalRecords）。
 4. persist key 全部不變（`ironpulse-*` / `vivix-*`），不得換 key 造成資料丟失。
+5. **熱量值一律禁止 persist**：strengthKcal / cardioKcal / MET 計算結果（含 low/high/activeMin/restMin/isFallback）皆為衍生，走 `features/stats/energy.ts` 即時派生；唯一例外是 `CardioSession.kcal` — 此為**用戶手動輸入的機器原始讀數**，定義為「事實」而非「推估」，屬 cardioStore 白名單（見 CALORIE_MODEL.md §4.1）。
 
 ## L2：派生律（Derivation Law）
 
@@ -132,6 +134,30 @@ mobile-app 為 prototype，不加功能。`FROZEN.md` 聲明；sampleSessions se
 
 試用續用碼本期保留；商業化前移 env（寫入本規則，本期不動）。商業化時將續用碼邏輯移至環境變數，前端不硬編碼。
 
+### E-D1：力量熱量雙段 MET 模型
+
+顯示「≈ X kcal（約 L–H）」＋「推估值」標籤。公式見 CALORIE_MODEL.md §3。
+
+### E-D2：bodyWeight 為 null → 力量熱量鎖定
+
+`profileStore.profile.bodyWeight === null` 時，力量熱量卡顯示「輸入體重解鎖」提示（沿用 D3 門檻），不顯示假數字。
+
+### E-D3：有氧日計入 streak
+
+`streak = 力量日 ∪ 有氧日`（E-04 selectors union）；D1 語義不變（昨天有練今天未練仍延續）。
+
+### E-D4：有氧 Partner XP 20/日
+
+settleAll 內每日有氧結算 20 XP，每日上限 1 次；Partner 形態解鎖的 `totalWorkouts` 仍只算力量 session（不稀釋原語義）。
+
+### E-D5：有氧 kcal 選填，缺則 MET fallback
+
+`CardioSession.kcal`：用戶輸入 = 機器讀數（事實，persist 白名單）；未輸入 → MET × kg × (min/60) fallback（標「推估值」）；缺 kcal 且 `bodyWeight === null` → 顯示「—」＋提示。
+
+### E-D6：總熱量＝力量推估＋有氧（輸入或 fallback）
+
+報告總熱量卡合併兩項，附免責小字：「機器讀數與代謝估算皆約 ±15–20% 誤差，僅供參考」。
+
 ## 工程慣例
 
 ### 狀態管理
@@ -190,6 +216,9 @@ mobile-app 為 prototype，不加功能。`FROZEN.md` 聲明；sampleSessions se
 - 在 C1–C8 之外新增功能或重構
 - 讓 mobile-app 繼續長功能
 - `as any`、非空斷言 `!`（改安全 guard）
+- **persist 熱量／MET 推估結果**（strengthKcal / cardio fallback kcal / low/high/activeMin/restMin/isFallback）；`CardioSession.kcal` 僅限用戶手動輸入的機器讀數可 persist
+- **醫療級宣稱**（如「可降血壓」「保證減 X kg」）
+- **假設穿戴裝置**（心率帶、手錶、腳踏車功率計等皆不做整合）
 
 ## 教訓記錄（Lessons Learned）
 

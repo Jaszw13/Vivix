@@ -1,20 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Trophy, TrendingUp, Flame, Check, Sparkles, Star } from 'lucide-react';
+import { Trophy, TrendingUp, Flame, Check, Sparkles, Star, Info, Zap } from 'lucide-react';
 import type { WorkoutSession } from '@/types';
 import { estimate1RM, formatDateFull } from '@/utils/workout';
 import { Card, SectionHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PageShell } from '@/components/layout/PageShell';
 import { useWorkoutStore } from '@/store/workoutStore';
+import { useProfileStore } from '@/store/profileStore';
 import { usePartnerStore } from '@/features/partner/stores/partnerStore';
 import { useFeatureFlags } from '@/features/partner/stores/featureFlags';
+import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { settleAll } from '@/features/stats/settleAll';
 import { PARTNER_FORMS } from '@/features/partner/data/forms';
 import { COSMETIC_MAP } from '@/features/partner/data/cosmetics';
 import type { RewardResult } from '@/features/partner/types';
 import { PartnerLevelUpModal } from '@/features/partner/components/PartnerLevelUpModal';
+import { estimateStrengthKcal } from '@/features/stats/energy';
 
 interface SummaryLocationState {
   session: WorkoutSession;
@@ -95,6 +98,22 @@ export default function WorkoutSummary() {
     )
     .sort((a, b) => b.e1rm - a.e1rm)
     .slice(0, 3);
+
+  // E-01 力量熱量估算卡：衍生，不 persist（L1）
+  const profile = useProfileStore((s) => s.profile);
+  const customExercises = useWorkoutStore((s) => s.customExercises);
+  const strengthEnergy = estimateStrengthKcal(session, customExercises, profile.bodyWeight);
+  // telemetry：首次展示時 log；strength_ee_locked_prompt_shown 鎖定態顯示時 log
+  const eeTelemetryRef = useRef(false);
+  useEffect(() => {
+    if (eeTelemetryRef.current) return;
+    eeTelemetryRef.current = true;
+    const telemetry = useTelemetryStore.getState();
+    telemetry.log('strength_ee_viewed', { hasBodyWeight: profile.bodyWeight !== null });
+    if (profile.bodyWeight === null) {
+      telemetry.log('strength_ee_locked_prompt_shown', {});
+    }
+  }, [profile.bodyWeight]);
 
   return (
     <PageShell title="訓練完成" showNav={false} noPadding>
@@ -225,6 +244,82 @@ export default function WorkoutSummary() {
                 </div>
               );
             })}
+          </Card>
+        </motion.div>
+
+        {/* 力量訓練熱量估算卡（E-01；E-D1 推估 + E-D2 鎖定態） */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.52 }}
+          className="mt-6"
+        >
+          <SectionHeader
+            title="能量消耗"
+            subtitle="雙段 MET 代謝估算 · 僅供參考"
+          />
+          <Card className="p-4">
+            {strengthEnergy ? (
+              <>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 rounded-full bg-accent/15 flex items-center justify-center">
+                    <Zap size={18} className="text-accent" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <div className="font-mono text-3xl font-bold text-text-primary">
+                        ≈ {strengthEnergy.kcal}
+                      </div>
+                      <div className="text-xs font-mono text-text-secondary">
+                        約 {strengthEnergy.low}–{strengthEnergy.high} kcal
+                      </div>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-auxiliary/15 text-auxiliary uppercase tracking-widest">
+                        推估值
+                      </span>
+                    </div>
+                    <div className="text-[10px] uppercase tracking-widest text-text-secondary mt-1">
+                      消耗熱量
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border/40">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-text-secondary">
+                      活動時長
+                    </div>
+                    <div className="font-mono text-sm text-text-primary mt-0.5">
+                      {strengthEnergy.activeMin} 分鐘
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-text-secondary">
+                      休息時長
+                    </div>
+                    <div className="font-mono text-sm text-text-primary mt-0.5">
+                      {strengthEnergy.restMin} 分鐘
+                    </div>
+                  </div>
+                </div>
+                <p className="mt-3 text-[11px] leading-relaxed text-text-secondary flex gap-2">
+                  <Info size={12} className="flex-shrink-0 mt-0.5" />
+                  推估值基於動作部位與休息比例估算，機器讀數與代謝估算皆約 ±15–20% 誤差，僅供方向參考。
+                </p>
+              </>
+            ) : (
+              // E-D2：體重未填 → 鎖定提示
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-border/50 flex items-center justify-center">
+                  <Info size={18} className="text-text-secondary" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-mono text-2xl font-bold text-text-secondary">— — kcal</div>
+                  <div className="text-xs text-text-secondary mt-1">
+                    尚未填入體重，無法估算熱量。
+                    至「設定 / 個人檔案」輸入體重即可解鎖推估。
+                  </div>
+                </div>
+              </div>
+            )}
           </Card>
         </motion.div>
 

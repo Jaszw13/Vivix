@@ -1,12 +1,14 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
-import { Flame, Plus, TrendingUp, Trophy, Zap, Award, Cat, Dog, ChevronRight, Gift } from 'lucide-react';
+import { Flame, Plus, TrendingUp, Trophy, Zap, Award, Cat, Dog, ChevronRight, Gift, Activity } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { Button } from '@/components/ui/Button';
 import { Card, SectionHeader, StatTile, Badge } from '@/components/ui/Card';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { useProfileStore } from '@/store/profileStore';
+import { useCardioStore } from '@/store/cardioStore';
+import type { CardioMachine } from '@/types';
 import {
   useAchievementsStore,
   SORTED_ACHIEVEMENTS,
@@ -41,6 +43,10 @@ export default function Dashboard() {
     setActivePlan,
   } = useWorkoutStore();
   const { profile } = useProfileStore();
+  const cardioSessions = useCardioStore((s) => s.sessions);
+  const addCardio = useCardioStore((s) => s.addCardio);
+
+  const [cardioModalOpen, setCardioModalOpen] = useState(false);
 
   // Partner 夥伴卡片
   const partnerEnabled = useFeatureFlags((s) => s.partnerEnabled);
@@ -77,8 +83,9 @@ export default function Dashboard() {
       hasCustomExercises: useWorkoutStore.getState().customExercises.length > 0,
       hasCustomPlans: false, // T-05 尚未實作 custom plans
       groupStats,
+      cardioSessions,
     };
-  }, [sessions, personalRecords, profile.bodyWeight, getGroupStats]);
+  }, [sessions, personalRecords, profile.bodyWeight, getGroupStats, cardioSessions]);
 
   useEffect(() => {
     // C5：統一透過 settleTaxonomyChange 結算（保證 achievements + quests 同源）
@@ -323,6 +330,15 @@ export default function Dashboard() {
           <Button fullWidth size="lg" onClick={handleStartToday}>
             <TrendingUp size={18} /> 開始訓練
           </Button>
+          <Button
+            fullWidth
+            size="sm"
+            variant="ghost"
+            className="mt-2 border border-border/40"
+            onClick={() => setCardioModalOpen(true)}
+          >
+            <Activity size={16} /> 記錄有氧
+          </Button>
         </Card>
       </motion.div>
 
@@ -512,7 +528,7 @@ export default function Dashboard() {
         className="mt-6 mb-4"
       >
         <SectionHeader title="快速開始" />
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <button
             onClick={() => navigate('/plans')}
             className={cn(
@@ -535,6 +551,17 @@ export default function Dashboard() {
             <div className="font-bold text-sm text-text-primary">自由訓練</div>
             <div className="text-[10px] text-text-secondary mt-0.5">空白開始</div>
           </button>
+          <button
+            onClick={() => setCardioModalOpen(true)}
+            className={cn(
+              'bg-bg-card rounded-card border border-border/40 p-4 text-left',
+              'hover:border-auxiliary/60 transition-colors'
+            )}
+          >
+            <Activity size={20} className="text-auxiliary mb-2" />
+            <div className="font-bold text-sm text-text-primary">記錄有氧</div>
+            <div className="text-[10px] text-text-secondary mt-0.5">機器讀數</div>
+          </button>
         </div>
       </motion.div>
 
@@ -554,7 +581,165 @@ export default function Dashboard() {
         open={setupModalOpen}
         onClose={() => setSetupModalOpen(false)}
       />
+
+      {/* 有氧新增表單 Modal */}
+      <CardioFormModal
+        open={cardioModalOpen}
+        onClose={() => setCardioModalOpen(false)}
+        onSubmit={(payload) => {
+          addCardio(payload);
+          setCardioModalOpen(false);
+        }}
+      />
     </PageShell>
+  );
+}
+
+// ============ 有氧新增表單 Modal ============
+interface CardioFormModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (payload: {
+    date?: string;
+    machine: CardioMachine;
+    durationMin: number;
+    kcal?: number | null;
+    avgHr?: number | null;
+    distanceKm?: number | null;
+  }) => void;
+}
+const MACHINE_OPTIONS: { value: CardioMachine; label: string }[] = [
+  { value: 'treadmill', label: '跑步機' },
+  { value: 'stair', label: '階梯機' },
+  { value: 'elliptical', label: '橢圓機' },
+  { value: 'bike', label: '腳踏車' },
+  { value: 'rower', label: '划船機' },
+  { value: 'other', label: '其他' },
+];
+
+function CardioFormModal({ open, onClose, onSubmit }: CardioFormModalProps) {
+  const [machine, setMachine] = useState<CardioMachine>('treadmill');
+  const [durationMin, setDurationMin] = useState('');
+  const [kcal, setKcal] = useState('');
+  const [avgHr, setAvgHr] = useState('');
+  const [distanceKm, setDistanceKm] = useState('');
+  const [err, setErr] = useState('');
+
+  const reset = () => {
+    setMachine('treadmill');
+    setDurationMin('');
+    setKcal('');
+    setAvgHr('');
+    setDistanceKm('');
+    setErr('');
+  };
+  const close = () => { reset(); onClose(); };
+  const submit = () => {
+    const dm = parseFloat(durationMin);
+    if (!(dm > 0)) { setErr('請輸入有氧時長（分鐘）'); return; }
+    onSubmit({
+      machine,
+      durationMin: dm,
+      kcal: kcal.trim() ? parseFloat(kcal) : null,
+      avgHr: avgHr.trim() ? parseFloat(avgHr) : null,
+      distanceKm: distanceKm.trim() ? parseFloat(distanceKm) : null,
+    });
+    reset();
+  };
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-bg-primary rounded-t-2xl sm:rounded-2xl p-5 shadow-2xl border border-border/40 animate-in fade-in slide-in-from-bottom-4 duration-200">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-display text-2xl tracking-wide uppercase text-text-primary">
+              記錄有氧
+            </h3>
+            <p className="text-xs text-text-secondary mt-0.5">
+              填入機器數據，kcal 可選
+            </p>
+          </div>
+          <button onClick={close} className="text-text-secondary hover:text-text-primary" aria-label="關閉">
+            <ChevronRight className="rotate-45" size={22} />
+          </button>
+        </div>
+        <div className="space-y-3">
+          <Field label="器材">
+            <div className="grid grid-cols-3 gap-2">
+              {MACHINE_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => setMachine(o.value)}
+                  className={cn(
+                    'px-2 py-2 rounded-button text-xs font-bold border transition-colors',
+                    machine === o.value
+                      ? 'bg-accent/15 text-accent border-accent/50'
+                      : 'bg-bg-secondary text-text-secondary border-border/40 hover:text-text-primary',
+                  )}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <Field label="時長（分鐘） *">
+            <input
+              type="number" min={0.5} step={0.5} inputMode="decimal"
+              value={durationMin}
+              onChange={(e) => setDurationMin(e.target.value)}
+              placeholder="例如 30"
+              className="w-full bg-bg-secondary rounded-button px-3 py-2 text-text-primary font-mono border border-border/40 focus:border-accent focus:outline-none"
+            />
+          </Field>
+          <div className="grid grid-cols-3 gap-2">
+            <Field label="kcal（選填）">
+              <input
+                type="number" min={0} step={1} inputMode="numeric"
+                value={kcal}
+                onChange={(e) => setKcal(e.target.value)}
+                placeholder="250"
+                className="w-full bg-bg-secondary rounded-button px-3 py-2 text-text-primary font-mono border border-border/40 focus:border-accent focus:outline-none"
+              />
+            </Field>
+            <Field label="心率（選填）">
+              <input
+                type="number" min={0} step={1} inputMode="numeric"
+                value={avgHr}
+                onChange={(e) => setAvgHr(e.target.value)}
+                placeholder="135"
+                className="w-full bg-bg-secondary rounded-button px-3 py-2 text-text-primary font-mono border border-border/40 focus:border-accent focus:outline-none"
+              />
+            </Field>
+            <Field label="km（選填）">
+              <input
+                type="number" min={0} step={0.1} inputMode="decimal"
+                value={distanceKm}
+                onChange={(e) => setDistanceKm(e.target.value)}
+                placeholder="3.2"
+                className="w-full bg-bg-secondary rounded-button px-3 py-2 text-text-primary font-mono border border-border/40 focus:border-accent focus:outline-none"
+              />
+            </Field>
+          </div>
+          {err && <p className="text-[11px] text-auxiliary">{err}</p>}
+        </div>
+        <div className="grid grid-cols-2 gap-3 mt-5">
+          <Button variant="ghost" onClick={close}>取消</Button>
+          <Button onClick={submit}>記錄</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-1">
+        {label}
+      </div>
+      {children}
+    </label>
   );
 }
 

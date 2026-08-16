@@ -4,11 +4,13 @@
 
 ## 1. 持久化邊界（L1）
 
-**只持久化**：原始事實（sessions、customExercises、plans、profile）＋ 永久決定（achievements `unlockedAt`/`seen`/`pending`、quests `claimed`/`completedAt`、partner `unlockedFormIds`、theme、trial）。
+**只持久化**：原始事實（sessions、customExercises、plans、profile、**cardioSessions**）＋ 永久決定（achievements `unlockedAt`/`seen`/`pending`、quests `claimed`/`completedAt`、partner `unlockedFormIds`、theme、trial）。
 
-**不持久化**：所有衍生欄位（personalRecords、lastMetrics、current progress、partner level/counters、equipment memories）。由 `partialize` 排除、`migrate` 剝除舊欄位。
+**不持久化**：所有衍生欄位（personalRecords、lastMetrics、current progress、partner level/counters、equipment memories、**strengthKcal / cardio fallback kcal / 任何 MET 計算結果**）。由 `partialize` 排除、`migrate` 剝除舊欄位。
 
 persist key 全部不變：`ironpulse-*` / `vivix-*`。
+
+`CardioSession.kcal` 為唯一例外：若為用戶手動輸入的機器讀數，則定義為「事實」，可 persist（白名單 cardioStore v1）；否則一律為衍生，不 persist。見 CALORIE_MODEL.md §4.1。
 
 ## 2. 訓練完成流程（finishSession）
 
@@ -26,19 +28,22 @@ WorkoutSummary mount
 settleAll（stats/settleAll.ts）固定順序：
   1. buildAchieveCtx()
        sessions = workoutStore.sessions
+       cardioSessions = cardioStore.sessions   ← 有氧事實
        personalRecords = workoutStore.personalRecords  ← 讀取時派生
-       bodyWeight = profileStore.profile.bodyWeight    ← number | null（D3）
+       bodyWeight = profileStore.profile.bodyWeight    ← number | null（D3 + E-D2/E-D5）
        groupStats = workoutStore.getGroupStats()
+       cardio metrics: cardioMinutesTotal / cardioSessionsTotal / cardioWeeklyRhythmWeeks（來自 cardioSessions）
   2. achievementsStore.recompute(ctx)
-       → computeMetrics（純函數）
+       → computeMetrics（純函數，含 cardio_* 三 metric）
        → 達標且未 unlocked → unlockedAt = now + pending
-       → 回傳新解鎖 id[]
-  3. partner handleWorkoutCompleted(rewardCtx)
-       → addXp + form unlock（僅 partnerEnabled）
+       → 回傳新解鎖 id[]（含 +9 cardio 成就；舊 58 不動）
+  3. partner
+       a. handleWorkoutCompleted(rewardCtx) ← addXp + form unlock（僅力量 session + partnerEnabled）
+       b. settleCardioDailyXp() ← 有氧 20 XP / 日，每日上限 1 次（E-D4）
   4. buildQuestCtx(streakDays)
-       totalWorkouts = sessions.length
+       totalWorkouts = sessions.length（只算力量，不稀釋 E-D4）
        totalPRs = personalRecords.length
-       streakDays = workoutStore.getStreakDays()  ← D1 語義
+       streakDays = getStreakDaysSelector(sessions, cardioSessions)  ← D1 + E-D3 union
   5. questStore.recompute(questCtx) → 達標 → completed
   6. telemetry.log('achievement_unlocked', {id}) 統一在此
   │
@@ -111,31 +116,108 @@ settleOnLoad()
 UI 顯示
 ```
 
-## 4. streak 計算（C3 / D1）
+## 4. streak 計算（C3 / D1 + E-D3）
 
-唯一來源：`stats/selectors.ts` 的 `getStreakDays`。
+唯一來源：`stats/selectors.ts` 的 `getStreakDays(workoutSessions, cardioSessions)`。
 
 ```
-getStreakDays(sessions)
+trainingDayKeys =
+    dayKey(workoutSessions[i].date)
+  ∪ dayKey(cardioSessions[j].date)     ← E-D3 union：有氧日計入 streak
+
+getStreakDays(sessions, cardioSessions)
   │
-  ├─ 今天有練 → cursor = today
-  ├─ 今天未練但昨天有練 → cursor = yesterday（仍延續）
+  ├─ 今天有訓練（力量 or 有氧）→ cursor = today
+  ├─ 今天未練但昨天有練 → cursor = yesterday（仍延續，D1 不變）
   └─ 否則 → 0
   │
   ▼
-  從 cursor 往回一天天比對（本地時區 toDateString 去重）
+  從 cursor 往回一天天比對（本地時區 toDateString 去重，力量+有氧聯集）
   │
   ▼
   streak = 連續天數
 ```
 
-**同源保證**：Dashboard、AchievementsPage、questStore recompute ctx 全部 import 同一個 `getStreakDays`。workoutStore.getStreakDays() 與 achievementsStore 內 streak 計算已刪除。
+**同源保證**：Dashboard、AchievementsPage、questStore recompute ctx、report 頁面全部 import 同一個 `getStreakDays`（兩個參數版本）。有氧刪除 → streak 可能即時下降（但已 unlocked 成就不消失，D2）。
 
 **驗收**：
-- 「昨天有練、今天未練」：兩處 streak 相同且 >0
-- 斷 2 天：兩處同為 0
+- 「昨天有氧、今天未練」：Dashboard 與成就頁 streak 相同且 >0
+- 「斷 2 天（不含有氧）」：兩處同為 0
+- addCardio 當天補紀錄 → streak 即時 +1（可復原）
 
-## 5. 成就進度（D2 live）
+## 5. 熱量派生（E-1 / E-2；L1：永不 persist）
+
+### 5.1 力量熱量（雙段 MET）
+
+```
+Dashboard / Progress / WorkoutSummary 熱量卡
+  │
+  ▼
+selectors.getWeeklyEnergyBreakdown(sessions, cardioSessions, customExercises, bodyWeight)
+  │
+  ├─ 力量 sessions 逐筆
+  │    ▼
+  │    energy.estimateStrengthKcal(session, customExercises, bodyWeight)
+  │      │ bodyWeight === null → 回 null（E-D2：鎖定，不落假數字）
+  │      │ 部位加權：Σ(completedSetsByGroup[g] × STRENGTH_ACTIVE_MET[g]) / totalCompleted
+  │      │ 時長：startedAt/finishedAt 存在 → 真實；否則 activeH = completedSets × 40s
+  │      │ restH = Σ(completedSets × (restSeconds ?? 90)) / 3600
+  │      ▼
+  │      { kcal, low, high, activeMin, restMin } | null
+  │
+  └─ 有氧 sessions 逐筆
+       ▼
+       energy.estimateCardioKcal(cardioSession, bodyWeight)
+         │ 用戶已輸入 kcal → 直接使用（isFallback=false）
+         │ 未輸入 + bodyWeight 有值 → CARDIO_MET × kg × (min/60)（isFallback=true，標推估）
+         │ 未輸入 + bodyWeight null → 回 null（E-D5：顯示 — + 提示）
+         ▼
+         { kcal, low, high, isFallback } | null
+  │
+  ▼
+UI：
+  力量 ≈A（約 L–H）推估值 ＋ 有氧 B kcal（機器）或 ≈B（推估） ＝ ≈Total
+  一律附小字：「機器讀數與代謝估算皆約 ±15–20% 誤差，僅供參考」
+```
+
+**L1 保證**：上述任何 `kcal / low / high / activeMin / restMin / isFallback` 皆為純函式回傳值，無任何 store persist；`CardioSession.kcal` 只有在用戶手動輸入時才會寫入 cardioStore（事實定義）。
+
+### 5.2 有氧新增／刪除流（addCardio / deleteCardio）
+
+```
+Dashboard 快速「記錄有氧」 / Progress 有氧區塊「新增」
+  │
+  ▼
+cardioStore.addCardio({ date, machine, durationMin, kcal?, avgHr?, distanceKm? })
+  │  1. 寫 CardioSession 事實（persist `vivix-cardio-v1` v1）
+  │  2. telemetry.log('cardio_session_added', { machine })
+  │  3. kcal 未輸入且 bodyWeight 有值 → telemetry.log('cardio_fallback_used')
+  │  4. 觸發 settleTaxonomyChange()（L3 唯一結算入口）
+  ▼
+settleAll（見 §2 流程；無 rewardCtx → 略過力量 handleWorkoutCompleted，仍執行 cardio XP + metrics）
+  │  buildAchieveCtx：cardioMinutesTotal / cardioSessionsTotal / cardioWeeklyRhythmWeeks 即時重算
+  │  settleCardioDailyXp：20 XP / 日上限 1 次
+  │  quests recompute：ctx.streakDays 取 union（可能今天補登而變 >0）
+  ▼
+成就 / streak / 熱量 / 圖表 全部即時更新
+
+─────────────────────────────────────
+
+Progress 有氧列表 → 刪除
+  │
+  ▼
+cardioStore.deleteCardio(id)
+  │  1. 從 cardioSessions 陣列移除
+  │  2. telemetry.log('cardio_session_deleted', { machine })
+  │  3. 觸發 settleTaxonomyChange()
+  ▼
+settleAll 重算
+  │  cardio metrics 下降（live）
+  │  streak 可能下降（但若已斷一天以上可能不變）
+  │  已 unlocked 成就仍保留（D2：unlockedAt 永久）
+```
+
+## 6. 成就進度（D2 live）
 
 ```
 AchievementsPage / Progress / Dashboard
@@ -157,7 +239,7 @@ current = computeMetrics(ctx)[id].current
 - 進度條 live（手造刪 sessions 後進度即時下降）
 - 禁止 `Math.max` 單調遞增（A-005 已修）
 
-## 6. 體重與 BW 軌（D3）
+## 7. 體重與 BW 軌（D3 + E-D2 + E-D5）
 
 ```
 profileStore.profile.bodyWeight: number | null
@@ -166,15 +248,19 @@ profileStore.profile.bodyWeight: number | null
   │    ├─ settleAll 傳 null（不 ?? 75）
   │    ├─ computeMetrics：bodyWeight !== null 檢查 → BW 軌指標留空
   │    ├─ BW 軌成就不觸發
-  │    └─ AchievementsPage 顯示「輸入體重解鎖」鎖定提示
+  │    ├─ AchievementsPage 顯示「輸入體重解鎖」鎖定提示
+  │    ├─ E-D2：力量熱量估算鎖定（estimateStrengthKcal → null）
+  │    └─ E-D5：有氧 fallback kcal 鎖定（未輸入 kcal 時 estimateCardioKcal → null，顯示 —）
   │
   └─ number（已填）
-       └─ 正常計算 est1RM / bodyWeight
+       ├─ 正常計算 est1RM / bodyWeight
+       ├─ 力量熱量、有氧 fallback kcal 正常派生
+       └─ WorkoutSummary 熱量卡顯示 ≈ 值
 ```
 
 migrate：舊 `bodyWeight === 75`（舊 default）→ `null`。真 75kg 用戶重填，UI 說明。
 
-## 7. 器械記憶（A-014）
+## 8. 器械記憶（A-014）
 
 ```
 equipmentMemoryStore
@@ -220,12 +306,15 @@ app start
        └─ true → 進入主畫面
 ```
 
-## 10. 禁止的資料流
+## 11. 禁止的資料流
 
 - 直接在元件內 inline 計算統計（應走 selectors）
 - 直接在元件內 inline 查分類（應走 taxonomy 權威）
-- 跨 store 結算不走 settleAll（L3）
+- **直接在元件內 inline 計算熱量**（應走 selectors → energy.ts，L2）
+- 跨 store 結算不走 settleAll（L3）；addCardio / deleteCardio 例外是必須呼叫 settleTaxonomyChange（也是走 settleAll）
 - 持久化衍生欄位（L1）
+- **persist 熱量／MET 計算結果**（strengthKcal / cardio fallback kcal / low/high/activeMin/restMin/isFallback）；`CardioSession.kcal` 只有用戶手動輸入的機器讀數可 persist（事實定義，詳 §1 與 CALORIE_MODEL.md §4.1）
 - 更換 persist key 造成資料丟失
-- 改休息計時行為或成就目錄數值（58 個）
+- 改休息計時行為或成就目錄數值（58 個；新 +9 cardio 成就不碰 58 舊）
 - 在 C1–C8 之外新增功能或重構
+- 醫療級宣稱；穿戴裝置整合（心率帶、手錶、功率計皆不做）

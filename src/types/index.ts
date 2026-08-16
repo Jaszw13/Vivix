@@ -20,6 +20,36 @@ export type ExerciseCategory = MuscleGroup;
  */
 export type LiftFamily = 'bench' | 'squat' | 'deadlift' | 'ohp';
 
+/** E-2：有氧器材類型（cardioStore 事實欄位） */
+export type CardioMachine = 'treadmill' | 'stair' | 'elliptical' | 'bike' | 'rower' | 'other';
+
+/** E-2：器材顯示名 */
+export const CARDIO_MACHINE_LABELS: Record<CardioMachine, string> = {
+  treadmill: '跑步機',
+  stair: '階梯機',
+  elliptical: '橢圓機',
+  bike: '飛輪車',
+  rower: '划船機',
+  other: '其他',
+};
+
+/** E-2：有氧訓練記錄（原始事實，cardioStore persist；L1） */
+export interface CardioSession {
+  id: string;
+  /** ISO date string（作為日期分組用，與 WorkoutSession.date 同格式） */
+  date: string;
+  machine: CardioMachine;
+  /** 訓練時長（分鐘），必填 >0 */
+  durationMin: number;
+  /** 機器顯示 kcal（選填）；缺時走 MET fallback（E-D5） */
+  kcal?: number | null;
+  /** 平均心率（選填） */
+  avgHr?: number | null;
+  /** 距離 km（選填） */
+  distanceKm?: number | null;
+  createdAt: string;
+}
+
 export const MUSCLE_GROUP_LABELS: Record<MuscleGroup, string> = {
   chest: '胸部',
   back: '背部',
@@ -326,6 +356,9 @@ export interface WorkoutSession {
   duration: number;
   totalVolume: number;
   exercises: ExerciseLog[];
+  /** E-01：訓練開始／結束時間（原始事實，persist）。migrate：舊 session 設 null */
+  startedAt?: string | null;
+  finishedAt?: string | null;
 }
 
 // ============ 用戶資料 ============

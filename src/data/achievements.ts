@@ -13,7 +13,8 @@ export type AchievementMetric =
   | 'sessions' | 'streak' | 'weekly_rhythm'
   | 'volume_delta_months' | 'pr_count_session'
   | 'group_pr' | 'group_pr_all' | 'group_coverage'
-  | 'warmup_count' | 'full_plan_count' | 'perfect_log_count' | 'explorer';
+  | 'warmup_count' | 'full_plan_count' | 'perfect_log_count' | 'explorer'
+  | 'cardio_minutes' | 'cardio_sessions' | 'cardio_weekly_rhythm';
 
 export interface AchievementDef {
   id: string;
@@ -108,6 +109,17 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   A('plan_t2','behavior','full_plan',2,'full_plan_count',10,'十次完整','10 次完整完成計劃。'),
   A('log_t1','behavior','perfect_log',1,'perfect_log_count',10,'完美記錄','10 次訓練完整記錄所有組數。'),
   A('explorer','behavior','explorer',1,'explorer',1,'探索者','建立並分類自訂動作，或建立自訂計劃。'),
+
+  // ── 有氧增量（+9，E-05；id/metric 與 §5 規格一致）──
+  A('cardio_first',   'consistency','cardio_first',1,'cardio_sessions',1,'有氧初體驗','第一次完成有氧。跑步機上的每一分鐘都算數。'),
+  A('cardio_min_t1',  'consistency','cardio_min',  1,'cardio_minutes',30, '三十分鐘打底','累積 30 分鐘有氧。循序漸進，穩步前進。'),
+  A('cardio_min_t2',  'consistency','cardio_min',  2,'cardio_minutes',60, '一小時里程碑','累積 60 分鐘有氧。節奏穩住，進步就會發生。'),
+  A('cardio_min_t3',  'consistency','cardio_min',  3,'cardio_minutes',120,'兩小時達標','累積 120 分鐘有氧。每一次都在累積未來的底氣。'),
+  A('cardio_min_t4',  'consistency','cardio_min',  4,'cardio_minutes',300,'五小時俱樂部','累積 300 分鐘有氧。耐力看得見。'),
+  A('cardio_min_t5',  'consistency','cardio_min',  5,'cardio_minutes',600,'十小時巔峰','累積 600 分鐘有氧。汗水不會騙人。'),
+  A('cardio_sess_t2', 'consistency','cardio_sess', 2,'cardio_sessions',10,'十次有氧達成','10 次有氧完成。每一次出發都算。'),
+  A('cardio_sess_t3', 'consistency','cardio_sess', 3,'cardio_sessions',25,'二十五次里程碑','25 次有氧完成。節律已在體內。'),
+  A('cardio_weekly',  'consistency','cardio_wk',   2,'cardio_weekly_rhythm',4,'四週連動','連續 4 週至少 1 次有氧。你已經建立有氧節律。'),
 ];
 
 // ── Tier 視覺樣式 ──
