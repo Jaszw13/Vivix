@@ -62,6 +62,9 @@ export default defineConfig({
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2,ttf}'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        // 確保每次打開 app 都檢查一次更新，SPA navigate fallback
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/__/, /\/api\//],
         // 預載 Google Fonts 樣式
         runtimeCaching: [
           {
@@ -89,8 +92,6 @@ export default defineConfig({
             },
           },
         ],
-        navigateFallback: 'index.html',
-        navigateFallbackDenylist: [/^\/__/, /\/api\//],
       },
       devOptions: {
         enabled: false,

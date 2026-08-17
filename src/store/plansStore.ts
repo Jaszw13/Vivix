@@ -273,6 +273,17 @@ export const usePlansStore = create<PlansState>()(
     {
       name: 'vivix-plans-store-v1',
       version: 1,
+      // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
+      onRehydrateStorage: () => {
+        return (state, error) => {
+          if (error) {
+            console.error('[plansStore] Zustand hydration failed, falling back to defaults', error);
+            try {
+              localStorage.removeItem('vivix-plans-store-v1');
+            } catch {}
+          }
+        };
+      },
       migrate: (persistedState, version) => {
         const s = (persistedState ?? {}) as Partial<PlansState>;
         // 確保 customPlans 存在且為 v2 結構

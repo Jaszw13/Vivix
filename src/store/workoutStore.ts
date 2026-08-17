@@ -701,6 +701,17 @@ export const useWorkoutStore = create<WorkoutState>()(
         taxonomyVersion: state.taxonomyVersion,
         // C4 / L1：personalRecords 為衍生資料，不 persist；讀取時由 sessions + customExercises 派生
       }),
+      // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
+      onRehydrateStorage: () => {
+        return (state, error) => {
+          if (error) {
+            console.error('[workoutStore] Zustand hydration failed, falling back to defaults', error);
+            try {
+              localStorage.removeItem('ironpulse-workouts');
+            } catch {}
+          }
+        };
+      },
       migrate: (persistedState, version) => {
         const raw = (persistedState ?? {}) as Record<string, unknown>;
         const sessionsIn: unknown = Array.isArray(raw.sessions) ? raw.sessions : [];

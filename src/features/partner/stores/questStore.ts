@@ -100,6 +100,17 @@ export const useQuestStore = create<QuestState>()(
     {
       name: 'vivix-quest-store-v1',
       version: 2,
+      // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
+      onRehydrateStorage: () => {
+        return (state, error) => {
+          if (error) {
+            console.error('[questStore] Zustand hydration failed, falling back to defaults', error);
+            try {
+              localStorage.removeItem('vivix-quest-store-v1');
+            } catch {}
+          }
+        };
+      },
       // C4 / L1：只 persist 永久決定（claimed、completedAt）；current 為衍生，不 persist
       partialize: (state) => ({
         progress: Object.fromEntries(

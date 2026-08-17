@@ -82,6 +82,17 @@ export const useCardioStore = create<CardioState>()(
     {
       name: 'vivix-cardio-v1',
       version: 1,
+      // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
+      onRehydrateStorage: () => {
+        return (state, error) => {
+          if (error) {
+            console.error('[cardioStore] Zustand hydration failed, falling back to defaults', error);
+            try {
+              localStorage.removeItem('vivix-cardio-v1');
+            } catch {}
+          }
+        };
+      },
       // L1：cardioSessions 全為事實，完整 persist
       partialize: (state) => ({ sessions: state.sessions }),
       migrate: (persistedState: unknown) => {

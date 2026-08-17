@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Moon, Sun, User, Trash2, Dumbbell, Clock, Shield, Smartphone, Copy, RotateCcw, FastForward, AlertTriangle, Bug, Download, Eraser, Cat } from 'lucide-react';
+import { Moon, Sun, User, Trash2, Dumbbell, Clock, Shield, Smartphone, Copy, RotateCcw, FastForward, AlertTriangle, Bug, Download, Eraser, Cat, RefreshCw } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { Card, SectionHeader, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -521,6 +521,63 @@ export default function Settings() {
         <p className="text-[10px] text-text-secondary mt-2 text-center">
           清除所有訓練記錄與個人資料
         </p>
+      </motion.div>
+
+      {/* PWA 強制更新（測試者自救按鈕）—— 解決 iOS Safari SW 幽靈快取導致嘅白屏 */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: devMenuOpen ? 0.28 : 0.28 }}
+        className="mt-6"
+      >
+        <SectionHeader title="應用程式更新" subtitle="解決卡住白屏問題" />
+        <Card className="p-4">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-10 h-10 rounded-full bg-accent-soft flex items-center justify-center flex-shrink-0">
+              <RefreshCw size={18} className="text-accent" />
+            </div>
+            <div className="flex-1">
+              <div className="text-sm font-bold text-text-primary">
+                強制檢查更新並刷新
+              </div>
+              <p className="text-[11px] text-text-secondary mt-0.5 leading-relaxed">
+                如果畫面卡住、白屏或功能異常，請點擊下方按鈕。此動作會跳過 Service Worker 快取、強制載入最新版本並重新整理頁面。
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="secondary"
+            fullWidth
+            onClick={async () => {
+              try {
+                if ('serviceWorker' in navigator) {
+                  const registrations = await navigator.serviceWorker.getRegistrations();
+                  // 1. 先嘗試 update 所有已註冊嘅 SW
+                  await Promise.all(registrations.map((r) => r.update().catch(() => {})));
+                  // 2. 叫當前 active SW 立即 skipWaiting（唔等用戶關 tab）
+                  const readyReg = await navigator.serviceWorker.ready.catch(() => null);
+                  if (readyReg?.waiting) {
+                    readyReg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                  }
+                  // 3. 卸載所有舊 SW registrations（清除幽靈快取）
+                  await Promise.all(registrations.map((r) => r.unregister().catch(() => {})));
+                }
+                // 4. 清除所有 caches（Workbox precache + runtime cache）
+                if ('caches' in window) {
+                  const keys = await caches.keys().catch(() => [] as string[]);
+                  await Promise.all(keys.map((k) => caches.delete(k).catch(() => {})));
+                }
+              } catch (e) {
+                console.warn('[ForceUpdate] cleanup failed, proceeding with reload:', e);
+              } finally {
+                // 5. 最後：強制 reload + 跳過 HTTP cache
+                window.location.reload();
+              }
+            }}
+          >
+            <RefreshCw size={16} className="animate-spin-slow" /> 強制檢查更新並刷新
+          </Button>
+        </Card>
       </motion.div>
     </PageShell>
   );

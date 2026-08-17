@@ -87,10 +87,10 @@ export function PartnerSetupModal({ open, onClose }: PartnerSetupModalProps) {
                 訓練夥伴
               </p>
               <h2 className="font-display text-2xl tracking-wide uppercase text-text-primary mt-1 leading-tight">
-                揀你嘅 Partner
+                選擇你的 Partner
               </h2>
               <p className="text-xs text-text-secondary mt-2 leading-relaxed">
-                你訓練，Partner 成長。佢會陪你記錄、陪你休息、陪你進步。
+                你訓練，Partner 成長。它會陪你記錄、陪你休息、陪你進步。
               </p>
 
               {/* 物種選擇 */}
@@ -149,7 +149,7 @@ export function PartnerSetupModal({ open, onClose }: PartnerSetupModalProps) {
                     className="mt-4 overflow-hidden"
                   >
                     <label className="text-[10px] uppercase tracking-widest text-text-secondary block mb-2">
-                      幫 Partner 改名（可以唔改）
+                      幫 Partner 改名（可以不改）
                     </label>
                     <div className="flex gap-2 flex-wrap mb-2">
                       {(species === 'cat' ? CAT_DEFAULT_NAMES : DOG_DEFAULT_NAMES).map((n) => (

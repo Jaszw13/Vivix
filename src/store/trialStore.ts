@@ -302,6 +302,17 @@ export const useTrialStore = create<TrialState>()(
     {
       name: 'ironpulse-trial',
       version: 5,
+      // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
+      onRehydrateStorage: () => {
+        return (state, error) => {
+          if (error) {
+            console.error('[trialStore] Zustand hydration failed, falling back to defaults', error);
+            try {
+              localStorage.removeItem('ironpulse-trial');
+            } catch {}
+          }
+        };
+      },
       migrate: (persistedState, version) => {
         const s = (persistedState ?? {}) as Partial<TrialState>;
         // v2: HMAC 版；v3: 明文碼；v4: 新增 Stage 1（3天/547）；

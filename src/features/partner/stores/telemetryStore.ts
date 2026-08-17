@@ -48,6 +48,17 @@ export const useTelemetryStore = create<TelemetryState>()(
     {
       name: 'vivix-telemetry-store-v1',
       version: 2,
+      // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
+      onRehydrateStorage: () => {
+        return (state, error) => {
+          if (error) {
+            console.error('[telemetryStore] Zustand hydration failed, falling back to defaults', error);
+            try {
+              localStorage.removeItem('vivix-telemetry-store-v1');
+            } catch {}
+          }
+        };
+      },
       // C6：補 migrate — 欄位校驗，避免舊 payload 損壞 crash
       migrate: (persistedState) => {
         const s = (persistedState ?? {}) as Partial<TelemetryState>;

@@ -21,6 +21,17 @@ export const useFeatureFlags = create<FeatureFlagsState>()(
     {
       name: 'vivix-feature-flags-v1',
       version: 2,
+      // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
+      onRehydrateStorage: () => {
+        return (state, error) => {
+          if (error) {
+            console.error('[featureFlags] Zustand hydration failed, falling back to defaults', error);
+            try {
+              localStorage.removeItem('vivix-feature-flags-v1');
+            } catch {}
+          }
+        };
+      },
       // C6：補 migrate — 合併預設 + 欄位校驗，避免舊 payload 缺欄位 crash
       migrate: (persistedState) => {
         const s = (persistedState ?? {}) as Partial<FeatureFlags>;

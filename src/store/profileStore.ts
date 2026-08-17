@@ -82,6 +82,17 @@ export const useProfileStore = create<ProfileState>()(
         onboardingCompleted: state.onboardingCompleted,
         goal: state.goal,
       }),
+      // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
+      onRehydrateStorage: () => {
+        return (state, error) => {
+          if (error) {
+            console.error('[profileStore] Zustand hydration failed, falling back to defaults', error);
+            try {
+              localStorage.removeItem('ironpulse-profile');
+            } catch {}
+          }
+        };
+      },
       migrate: (persistedState: unknown) => {
         const s = (persistedState ?? {}) as Partial<ProfileState>;
         const oldProfile = s.profile;

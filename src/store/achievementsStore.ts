@@ -497,6 +497,17 @@ export const useAchievementsStore = create<AchievementsState>()(
     {
       name: 'ironpulse-achievements',
       version: 4,
+      // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
+      onRehydrateStorage: () => {
+        return (state, error) => {
+          if (error) {
+            console.error('[achievementsStore] Zustand hydration failed, falling back to defaults', error);
+            try {
+              localStorage.removeItem('ironpulse-achievements');
+            } catch {}
+          }
+        };
+      },
       // C4 / L1：只 persist 永久決定（unlockedAt、seen、pending）；lastMetrics 和 current 為衍生，不 persist
       partialize: (state) => ({
         // progress 只保留 unlockedAt（D2 永久）；current 不 persist（live 計算）

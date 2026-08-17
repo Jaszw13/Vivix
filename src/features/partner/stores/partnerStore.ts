@@ -166,6 +166,17 @@ export const usePartnerStore = create<PartnerStoreState>()(
     {
       name: 'vivix-partner-store-v1',
       version: 2,
+      // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
+      onRehydrateStorage: () => {
+        return (state, error) => {
+          if (error) {
+            console.error('[partnerStore] Zustand hydration failed, falling back to defaults', error);
+            try {
+              localStorage.removeItem('vivix-partner-store-v1');
+            } catch {}
+          }
+        };
+      },
       // C4 / L1：排除衍生欄位（level/totalWorkouts/totalTrainingDays）；只 persist 永久決定
       partialize: (state) => ({
         species: state.species,

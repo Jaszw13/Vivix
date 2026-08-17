@@ -283,7 +283,7 @@ export default function Dashboard() {
                   新功能上線
                 </div>
                 <div className="font-display text-base tracking-wide text-text-primary mt-0.5">
-                  揀你嘅訓練夥伴
+                  選擇你的訓練夥伴
                 </div>
                 <p className="text-[11px] text-text-secondary mt-1 leading-snug">
                   Partner 會陪你記錄、陪你休息、陪你進步。

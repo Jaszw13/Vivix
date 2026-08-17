@@ -8,7 +8,6 @@ import {
   Flame,
   Heart,
   Scale,
-  Sparkles,
   X,
   Info,
   Cat,
@@ -16,6 +15,7 @@ import {
   Pencil,
   Gift,
 } from 'lucide-react';
+// 註：Sparkles 已移除，改用 Dumbbell 作為品牌純啞鈴圖標
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Card, Badge } from '@/components/ui/Card';
@@ -198,14 +198,7 @@ function StepWelcome({
         transition={{ delay: 0.1, type: 'spring', stiffness: 260, damping: 22 }}
         className="w-28 h-28 mx-auto mt-10 rounded-[28px] bg-gradient-to-br from-accent/25 via-accent/10 to-auxiliary/20 flex items-center justify-center border border-accent/40"
       >
-        <span className="font-display text-6xl tracking-wider text-accent drop-shadow-md">
-          V
-        </span>
-        <Sparkles
-          size={20}
-          className="absolute translate-x-[46px] translate-y-[-34px] text-auxiliary"
-          strokeWidth={2.5}
-        />
+        <Dumbbell size={56} className="text-accent drop-shadow-md" />
       </motion.div>
 
       <h1 className="font-display text-4xl tracking-wide uppercase text-text-primary mt-10 text-center leading-tight">
@@ -218,12 +211,12 @@ function StepWelcome({
       <p className="text-sm text-text-secondary text-center mt-3 leading-relaxed max-w-[22rem] mx-auto">
         你的新手健身教練。
         <br />
-        30 秒之後，你就會知道「今日練咩、點做」。
+        30 秒之後，你就會知道「今日訓練項目與動作方式」。
       </p>
 
       <div className="mt-10">
         <label className="text-[10px] uppercase tracking-widest text-text-secondary block mb-2">
-          想我點稱呼你？（可以留空）
+          想我如何稱呼你？（可以留空）
         </label>
         <input
           type="text"
@@ -276,10 +269,10 @@ function StepPartner({
         第一步半
       </p>
       <h1 className="font-display text-3xl tracking-wide uppercase text-text-primary mt-2 leading-tight">
-        揀你嘅訓練夥伴
+        選擇你的訓練夥伴
       </h1>
       <p className="text-sm text-text-secondary mt-2 leading-relaxed">
-        你訓練，Partner 成長。佢會陪你記錄、陪你休息、陪你進步。
+        你訓練，Partner 成長。它會陪你記錄、陪你休息、陪你進步。
       </p>
 
       <div className="grid grid-cols-2 gap-3 mt-6">
@@ -332,7 +325,7 @@ function StepPartner({
           className="mt-5 overflow-hidden"
         >
           <label className="text-[10px] uppercase tracking-widest text-text-secondary flex items-center gap-1.5 mb-2">
-            <Pencil size={11} /> 幫 Partner 改名（可以唔改）
+            <Pencil size={11} /> 幫 Partner 改名（可以不改）
           </label>
           <div className="flex gap-2 flex-wrap mb-2">
             {(selected === 'cat' ? CAT_DEFAULT_NAMES : DOG_DEFAULT_NAMES).map((n) => (
@@ -498,7 +491,7 @@ function StepRecommend({
         第四步 · 為你推薦
       </p>
       <h1 className="font-display text-3xl tracking-wide uppercase text-text-primary mt-2 leading-tight">
-        我幫你揀咗：
+        我為你選擇了：
       </h1>
 
       <motion.div
@@ -553,9 +546,9 @@ function StepRecommend({
       </motion.div>
 
       <p className="mt-6 text-sm text-text-secondary leading-relaxed">
-        🎯 <b className="text-text-primary">點解揀呢個？</b>
+        🎯 <b className="text-text-primary">為什麼選擇這個？</b>
         <br />
-        因為三大項（深蹲/臥推/划船/硬舉）係新手入門最快建立力量嘅路徑，5 組 × 5 次唔太難跟，每完成一次都有清晰進步感。
+        因為三大項（深蹲/臥推/划船/硬舉）是新手入門最快建立力量的路徑，5 組 × 5 次不會太難跟隨，每完成一次都有清晰進步感。
       </p>
 
       {/* §19 獎勵預覽 */}
@@ -575,7 +568,7 @@ function StepRecommend({
 
       <div className="mt-auto pt-6">
         <Button fullWidth size="lg" onClick={onNext}>
-          <ArrowRight size={18} /> 下一步：學下點記錄
+          <ArrowRight size={18} /> 下一步：學習如何記錄
         </Button>
       </div>
     </motion.div>
@@ -602,31 +595,31 @@ function StepTutorial({
         最後一步 · 教練語錄
       </p>
       <h1 className="font-display text-3xl tracking-wide uppercase text-text-primary mt-2 leading-tight">
-        點樣記錄一組？
+        如何記錄一組？
       </h1>
 
       <div className="flex flex-col gap-3 mt-5">
         <TipCard
           icon={<CheckCircle2 size={20} />}
-          title="每做完一組 → 剔勾勾"
-          desc="完成一個組數就按咗旁邊個圓圈，即刻跳去休息倒數，唔好分心。"
+          title="每做完一組 → 勾選完成"
+          desc="完成一個組數就點旁邊的圓圈，立即跳至休息倒數，請勿分心。"
         />
         <TipCard
           icon={<Info size={20} />}
-          title="RPE 係咩？"
-          desc="主觀費力指數：1 = 完全唔使力，10 = 完全力竭。新手建議停喺 7~8，留 2~3 下力就好，先學控制動作。"
+          title="RPE 是什麼？"
+          desc="主觀費力指數：1 = 完全不用費力，10 = 完全力竭。新手建議停在 7~8，保留 2~3 下力即可，先學習控制動作。"
         />
         <TipCard
           icon={<Flame size={20} />}
-          title="熱身一定要做"
-          desc="訓練日開頭有 5–6 個熱身步驟，做完先入工作組，保護你唔受傷。"
+          title="熱身一定要確實執行"
+          desc="訓練日開頭有 5–6 個熱身步驟，確實執行後再進入工作組，保護你不受傷。"
         />
       </div>
 
       <div className="mt-6 p-4 rounded-card bg-accent/10 border border-accent/30">
         <p className="text-xs text-text-secondary leading-relaxed">
-          「<b className="text-text-primary">唔好追求大重量，先追求連續 7 日訓練。</b>
-          <br />Vivix 會幫你記錄進度，解鎖成就，做你入健身房嘅第一個教練。」
+          「<b className="text-text-primary">不要追求大重量，先追求連續 7 天規律訓練。</b>
+          <br />Vivix 會幫你記錄進度，解鎖成就，成為你進入健身房的第一個教練。」
           <span className="text-accent font-bold"> — 你的 Vivix 教練</span>
         </p>
       </div>
@@ -638,7 +631,7 @@ function StepTutorial({
           onClick={onFinish}
           disabled={!canFinish}
         >
-          <Sparkles size={18} /> 完成，開始訓練
+          <Dumbbell size={18} /> 完成，開始訓練
         </Button>
       </div>
     </motion.div>
