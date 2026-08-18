@@ -2,12 +2,35 @@
 <html lang="zh-Hant">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="mask-icon" href="/favicon.svg" color="#C9A96E" />
+    <!--
+      ⚠️ 雙主題圖標系統（G-05）：
+      - 喺 React 載入前，先讀 localStorage['ironpulse-theme']（themeStore 手動 key）
+      - 動態注入 manifest / apple-touch-icon / favicon 三個 <link>
+      - 主題切換時由 themeStore 再次更新呢三個 link
+      - iOS 已安裝 PWA 嘅主畫面圖標：需要刪除重裝先會更新（平台限制，屬預期）
+    -->
+    <script>
+      (function () {
+        try {
+          var t = (typeof localStorage !== 'undefined' && localStorage.getItem('ironpulse-theme')) || 'light';
+          if (t !== 'dark' && t !== 'light') t = 'light';
+          var theme = t;
+          var iconsBase = '/icons/vivix-icon-' + theme;
+        } catch (e) {
+          var theme = 'light';
+          var iconsBase = '/icons/vivix-icon-light';
+        }
+        document.write(
+          '<link id="vivix-manifest" rel="manifest" href="/manifest-' + theme + '.webmanifest" />' +
+          '<link id="vivix-apple-touch" rel="apple-touch-icon" href="' + iconsBase + '-180.png" />' +
+          '<link id="vivix-favicon" rel="icon" type="image/png" sizes="32x32" href="' + iconsBase + '-32.png" />'
+        );
+      })();
+    </script>
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#F8F5F0" />
+    <!-- theme-color 初始先俾 light；themeStore 切換時會同步更新呢個 meta -->
+    <meta id="vivix-theme-color" name="theme-color" content="#F8F5F0" />
 
     <!-- iOS PWA 標籤 -->
     <meta name="apple-mobile-web-app-capable" content="yes" />

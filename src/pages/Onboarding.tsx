@@ -196,9 +196,14 @@ function StepWelcome({
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ delay: 0.1, type: 'spring', stiffness: 260, damping: 22 }}
-        className="w-28 h-28 mx-auto mt-10 rounded-[28px] bg-gradient-to-br from-accent/25 via-accent/10 to-auxiliary/20 flex items-center justify-center border border-accent/40"
+        className="w-[96px] h-[96px] mx-auto mt-10 overflow-hidden rounded-2xl shadow-lg border border-accent/10"
       >
-        <Dumbbell size={56} className="text-accent drop-shadow-md" />
+        <img
+          src="/icons/vivix-icon-light.png"
+          alt="Vivix"
+          className="w-full h-full object-cover"
+          draggable={false}
+        />
       </motion.div>
 
       <h1 className="font-display text-4xl tracking-wide uppercase text-text-primary mt-10 text-center leading-tight">

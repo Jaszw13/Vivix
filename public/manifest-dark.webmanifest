@@ -1,0 +1,27 @@
+{
+  "name": "Vivix - 你的新手訓練夥伴",
+  "short_name": "Vivix",
+  "description": "Vivix - 給健身新手的陪伴型教練 App，完整力量訓練紀錄、進度追蹤與 Partner 陪伴系統。",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0A0A0B",
+  "theme_color": "#0A0A0B",
+  "lang": "zh-Hant",
+  "categories": ["health", "fitness", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icons/vivix-icon-dark-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/vivix-icon-dark-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
