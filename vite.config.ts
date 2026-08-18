@@ -31,10 +31,12 @@ export default defineConfig({
         'icons/vivix-icon-light-512.png',
         'icons/vivix-icon-light-180.png',
         'icons/vivix-icon-light-32.png',
+        'icons/vivix-icon-light-512-maskable.png',
         'icons/vivix-icon-dark-192.png',
         'icons/vivix-icon-dark-512.png',
         'icons/vivix-icon-dark-180.png',
         'icons/vivix-icon-dark-32.png',
+        'icons/vivix-icon-dark-512-maskable.png',
       ],
       workbox: {
         // ⚠️ 斬斷舊 SW precache 導致嘅 bundle 版本錯配：
