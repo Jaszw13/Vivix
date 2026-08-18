@@ -146,6 +146,11 @@ interface WorkoutState {
   finishSession: () => WorkoutSession | null;
   clearActiveSession: () => void;
 
+  // 匯入（Errata E12：單次 set() 批次寫入，不觸發 finishSession 路徑）
+  importSessionsBatch: (incoming: WorkoutSession[]) => void;
+  /** 刪除指定 session（匯入 session 刪除後進度 live 下降；成就永久保留 D2） */
+  deleteSession: (sessionId: string) => void;
+
   // 統計
   getTotalSessions: () => number;
   getTotalVolume: () => number;
@@ -481,6 +486,20 @@ export const useWorkoutStore = create<WorkoutState>()(
       },
 
       clearActiveSession: () => set({ activeSession: null }),
+
+      // I-2 / Errata E12：匯入 session 單次 set() 批次寫入；不 finishSession、不排序 caller 決定
+      importSessionsBatch: (incoming) => {
+        if (!incoming || incoming.length === 0) return;
+        set((s) => ({
+          sessions: [...s.sessions, ...incoming],
+        }));
+      },
+
+      deleteSession: (sessionId) => {
+        set((s) => ({
+          sessions: s.sessions.filter((sess) => sess.id !== sessionId),
+        }));
+      },
 
       getTotalSessions: () => get().sessions.length,
 

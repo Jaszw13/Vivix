@@ -685,7 +685,7 @@ export default function Progress() {
             </div>
             <p className="mt-3 text-[11px] leading-relaxed text-text-secondary flex gap-2">
               <Info size={12} className="flex-shrink-0 mt-0.5" />
-              機器讀數與代謝估算皆約 ±15–20% 誤差，僅供方向參考；熱量為衍生值，不會被儲存。
+              機器讀數與代謝估算皆約 ±15–20% 誤差，僅供方向參考；熱量為衍生值，不會被儲存；匯入的歷史記錄不計入力量熱量推估。
             </p>
           </div>
         </Card>

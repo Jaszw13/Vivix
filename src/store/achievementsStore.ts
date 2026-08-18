@@ -86,6 +86,8 @@ interface ComputedMetrics {
   cardioMinutesTotal: number;
   cardioSessionsTotal: number;
   cardioWeeklyRhythmWeeks: number;
+  // I-2：匯入行為 metric（Errata E4，匯入行為成就進度）
+  sessionsImportedTotal: number;
 }
 
 // ── Compute all metrics from raw data ──
@@ -305,10 +307,13 @@ function computeMetrics(ctx: DeriveContext): ComputedMetrics {
   // 16. total volume
   const totalVolumeKg = sessions.reduce((sum, s) => sum + s.totalVolume, 0);
 
-  // 17. cardio（E-05）：時長加總、次數、連續週節律
+  // E-05：cardio（時長加總、次數、連續週節律）
   const cardioMinutesTotal = cardioSessions.reduce((s, c) => s + (Number.isFinite(c.durationMin) ? c.durationMin : 0), 0);
   const cardioSessionsTotal = cardioSessions.length;
   const cardioWeeklyRhythmWeeks = getConsecutiveWeeksWithCardio(cardioSessions);
+
+  // I-2：匯入行為 metric（Errata E4）
+  const sessionsImportedTotal = sessions.filter((s) => s.imported === true).length;
 
   return {
     maxEst1RMByFamily,
@@ -334,6 +339,7 @@ function computeMetrics(ctx: DeriveContext): ComputedMetrics {
     cardioMinutesTotal,
     cardioSessionsTotal,
     cardioWeeklyRhythmWeeks,
+    sessionsImportedTotal,
   };
 }
 
@@ -383,6 +389,8 @@ function currentOf(metrics: ComputedMetrics, def: AchievementDef): number {
       return metrics.cardioSessionsTotal;
     case 'cardio_weekly_rhythm':
       return metrics.cardioWeeklyRhythmWeeks;
+    case 'sessions_imported_total': // Errata E4
+      return metrics.sessionsImportedTotal;
     default:
       return 0;
   }
@@ -412,7 +420,7 @@ interface AchievementsState {
   pendingUnlockIds: string[]; // 改為陣列支援多解鎖
   lastMetrics: ComputedMetrics | null;
 
-  recompute: (ctx: DeriveContext) => string[];
+  recompute: (ctx: DeriveContext, opts?: { silent?: boolean }) => string[];
   markUnlockSeen: (id: string) => void;
   clearPending: () => void;
   reset: () => void;
@@ -434,7 +442,8 @@ export const useAchievementsStore = create<AchievementsState>()(
       pendingUnlockIds: [],
       lastMetrics: null,
 
-      recompute: (ctx) => {
+      recompute: (ctx, opts) => {
+        const silent = opts?.silent === true;
         const prev = get().progress ?? {};
         const next = { ...prev };
         const metrics = computeMetrics(ctx);
@@ -466,7 +475,8 @@ export const useAchievementsStore = create<AchievementsState>()(
 
         set({
           progress: next,
-          pendingUnlockIds: newUnlocks,
+          // silent：解鎖仍然永久，但不 push 到 pending（避免匯入批次重複慶祝）
+          pendingUnlockIds: silent ? [] : newUnlocks,
           // C4：lastMetrics 為衍生資料，記憶體中保留供 UI format 用，不 persist
           lastMetrics: metrics,
         });

@@ -95,12 +95,14 @@ function buildQuestCtx(streakDays: number) {
   const workout = useWorkoutStore.getState();
   const partner = usePartnerStore.getState();
   const sessions = workout.sessions;
+  // Errata E15：quest 的 totalWorkouts 跟 partner 同語義（只算非 imported；避免稀釋）
+  const nonImported = sessions.filter((s) => s.imported !== true);
   return {
-    totalWorkouts: sessions.length,
+    totalWorkouts: nonImported.length,
     totalPRs: workout.personalRecords.length,
     streakDays,
-    warmupCount: sessions.reduce((sum, s) => sum + (s.warmupCompletedIds?.length ?? 0), 0),
-    recentWorkoutDates: sessions.map((s) => s.date),
+    warmupCount: nonImported.reduce((sum, s) => sum + (s.warmupCompletedIds?.length ?? 0), 0),
+    recentWorkoutDates: nonImported.map((s) => s.date),
   };
 }
 
@@ -109,12 +111,13 @@ function buildQuestCtx(streakDays: number) {
  *
  * @param rewardCtx 若提供則執行 partner XP 結算（finishSession 後）；否則僅結算 achievements/quests
  * @param options.silent 若 true，不觸發慶祝（load/migrate 補解锁用）
+ * @param options.skipPartner 若 true，跳過 Partner XP / 形態解鎖 / cardio XP（匯入批次用，I-5／Errata E4/E6）
  */
 export function settleAll(
   rewardCtx?: RewardContext,
-  options: { silent?: boolean } = {},
+  options: { silent?: boolean; skipPartner?: boolean } = {},
 ): SettleResult {
-  const { silent = false } = options;
+  const { silent = false, skipPartner = false } = options;
   const telemetry = useTelemetryStore.getState();
   const flags = useFeatureFlags.getState();
   const partnerEnabled = flags.partnerEnabled;
@@ -124,9 +127,9 @@ export function settleAll(
   const achievementsStore = useAchievementsStore.getState();
   const achievementUnlocks = achievementsStore.recompute(achieveCtx);
 
-  // 2. partner：addXp + form unlock
+  // 2. partner：addXp + form unlock（匯入批次 skipPartner=true 時跳過）
   let partnerReward: RewardResult | null = null;
-  if (partnerEnabled) {
+  if (partnerEnabled && !skipPartner) {
     // a) 力量 session XP（僅提供 rewardCtx 時）
     if (rewardCtx) {
       const partner = usePartnerStore.getState();

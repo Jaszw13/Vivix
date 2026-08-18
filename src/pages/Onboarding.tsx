@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -14,6 +14,9 @@ import {
   Dog,
   Pencil,
   Gift,
+  Upload,
+  Sparkles,
+  CalendarDays,
 } from 'lucide-react';
 // 註：Sparkles 已移除，改用 Dumbbell 作為品牌純啞鈴圖標
 import { cn } from '@/lib/utils';
@@ -26,10 +29,29 @@ import { usePartnerStore } from '@/features/partner/stores/partnerStore';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { CAT_DEFAULT_NAMES, DOG_DEFAULT_NAMES } from '@/features/partner/data/partnerNames';
 import type { PartnerSpecies } from '@/features/partner/types';
+import type { TrainingPlan } from '@/types';
+import ImportHistoryModal from '@/components/ImportHistoryModal';
+import { WEEK_MS } from '@/utils/time';
 
-// 加入 Partner 選擇步驟（§19 文檔要求）
-const STEPS = ['welcome', 'partner', 'goal', 'recommend', 'tutorial'] as const;
+// Errata E7：Lane A 以現有序列為準（partner→goal→recommend→tutorial），**僅前置 experience**
+// STEPS 陣列成員對兩 lane 相同，goal 頁內部依 lane 切換「選目標」或「選頻率」
+const STEPS = ['welcome', 'experience', 'partner', 'goal', 'recommend', 'tutorial'] as const;
 type StepId = (typeof STEPS)[number];
+
+type ExperienceChoice = 'beginner' | 'experienced' | 'excel';
+type FreqBucket = '1' | '2' | '3-4' | '5+';
+const FREQ_PLAN_MAP: Record<FreqBucket, string> = {
+  '1': DEFAULT_BEGINNER_PLAN_ID,          // 5×5
+  '2': 'upper-lower',                      // 上下分裂
+  '3-4': 'push-pull-legs',                 // PPL
+  '5+': 'push-pull-legs',                  // PPL（E5）
+};
+const PLAN_FREQ_RATIONALE: Record<FreqBucket, string> = {
+  '1': '每週 1 次先培養規律，5×5 全身入門是最穩的起步。',
+  '2': '每週 2 次以上可用上下分裂，上下半身輪流恢復。',
+  '3-4': '每週 3–4 次節奏適合推拉腿 PPL，部位刺激更聚焦。',
+  '5+': '每週 5 次以上同樣建議 PPL，把恢復日排在訓練日之間。',
+};
 
 export default function Onboarding() {
   const navigate = useNavigate();
@@ -38,21 +60,89 @@ export default function Onboarding() {
   const setActivePlan = useWorkoutStore((s) => s.setActivePlan);
   const createPartner = usePartnerStore((s) => s.createPartner);
   const telemetryLog = useTelemetryStore((s) => s.log);
+  // E5：Lane B 頻率計算需讀既有的匯入 session
+  const existingSessions = useWorkoutStore((s) => s.sessions);
+
   const [name, setName] = useState('');
   const [goal, setGoal] = useState<TrainingGoalValue | null>(null);
   const [partnerSpecies, setPartnerSpecies] = useState<PartnerSpecies | null>(null);
   const [partnerName, setPartnerName] = useState('');
   const [stepIdx, setStepIdx] = useState(0);
 
+  // I-1 / Errata E7 / T8：experience 狀態（beginner= Lane A；experienced/excel = Lane B；persist 時 normalize）
+  const [experience, setExperience] = useState<ExperienceChoice | null>(null);
+  // E5：Lane B 頻率選擇（chips 或 8 週平均自動推斷）
+  const [freqBucket, setFreqBucket] = useState<FreqBucket | null>(null);
+  // Lane B excel 用戶的 inline 匯入 wizard
+  const [importOpen, setImportOpen] = useState(false);
+
   const step = STEPS[stepIdx];
   const next = () => setStepIdx((i) => Math.min(STEPS.length - 1, i + 1));
   const back = () => setStepIdx((i) => Math.max(0, i - 1));
+
+  const isLaneA = experience === null || experience === 'beginner';
+  const isLaneB = experience === 'experienced' || experience === 'excel';
+
+  // E5：近 8 週頻率自動推斷（Lane B 已匯入 session 時）
+  const autoFreq = useMemo<FreqBucket | null>(() => {
+    if (isLaneA) return null;
+    if (!existingSessions || existingSessions.length === 0) return null;
+    const now = Date.now();
+    const windowStart = now - 8 * WEEK_MS;
+    const trainDaysInWindow = new Set<string>();
+    let minDateMs = now;
+    for (const s of existingSessions) {
+      const dMs = new Date(s.date).getTime();
+      if (!Number.isFinite(dMs)) continue;
+      if (dMs < minDateMs) minDateMs = dMs;
+      if (dMs >= windowStart) trainDaysInWindow.add(new Date(dMs).toDateString());
+    }
+    const rangeStart = Math.max(minDateMs, windowStart);
+    const spanMs = now - rangeStart;
+    const spanWeeks = Math.max(1, Math.ceil(spanMs / WEEK_MS) || 1);
+    const eligibleWeeks = Math.min(8, spanWeeks);
+    const avg = trainDaysInWindow.size / eligibleWeeks;
+    if (avg >= 2.5) return '5+';
+    if (avg >= 1.5) return '3-4';
+    if (avg >= 1) return '2';
+    return '1';
+  }, [existingSessions, isLaneA]);
+
+  // Lane B：優先自動推斷，否則用戶手選 chips
+  const resolvedFreq: FreqBucket | null = autoFreq ?? freqBucket;
+  const recommendedPlanId: string = useMemo(() => {
+    if (isLaneA) return DEFAULT_BEGINNER_PLAN_ID;
+    if (resolvedFreq) return FREQ_PLAN_MAP[resolvedFreq];
+    return DEFAULT_BEGINNER_PLAN_ID; // fallback
+  }, [isLaneA, resolvedFreq]);
+
+  const plan = getPlanById(recommendedPlanId) ?? getPlanById(DEFAULT_BEGINNER_PLAN_ID) ?? trainingPlans[0];
+  const firstDay = plan?.days?.[0];
+
+  function setExperienceAndLog(choice: ExperienceChoice) {
+    setExperience(choice);
+    const persistLevel: 'beginner' | 'experienced' = choice === 'beginner' ? 'beginner' : 'experienced';
+    // T8 / R-5 telemetry
+    try { telemetryLog('onboarding_experience_selected', { level: persistLevel }); } catch {
+      // 忽略 telemetry 失敗，不阻斷 onboarding
+    }
+    // 同步 update profile（原始事實 persist v3）
+    if (typeof updateProfile === 'function') {
+      try { updateProfile({ experienceLevel: persistLevel }); } catch { /* noop */ }
+    }
+    setTimeout(next, 200);
+  }
 
   const finish = () => {
     // 略過或早期完成時用戶可能未選目標，預設健康目標
     const finalGoal: TrainingGoalValue = goal ?? 'health';
     // 寫入用戶名
     if (name.trim()) typeof updateProfile === 'function' && updateProfile({ name: name.trim() });
+    // 若尚未在 setExperienceAndLog 內寫入（防呆），再補一筆
+    if (typeof updateProfile === 'function') {
+      const persistLevel: 'beginner' | 'experienced' = isLaneA ? 'beginner' : 'experienced';
+      try { updateProfile({ experienceLevel: persistLevel }); } catch { /* noop */ }
+    }
     // 建立 Partner（§19: 用戶必須選 cat 或 dog）
     const finalSpecies: PartnerSpecies = partnerSpecies ?? 'cat';
     const finalPartnerName = partnerName.trim() ||
@@ -67,19 +157,16 @@ export default function Onboarding() {
       }
     }
     if (typeof completeOnboarding === 'function') completeOnboarding(finalGoal);
-    // 預設新手 5x5 追蹤計畫
+    // 設定 active plan（Lane A = 5×5；Lane B = 依 E5 頻率推斷）
     if (typeof setActivePlan === 'function') {
       try {
-        setActivePlan(DEFAULT_BEGINNER_PLAN_ID);
+        setActivePlan(recommendedPlanId);
       } catch (e) {
         console.warn('[Onboarding] setActivePlan skipped:', e);
       }
     }
     navigate('/', { replace: true });
   };
-
-  const plan = getPlanById(DEFAULT_BEGINNER_PLAN_ID) ?? trainingPlans[0];
-  const firstDay = plan?.days[0];
 
   return (
     <div className="min-h-screen w-full max-w-[480px] mx-auto bg-bg-primary flex flex-col">
@@ -127,6 +214,14 @@ export default function Onboarding() {
               onNext={next}
             />
           )}
+          {step === 'experience' && (
+            <StepExperience
+              key="experience"
+              selected={experience}
+              setSelected={setExperienceAndLog}
+              excelHasImported={existingSessions.length > 0}
+            />
+          )}
           {step === 'partner' && (
             <StepPartner
               key="partner"
@@ -143,9 +238,9 @@ export default function Onboarding() {
               onNext={next}
             />
           )}
-          {step === 'goal' && (
+          {step === 'goal' && isLaneA && (
             <StepGoal
-              key="goal"
+              key="goal-beginner"
               selected={goal}
               setSelected={(g) => {
                 setGoal(g);
@@ -153,23 +248,52 @@ export default function Onboarding() {
               }}
             />
           )}
+          {step === 'goal' && isLaneB && (
+            <StepFrequencyLaneB
+              key="goal-experienced"
+              autoFreq={autoFreq}
+              bucket={freqBucket}
+              setBucket={setFreqBucket}
+              isExcelUser={experience === 'excel'}
+              onOpenImport={() => setImportOpen(true)}
+              onNext={() => next()}
+              canProceed={resolvedFreq !== null}
+              existingCount={existingSessions.length}
+              onSkipGoal={(g) => setGoal(g)}
+            />
+          )}
           {step === 'recommend' && plan && firstDay && (
             <StepRecommend
               key="recommend"
               plan={plan}
-              dayName={firstDay.dayName}
+              dayName={firstDay.dayName ?? 'Day 1'}
+              lane={isLaneA ? 'A' : 'B'}
+              rationale={
+                isLaneA
+                  ? '因為三大項（深蹲/臥推/划船/硬舉）是新手入門最快建立力量的路徑，5 組 × 5 次不會太難跟隨，每完成一次都有清晰進步感。'
+                  : (resolvedFreq ? PLAN_FREQ_RATIONALE[resolvedFreq] : '從你的過去節奏出發，為你選擇最適合的計畫密度。')
+              }
               onNext={next}
             />
           )}
           {step === 'tutorial' && (
             <StepTutorial
               key="tutorial"
-              canFinish={goal !== null}
+              canFinish={isLaneB ? true : goal !== null}
               onFinish={finish}
             />
           )}
         </AnimatePresence>
       </main>
+
+      {/* Lane B（Excel/經驗）可選 inline 匯入 wizard（共用 ImportHistoryModal 元件）*/}
+      <ImportHistoryModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onGoTrain={() => setImportOpen(false)}
+        onGoAchievements={() => setImportOpen(false)}
+        defaultMode="matrix"
+      />
     </div>
   );
 }
@@ -243,7 +367,108 @@ function StepWelcome({
   );
 }
 
-// ============ Step 1.5: 選擇 Partner（§19） ============
+// ============ Step 1.5: 訓練經驗（I-1 / Errata E7；Lane A/B 分流起點） ============
+
+function StepExperience({
+  selected,
+  setSelected,
+  excelHasImported,
+}: {
+  selected: ExperienceChoice | null;
+  setSelected: (c: ExperienceChoice) => void;
+  excelHasImported: boolean;
+}) {
+  const options: { id: ExperienceChoice; label: string; desc: string; icon: typeof Sparkles }[] = [
+    { id: 'beginner', icon: Sparkles, label: '第一次進健身房', desc: '我從零開始，需要教練帶你練。' },
+    { id: 'experienced', icon: Dumbbell, label: '有在練，但還沒系統記錄', desc: '我會動作，但想開始留下每一次進步。' },
+    { id: 'excel', icon: Upload, label: '用 Excel / 其他 App 記錄過', desc: '我有過去的訓練資料，希望 Vivix 承認它。' },
+  ];
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 30 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -30 }}
+      className="flex-1 flex flex-col"
+    >
+      <p className="text-[10px] uppercase tracking-widest text-text-secondary">
+        第二步 · 認識你
+      </p>
+      <h1 className="font-display text-3xl tracking-wide uppercase text-text-primary mt-2 leading-tight">
+        你的訓練經驗？
+      </h1>
+      <p className="text-sm text-text-secondary mt-2 leading-relaxed">
+        Vivix 服務「記錄新手」：不管你是第一次進健身房，或是會練但還沒開始記錄，我們都同樣看重。
+      </p>
+
+      <div className="flex flex-col gap-3 mt-6">
+        {options.map((opt, i) => {
+          const Icon = opt.icon;
+          const isSel = selected === opt.id;
+          return (
+            <motion.button
+              key={opt.id}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.06 }}
+              onClick={() => setSelected(opt.id)}
+              className={cn(
+                'relative p-4 rounded-card border-2 text-left transition-all',
+                isSel
+                  ? 'border-accent bg-gradient-to-br from-accent/10 via-bg-card to-bg-card shadow-card'
+                  : 'border-border/60 bg-bg-card hover:border-accent/40'
+              )}
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className={cn(
+                    'w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0',
+                    isSel ? 'bg-accent text-bg-primary' : 'bg-accent-soft text-accent'
+                  )}
+                >
+                  <Icon size={22} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-display text-lg tracking-wide uppercase text-text-primary">
+                    {opt.label}
+                  </h3>
+                  <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">{opt.desc}</p>
+                  {opt.id === 'excel' && excelHasImported && (
+                    <div className="mt-1.5 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-accent/15 text-accent font-bold">
+                      <CheckCircle2 size={10} /> 偵測到本機已存在 {excelHasImported ? '歷史記錄' : ''}
+                    </div>
+                  )}
+                </div>
+                <CheckCircle2
+                  size={22}
+                  className={cn(
+                    'transition-all flex-shrink-0',
+                    isSel ? 'text-accent opacity-100 scale-100' : 'opacity-0 scale-75'
+                  )}
+                />
+              </div>
+            </motion.button>
+          );
+        })}
+      </div>
+
+      <p className="mt-6 text-center text-[11px] text-text-secondary leading-relaxed">
+        💡 稍後隨時都可以到「設定 / 匯入歷史記錄」補匯入。
+      </p>
+      <div className="mt-auto pt-8">
+        <Button
+          fullWidth
+          size="lg"
+          onClick={() => selected && setSelected(selected)}
+          disabled={!selected}
+        >
+          <ArrowRight size={18} /> 下一步
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
+// ============ Step 2: 選擇 Partner（§19） ============
 
 function StepPartner({
   selected,
@@ -271,7 +496,7 @@ function StepPartner({
       className="flex-1 flex flex-col"
     >
       <p className="text-[10px] uppercase tracking-widest text-text-secondary">
-        第一步半
+        第三步
       </p>
       <h1 className="font-display text-3xl tracking-wide uppercase text-text-primary mt-2 leading-tight">
         選擇你的訓練夥伴
@@ -474,14 +699,167 @@ function StepGoal({
   );
 }
 
-// ============ Step 3: 推薦新手計畫 ============
+// ============ Lane B Step 4：頻率選擇 / 8 週平均（Errata E5） ============
+
+function StepFrequencyLaneB({
+  autoFreq,
+  bucket,
+  setBucket,
+  isExcelUser,
+  onOpenImport,
+  onNext,
+  canProceed,
+  existingCount,
+  onSkipGoal,
+}: {
+  autoFreq: FreqBucket | null;
+  bucket: FreqBucket | null;
+  setBucket: (b: FreqBucket) => void;
+  isExcelUser: boolean;
+  onOpenImport: () => void;
+  onNext: () => void;
+  canProceed: boolean;
+  existingCount: number;
+  onSkipGoal: (g: TrainingGoalValue) => void;
+}) {
+  // Lane B 不強迫選目標，預設 'health'（React StrictMode：mount 階段 setState 需在 effect 內）
+  useEffect(() => {
+    if (typeof onSkipGoal === 'function') onSkipGoal('health');
+  }, [onSkipGoal]);
+  const chipOptions: { id: FreqBucket; label: string }[] = [
+    { id: '1', label: '1 次 / 週' },
+    { id: '2', label: '2 次 / 週' },
+    { id: '3-4', label: '3–4 次 / 週' },
+    { id: '5+', label: '5+ 次 / 週' },
+  ];
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 30 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -30 }}
+      className="flex-1 flex flex-col"
+    >
+      <p className="text-[10px] uppercase tracking-widest text-text-secondary">
+        第四步 · 節奏
+      </p>
+      <h1 className="font-display text-3xl tracking-wide uppercase text-text-primary mt-2 leading-tight">
+        你一週練幾天？
+      </h1>
+      <p className="text-sm text-text-secondary mt-2 leading-relaxed">
+        計畫密度要對上現實節奏，才能長久跟隨。
+      </p>
+
+      {/* Excel 用戶：快速匯入 CTA */}
+      {isExcelUser && existingCount === 0 && (
+        <Card className="mt-5 p-3.5 border-auxiliary/30 bg-auxiliary/5">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-auxiliary/15 text-auxiliary flex items-center justify-center flex-shrink-0">
+              <Upload size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-bold text-sm text-text-primary">先匯入你的過去</h4>
+              <p className="text-[11.5px] text-text-secondary mt-0.5 leading-relaxed">
+                貼上 Excel 複製的訓練表，Vivix 會自動讀出你的過去節奏，為你推薦計畫。
+              </p>
+              <Button variant="danger" size="sm" className="mt-3" onClick={onOpenImport}>
+                <Upload size={14} /> 開始匯入
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+      {existingCount > 0 && (
+        <Card className="mt-5 p-3.5 border-accent/30 bg-accent/5">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-accent/15 text-accent flex items-center justify-center flex-shrink-0">
+              <CalendarDays size={18} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-bold text-sm text-text-primary">已從你的歷史推斷節奏</h4>
+              <p className="text-[11.5px] text-text-secondary mt-0.5 leading-relaxed">
+                近 8 週平均約 <b className="text-accent">{autoFreq ?? '—'}</b> 頻率；以下 chips 可再調整。
+              </p>
+            </div>
+            {autoFreq && <Badge variant="accent">{autoFreq}</Badge>}
+          </div>
+        </Card>
+      )}
+
+      {/* E5：chips 四選；有 auto 時預設高亮 */}
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        {chipOptions.map((c, i) => {
+          const selected = (autoFreq ?? bucket) === c.id;
+          return (
+            <motion.button
+              key={c.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.05 }}
+              onClick={() => setBucket(c.id)}
+              className={cn(
+                'h-20 rounded-card border-2 text-center flex flex-col items-center justify-center transition-all',
+                selected
+                  ? 'border-accent bg-gradient-to-br from-accent/12 via-bg-card to-bg-card shadow-card'
+                  : 'border-border/60 bg-bg-card hover:border-accent/40'
+              )}
+            >
+              <div className={cn(
+                'font-display text-xl tracking-wide uppercase',
+                selected ? 'text-accent' : 'text-text-primary'
+              )}>
+                {c.id}
+              </div>
+              <div className="text-[10px] text-text-secondary mt-1">{c.label}</div>
+              {selected && <CheckCircle2 size={14} className="text-accent mt-1" />}
+            </motion.button>
+          );
+        })}
+      </div>
+
+      {/* 選擇預告 */}
+      {(autoFreq ?? bucket) && (
+        <div className="mt-5 p-3.5 rounded-card bg-bg-card border border-border/40">
+          <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-1">預估推薦</div>
+          <div className="font-display text-lg tracking-wide uppercase text-text-primary">
+            {FREQ_PLAN_MAP[(autoFreq ?? bucket) as FreqBucket] === DEFAULT_BEGINNER_PLAN_ID && '5×5 力量基礎'}
+            {FREQ_PLAN_MAP[(autoFreq ?? bucket) as FreqBucket] === 'upper-lower' && '上下分裂'}
+            {FREQ_PLAN_MAP[(autoFreq ?? bucket) as FreqBucket] === 'push-pull-legs' && '推拉腿 PPL'}
+          </div>
+          <div className="text-[11px] text-text-secondary mt-1 leading-relaxed">
+            {PLAN_FREQ_RATIONALE[(autoFreq ?? bucket) as FreqBucket]}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-auto pt-6 space-y-3">
+        <Button
+          fullWidth
+          size="lg"
+          onClick={onNext}
+          disabled={!canProceed}
+        >
+          <ArrowRight size={18} /> 查看為你推薦的計畫
+        </Button>
+        <p className="text-center text-[11px] text-text-secondary">
+          計畫與頻率隨時都可以到「計畫中心」調整。
+        </p>
+      </div>
+    </motion.div>
+  );
+}
+
+// ============ Step 5: 推薦計畫（Lane A / Lane B 皆使用） ============
 
 function StepRecommend({
   plan,
+  lane,
+  rationale,
   dayName,
   onNext,
 }: {
-  plan: { name: string; description: string; cover: string; days: { exercises: { name: string; targetSets: number; targetReps: string }[] }[] };
+  plan: TrainingPlan;
+  lane: 'A' | 'B';
+  rationale: string;
   dayName: string;
   onNext: () => void;
 }) {
@@ -493,7 +871,7 @@ function StepRecommend({
       className="flex-1 flex flex-col"
     >
       <p className="text-[10px] uppercase tracking-widest text-text-secondary">
-        第四步 · 為你推薦
+        第五步 · 為你推薦
       </p>
       <h1 className="font-display text-3xl tracking-wide uppercase text-text-primary mt-2 leading-tight">
         我為你選擇了：
@@ -515,7 +893,7 @@ function StepRecommend({
               }}
             />
             <Badge variant="accent" className="absolute top-3 left-3 z-10">
-              教練推薦
+              Lane {lane} · {lane === 'A' ? '帶你練' : '承認你的過去'}
             </Badge>
             <span className="relative font-display text-7xl tracking-wider text-accent">
               {plan.cover}
@@ -542,7 +920,7 @@ function StepRecommend({
                   今日動作
                 </div>
                 <div className="font-mono text-lg font-bold text-accent mt-0.5">
-                  {plan.days[0].exercises.length} 個
+                  {(plan.days?.[0]?.exercises?.length ?? 0)} 個
                 </div>
               </div>
             </div>
@@ -553,7 +931,7 @@ function StepRecommend({
       <p className="mt-6 text-sm text-text-secondary leading-relaxed">
         🎯 <b className="text-text-primary">為什麼選擇這個？</b>
         <br />
-        因為三大項（深蹲/臥推/划船/硬舉）是新手入門最快建立力量的路徑，5 組 × 5 次不會太難跟隨，每完成一次都有清晰進步感。
+        {rationale}
       </p>
 
       {/* §19 獎勵預覽 */}
@@ -580,7 +958,7 @@ function StepRecommend({
   );
 }
 
-// ============ Step 4: 教學 ============
+// ============ Step 6: 教學 ============
 
 function StepTutorial({
   canFinish,

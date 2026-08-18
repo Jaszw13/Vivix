@@ -359,6 +359,11 @@ export interface WorkoutSession {
   /** E-01：訓練開始／結束時間（原始事實，persist）。migrate：舊 session 設 null */
   startedAt?: string | null;
   finishedAt?: string | null;
+  /** I-2：匯入 v1 標記；=== true 表示來自歷史匯入（Excel / CSV）。
+   *  讀取端一律 `s.imported === true`（舊資料沒該欄 = false / undefined 視為非匯入） */
+  imported?: boolean;
+  /** I-2：非結構化附註（來源：matrix Feedback 或用戶手動），原始事實 persist */
+  notes?: string;
 }
 
 // ============ 用戶資料 ============
@@ -369,6 +374,8 @@ export interface UserProfile {
   /** D3：null 表示未填寫（舊 default 75 視為未填）；BW 軌成就於 null 時鎖定 */
   bodyWeight: number | null;
   createdAt: string;
+  /** I-1：Onboarding 經驗自選結果（原始事實 persist；profileStore v3 migrate 舊資料補 'beginner'） */
+  experienceLevel?: 'beginner' | 'experienced';
 }
 
 // ============ PR 紀錄 ============

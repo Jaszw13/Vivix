@@ -35,8 +35,13 @@ export function PartnerPage() {
   // C4：level 由 xp 派生（getLevelForXp）
   const level = useMemo(() => getLevelForXp(xp), [xp]);
   // C4：totalWorkouts 由 sessions 派生
+  // E15 / I-4：Partner 顯示／形態解鎖／Quest 結算僅計「手動完成」（排除 imported）
   const sessions = useWorkoutStore((s) => s.sessions);
-  const totalWorkouts = sessions.length;
+  const nonImportedSessions = useMemo(
+    () => sessions.filter((s) => s.imported !== true),
+    [sessions]
+  );
+  const totalWorkouts = nonImportedSessions.length;
   const currentFormId = usePartnerStore((s) => s.currentFormId);
   const unlockedFormIds = usePartnerStore((s) => s.unlockedFormIds);
   const unlockedCosmeticIds = usePartnerStore((s) => s.unlockedCosmeticIds);
@@ -70,10 +75,10 @@ export function PartnerPage() {
   const displayForm =
     PARTNER_FORMS.find((f) => f.id === currentFormId) ?? currentForm;
 
-  // 重建 quest context（與 rewardEngine 一致）
+  // 重建 quest context（與 rewardEngine 一致；Partner 語義僅計非 imported）
   const questCtx = useMemo(() => {
-    const recentWorkoutDates = sessions.map((s) => s.date);
-    const warmupCount = sessions.filter(
+    const recentWorkoutDates = nonImportedSessions.map((s) => s.date);
+    const warmupCount = nonImportedSessions.filter(
       (s) => (s.warmupCompletedIds?.length ?? 0) > 0
     ).length;
     return {
@@ -83,7 +88,7 @@ export function PartnerPage() {
       warmupCount,
       recentWorkoutDates,
     };
-  }, [sessions, personalRecords.length, streak, totalWorkouts]);
+  }, [nonImportedSessions, personalRecords.length, streak, totalWorkouts]);
 
   // 進入頁面 / 數據變動時重算任務進度
   useEffect(() => {

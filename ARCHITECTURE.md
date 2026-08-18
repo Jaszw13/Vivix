@@ -15,6 +15,58 @@
 | L3 | 編排律 | 跨 store 結算一律走 `stats/settleAll.ts`，順序固定 |
 | L4 | 遷移律 | 所有 persist store 版本化＋migrate；migrate 用 `unknown` + guard |
 
+### 定位律附錄（L0，詳見 DEV_RULES.md L0）
+
+Vivix 服務「記錄新手」雙 lane：
+- **Lane A 訓練新手**：第一次進健身房＋第一次系統記錄。Onboarding 首步 experience=beginner → 其餘 Steps 序列不變（E7：教練流 5×5 入門）。
+- **Lane B 經驗記錄者**：經驗自選 experienced 兩支 — ① 有在練但沒系統記錄；② 從 Excel／其他 App 轉移（觸發歷史匯入 wizard v1）。計畫依頻率或 8 週平均推薦（1→5×5、2→上下分裂、3-4/5+→PPL）。
+
+**兩種 totalWorkouts 語義（E15）**：① 統計／成就／streak 用＝全 sessions（含 imported，I-3）；② Partner 形態解鎖／XP 用＝僅非 imported（I-4，`partnerStore.getTotalWorkouts()`）。
+
+### §匯入管線（Import v1 Pipeline）
+
+入口：Settings 資料管理「匯入歷史訓練」按鈕 ＋ Onboarding Lane B experienced_has_log step import-wizard（共用 ImportHistoryModal）。
+
+```
+用戶貼上 text（TSV 或 CSV）
+  │
+  ▼
+detectMode：
+  有 Weight+Reps markers 且 月/日 token   → matrix 模式（src/utils/matrixParser.ts）
+  首行 header 似 date/exercise/weight/reps → table 模式（src/utils/csv.ts）
+  其他                                   → 錯誤 + 兩種範例
+  │
+  ▼
+Step1 quote-aware parse（src/utils/textSplit.ts splitQuoteAware shared by csv+matrix，支援多行引號 cell/E2）
+  │  matrix: 年月 ctx → anchor header (name d-1, marker d, sets d+1..10, Load d+11) → multi-day anchor
+  │  table: 欄位映射 chips + 日期格式選擇器(4種) + 單位(kg/lb)
+  ▼
+Step2 動作映射（fuzzy token overlap≥1 或 Levenshtein≤2，E1）
+  │ unique 名單 → 每項 select dropdown（內建/既有自訂/建新自訂）
+  │ 新建自訂：CustomExerciseForm 共用元件（E14），分類 MuscleGroup 必填，equipment default barbell
+  ▼
+Step3 預覽（N sessions / M unique exercises / 日期區間 / 總噸數 / skipped lines / Load warnings）
+  │ Confirm CTA
+  ▼
+workoutStore.importSessionsBatch（單次 set() 批次寫入，E12）
+  - sessions.imported = true
+  - startedAt/finishedAt = null
+  - sets.completed = true
+  - session.notes = 合併 Feedback（同日同內容去重，E6）
+  - IDs 統一 src/utils/workout.ts generateId（E3，禁 nanoid）
+  │
+  ▼
+settleAll(undefined, { silent: true, skipPartner: true })
+  → metrics 重算（imported 會參與成就/PR/streak，I-3）
+  → celebration queue 靜音（silent 不 push toast/modal）
+  → Partner XP / form unlock 短路（skipPartner，I-4）
+  │
+  ▼
+RecognitionModal 每匯入批次一次（E8，非 ever-once）
+  文案：「本批次認可：X sessions・Y training days・Z PR・W 成就・T 噸」
+  CTA：成就牆 / Dashboard（走現有導航機制，E11）
+```
+
 ## 2. 分層總覽
 
 ```

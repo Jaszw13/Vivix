@@ -156,10 +156,11 @@ export const usePartnerStore = create<PartnerStoreState>()(
       },
 
       // ── C4：衍生讀取（從 workoutStore.sessions 派生） ──
+      // I-4 / Errata E15：Partner XP／形態解鎖的 totalWorkouts 僅計非 imported session
       getLevel: () => getLevelForXp(get().xp),
-      getTotalWorkouts: () => useWorkoutStore.getState().sessions.length,
+      getTotalWorkouts: () => useWorkoutStore.getState().sessions.filter((s) => s.imported !== true).length,
       getTotalTrainingDays: () => {
-        const sessions = useWorkoutStore.getState().sessions;
+        const sessions = useWorkoutStore.getState().sessions.filter((s) => s.imported !== true);
         return new Set(sessions.map((s) => new Date(s.date).toDateString())).size;
       },
     }),

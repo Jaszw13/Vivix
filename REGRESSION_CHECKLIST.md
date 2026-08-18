@@ -243,3 +243,87 @@ npx vite build
 - [ ] 開啟 WorkoutSummary 熱量卡（有 bodyWeight）→ events 存在 `strength_ee_viewed`
 - [ ] 開啟 WorkoutSummary 熱量卡（bodyWeight null，顯示 E-D2 提示）→ events 存在 `strength_ee_locked_prompt_shown`
 - [ ] addCardio 未填 kcal 且 bodyWeight 有值（走 MET fallback）→ events 存在 `cardio_fallback_used`
+
+## 14. 定位重定義 + 歷史匯入 v2.1（雙 lane + Import v1，Errata E1–E15 合併）
+
+對應《Vivix 定位重定義＋歷史記錄匯入 一次性執行規格 v2（AI Agent 版）＋Errata v2.1》驗收矩陣。任何一項失敗 → 立即停工回報。
+
+### 14.1 Lane 分流與文案（L0 定位律）
+
+- [ ] **Lane A 零改動（E7）**：Onboarding 選擇 `第一次進健身房` 後續 steps 序列（welcome → partner → goal → recommend → tutorial）與改動前完全一致（陣列成員、render 內容比對零 diff）
+- [ ] **Lane B 雙支線**：`有在練，但還沒系統記錄` → partner → plan-freq-chips → recommend → tutorial；`用 Excel／其他 App 記錄過` → partner → import-wizard（可跳過）→ plan-prompt（有匯入用 8 週平均、無匯入用 chips）→ recommend → tutorial
+- [ ] **Chips 四選公式（E5）**：chips 1 次/週 → 5×5；2 次/週 → 上下分裂；3-4 次/週 → PPL；5+ 次/週 → PPL
+- [ ] **8 週頻率公式（E5）**：匯入 session 在 56 天內的每週平均套同 chips 公式（≥5→PPL，3-4→PPL，2→上下，≤1→5×5）
+- [ ] **中性措辭守門**：`grep -rn "健身新手" src` = 0；UI 文案使用「你 / 訓練者」；Lane A 用「帶你練」語氣；Lane B 用「幫你記得 / 承認你的過去」語氣
+
+### 14.2 矩陣模式（matrixParser.ts，Excel TSV）
+
+- [ ] 真實 2026-07-11 block 向量 → 1 session，日期 `2026-07-11`，notes 含「Deadlift腰弓嚴重…」
+- [ ] Deadlift：8 sets（20×5, 30×5, 40×5, 50×4, 60×3, 60×3, 60×3, 60×2），Load 交叉驗證 Σ = 1310 ±1
+- [ ] Overhead press：3 sets（20×5×3），Σ = 300 ±1
+- [ ] Bulgarian Squat：`2*6` × 2 欄 → 4 sets × 6 × 25kg = 600 ±1
+- [ ] Hip Abduction 3 sets Σ = 476 ±1；Hip Addcution 3 sets Σ = 266 ±1
+- [ ] **多行 Feedback 向量（E2）**：含引號跨行 cell（`"Feedbck: 一行\n第二行"`）→ notes 同時保留兩行；同日重複 Feedback cell 被去重（E6）
+- [ ] **規則守門（E6）**：Weight marker 存在但 Reps marker 缺失 → 丟棄（不產出 sets）；name 空白 → skip；VBT marker（MV/PV/DISP/PP/V-Loss）→ 丟棄、不入 notes
+- [ ] **quote-aware 行分割（E2）**：共用 `splitQuoteAware`；引號欄位正確（欄數 / cell 內容無截斷）
+
+### 14.3 表格模式（csv.ts，簡易 CSV）
+
+- [ ] BOM（`\uFEFF`）/ CRLF / 引號 cell：全部正確 parse 且行/欄數正確
+- [ ] 日期四格式（YYYY-MM-DD / YYYY/MM/DD / DD/MM/YYYY / MM/DD/YYYY）→ Step1 日期格式選擇器可切換，輸出 ISO 正確
+- [ ] `220 lb` → weight ≈ 99.792 kg（lb × 0.4536）；單位切換 kg/lb 生效
+- [ ] skipped 行統計正確（空行、缺必要欄位）
+- [ ] **範本 CSV 下載（E13）**：Step1 提供「範本下載」按鈕；前端 `URL.createObjectURL(buildTemplateBlob())` 可下載，內容為 `date,exercise,weight_kg,reps` + 2 行範例
+
+### 14.4 動作映射 Step2（fuzzy + 新建自訂）
+
+- [ ] **Fuzzy token 級（E1）**：normalize = lower + 去 ASCII 標點 + 分詞；overlap ≥ 1 或 Levenshtein ≤ 2 → 推薦。例：`overhand press` → Overhead Press（pass=true）
+- [ ] **新建自訂分類必填（E14）**：MuscleGroup 未選 → CTA disabled；選後才允許建立；成功即加入 dropdown mapping
+- [ ] **預覽 Step3**：N sessions、M unique exercises、日期區間、總噸數、skipped 行數、Load warnings 列表正確；|Σ-Load| > 1 顯示 warning（不阻斷）
+
+### 14.5 寫入與 imported 整合（I-3 / I-4 / I-6）
+
+- [ ] imported session：`imported === true`、`startedAt === null`、`finishedAt === null`、所有 sets `completed === true`、notes=feedback 合併
+- [ ] **單次批次 set()（E12）**：workoutStore `importSessionsBatch` 或 `set({sessions: [...old, ...new]})` 僅 call 一次；禁止逐 session push
+- [ ] **ID 統一 generateId（E3）**：`grep -rn "nanoid" src` = 0；所有 session/exercise/set ID 來自 `src/utils/workout.ts generateId`
+- [ ] **PR 列表 / 圓餅 / 8 週體積 / 器械記憶**：匯入 session 被正確包含（I-3）
+- [ ] **streak union**：匯入的訓練日與 cardio 日仍計入 streak（I-3，D1 語義不變）
+- [ ] **刪 imported session**：live 進度（PR 數 / streak / weekMap 進度）即時下降；已解鎖成就仍在（D2）
+
+### 14.6 RecognitionModal 與結算（I-5，E8/E11/E13）
+
+- [ ] **Settings 匯入入口存在（E13）**：Settings 頁「資料」區塊有按鈕 `匯入歷史記錄`；點擊即開啟 ImportHistoryModal（對齊 onboarding 匯入 wizard 共用元件）
+- [ ] **每批次一次儀式（E8）**：連續匯入兩批 → RecognitionModal 各彈一次（非 ever-once）
+- [ ] `settleAll` opts：`{ silent: true, skipPartner: true }`；silent 不 push 慶祝 queue / toast；skipPartner 不 addXp / form unlock
+- [ ] **CTA 使用現有導航（E11）**：RecognitionModal「查看成就牆 / 開始今天訓練」CTA 使用應用既有導航機制（非字面 '/achievements' 字串硬接）
+- [ ] 批次卡片數字正確：X sessions / Y unique days / Z PR diff / W newly unlocked achievements / T total tonne
+- [ ] `import_first`：匯入後永久解鎖；刪除所有 imported 後成就仍在
+
+### 14.7 Partner 與熱量分離規則（I-4 / I-6，E10/E15）
+
+- [ ] `partnerStore.getTotalWorkouts()` = `sessions.filter(s => s.imported !== true).length`；加入 5 imported session → getTotalWorkouts 回傳值未增加（I-4）
+- [ ] settleAll skipPartner=true 前後：Partner XP、unlockedFormIds 零變化
+- [ ] **energy.ts 首行 guard（E10）**：`if (session.imported === true) return null`；非 imported session 仍走原雙段 MET + timestamp fallback
+- [ ] Progress 熱量區附註「匯入記錄不計入熱量估算」chip 存在（I-6 註記）
+- [ ] **兩種 totalWorkouts 語義對應（E15）**：DEV_RULES / DATA_FLOW 文字完全一致；成就用=sessions.length；Partner 用=`sessions.filter(s => s.imported !== true).length`
+
+### 14.8 Telemetry（R-5 四事件）
+
+- [ ] ImportHistoryModal 首次 open → `import_started` 出現在 telemetryStore.events
+- [ ] Confirm CTA → `import_completed{mode, sessions, exercises, skipped}` 記錄
+- [ ] 未 Confirm 就關閉（step<3 或 text 空）→ `import_cancelled` 記錄
+- [ ] Onboarding StepExperience 三選項 → 各有 `onboarding_experience_selected{level: 'beginner'|'experienced'}` call path
+
+### 14.9 零變化保證（NOREG）
+
+- [ ] `src/components/workout/RestTimer.tsx` git diff = 0
+- [ ] `src/store/themeStore.ts` git diff = 0（E9 AC-NOREG）
+- [ ] `src/store/trialStore.ts` git diff = 0
+- [ ] 現有 67 成就（58 力量 + 9 cardio）id / threshold / copy：**git diff src/data/achievements.ts 僅新增 metric union 擴充 + import_first**，其餘 67 定義零變更
+
+### 14.10 構建守門（AC-BUILD / E9）
+
+- [ ] `npx tsc --noEmit` → 0 errors
+- [ ] `npx vite build` → ✓ built 成功，**PWA precache entries ≥ 16**（E9 刪括號，改 ≥ 16）
+- [ ] 無新 dependencies（package.json dependencies/devDependencies 長度未擴增；禁 xlsx / papaparse / nanoid）
+- [ ] `mobile-app/`：完全未修改（FROZEN.md 合規）

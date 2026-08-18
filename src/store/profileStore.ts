@@ -36,6 +36,8 @@ const defaultProfile: UserProfile = {
   name: '鐵人',
   bodyWeight: null,
   createdAt: new Date().toISOString(),
+  // I-1：新用戶預設 beginner；Lane B 用戶會於 Onboarding StepExperience 覆寫
+  experienceLevel: 'beginner',
 };
 
 export const useProfileStore = create<ProfileState>()(
@@ -76,7 +78,7 @@ export const useProfileStore = create<ProfileState>()(
     }),
     {
       name: 'ironpulse-profile',
-      version: 2,
+      version: 3,
       partialize: (state) => ({
         profile: state.profile,
         onboardingCompleted: state.onboardingCompleted,
@@ -94,20 +96,43 @@ export const useProfileStore = create<ProfileState>()(
         };
       },
       migrate: (persistedState: unknown) => {
-        const s = (persistedState ?? {}) as Partial<ProfileState>;
-        const oldProfile = s.profile;
+        const raw = (persistedState ?? {}) as Partial<ProfileState>;
+        const oldProfile = raw.profile;
         // D3：舊 default 75 視為未填 → null（真 75kg 用戶需重填，UI 會提示）
-        const migratedProfile: UserProfile = oldProfile
-          ? {
-              ...oldProfile,
-              bodyWeight:
-                oldProfile.bodyWeight === 75 ? null : (oldProfile.bodyWeight ?? null),
-            }
-          : { ...defaultProfile, createdAt: new Date().toISOString() };
+        let migratedProfile: UserProfile;
+        if (oldProfile && typeof oldProfile === 'object') {
+          const op = oldProfile as Partial<UserProfile>;
+          const bodyWeight: number | null =
+            typeof op.bodyWeight === 'number'
+              ? op.bodyWeight === 75
+                ? null
+                : op.bodyWeight
+              : null;
+          // I-1 (L4 unknown guard)：舊 v1/v2 profile 一律補 experienceLevel='beginner'
+          const experienceLevel: 'beginner' | 'experienced' =
+            op.experienceLevel === 'experienced' ? 'experienced' : 'beginner';
+          migratedProfile = {
+            id: typeof op.id === 'string' ? op.id : 'user-default',
+            name: typeof op.name === 'string' ? op.name : '鐵人',
+            bodyWeight,
+            createdAt:
+              typeof op.createdAt === 'string' ? op.createdAt : new Date().toISOString(),
+            experienceLevel,
+          };
+        } else {
+          migratedProfile = { ...defaultProfile, createdAt: new Date().toISOString() };
+        }
+        const onboardingCompleted = typeof raw.onboardingCompleted === 'boolean'
+          ? raw.onboardingCompleted
+          : false;
+        const goal: TrainingGoalValue | null =
+          raw.goal === 'muscle' || raw.goal === 'fatloss' || raw.goal === 'health'
+            ? raw.goal
+            : null;
         return {
           profile: migratedProfile,
-          onboardingCompleted: s.onboardingCompleted ?? false,
-          goal: s.goal ?? null,
+          onboardingCompleted,
+          goal,
         };
       },
     }

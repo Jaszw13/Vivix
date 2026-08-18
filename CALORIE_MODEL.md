@@ -23,6 +23,7 @@
 | E-D4 | 有氧給 Partner XP（20/日，每日上限 1 次） | Partner 形態解鎖的 `totalWorkouts` 仍只算力量 session |
 | E-D5 | 有氧 kcal 選填；缺則 MET fallback（標「推估值」） | 缺 kcal 且 `bodyWeight === null` → 顯示 `—`＋提示 |
 | E-D6 | 總熱量＝力量推估＋有氧（輸入或 fallback） | 報告卡附免責小字 |
+| I-6  | 匯入記錄（`WorkoutSession.imported === true`）跳過力量雙段 MET 估算 | Progress 熱量卡附註「匯入記錄不計入熱量估算」；匯入 session 缺乏 startedAt/finishedAt/rest 細節，MET fallback 不具可信度，直接視為空 |
 
 ---
 

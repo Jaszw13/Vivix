@@ -41,7 +41,9 @@ settleAll（stats/settleAll.ts）固定順序：
        a. handleWorkoutCompleted(rewardCtx) ← addXp + form unlock（僅力量 session + partnerEnabled）
        b. settleCardioDailyXp() ← 有氧 20 XP / 日，每日上限 1 次（E-D4）
   4. buildQuestCtx(streakDays)
-       totalWorkouts = sessions.length（只算力量，不稀釋 E-D4）
+       // Errata E15 / I-4：quest 與 partner 共用「僅非 imported」語義（避免 Lane B 匯入稀釋）
+       totalWorkouts = sessions.filter(s => s.imported !== true).length
+       // （成就/統計用 totalWorkouts 則是 sessions.length，含 imported；兩語義嚴格分開）
        totalPRs = personalRecords.length
        streakDays = getStreakDaysSelector(sessions, cardioSessions)  ← D1 + E-D3 union
   5. questStore.recompute(questCtx) → 達標 → completed
@@ -57,6 +59,63 @@ WorkoutSummary 顯示慶祝批次（一次完成只一批）
 **保證**：一次 finish 只產生一組慶祝批次；順序確定可測；不依賴進度差。
 
 註：頁面進入（Dashboard／AchievementsPage mount）呼叫 `settleTaxonomyChange` 為冪等安全網 — `unlockedAt` 永久，不會重複慶祝／重複 telemetry。
+
+---
+
+### 兩種 totalWorkouts 語義（E15，I-3 vs I-4）
+
+為避免混用造成成就 / Partner 解鎖的語義矛盾，系統明確劃分兩種 totalWorkouts：
+
+| 語義 | 公式 | 使用場景 | 律 |
+|---|---|---|---|
+| **統計／成就／streak 用**（I-3） | `sessions.length`（全 sessions，含 imported） | computeMetrics、achievements metric、PR list、groupStats、selectors.getStreakDays、部位圓餅/曲線、器械記憶派生、週報總噸數 | L2 派生律，讀取時計算 |
+| **Partner 形態解鎖／XP 用**（I-4） | `sessions.filter(s => s.imported !== true).length`（僅非 imported） | `partnerStore.getTotalWorkouts()`、settleAll Partner form unlock、handleWorkoutCompleted XP | I-4：避免 Lane B 匯入一次解鎖所有形態（保持「親自記錄」的 Partner 語義） |
+
+---
+
+## §匯入流（Import v1 Full Flow）
+
+```
+用戶（Settings 入口 或 Onboarding Lane B experienced_has_log step）
+  │
+  ▼
+ImportHistoryModal 三步 Wizard
+  ├─ Step1：貼上 TSV/CSV → detectMode → quote-aware parse（src/utils/textSplit.ts 共用 E2）
+  │         matrix：年月 ctx override + anchor header (weight→reps pair 緩衝, VBT 丟棄, Feedbck 入 notes, 同日同內容去重 E6)
+  │         table ：欄位映射 chips + 日期格式選擇器(4選) + 單位 kg/lb + 範本下載按鈕 blob (vivix-template.csv, E13)
+  ├─ Step2：unique 動作名映射（fuzzy token overlap≥1 或 Levenshtein≤2, E1；新建自訂 CustomExerciseForm 必填 MuscleGroup，E14）
+  └─ Step3：預覽（N sessions/M exercises/日期區間/總噸數/skipped/Load warnings）→ Confirm CTA
+        │
+        ▼
+workoutStore.importSessionsBatch（單次 set() 批次寫入，E12）
+  for each session：
+    id = generateId (src/utils/workout.ts, E3 禁 nanoid)
+    imported = true
+    startedAt/finishedAt = null
+    sets.completed = true
+    session.notes = feedback 合併（同日同內容去重 E6）
+        │
+        ▼
+telemetry.log('import_completed', {mode, sessions:N, exercises:M, skipped})
+        │
+        ▼
+settleAll(undefined, { silent: true, skipPartner: true })
+  ├─ metrics recompute：imported session 會參與成就 metric、PR、streak、groupStats、volume、器械記憶（I-3，統計／成就 totalWorkouts 語義）
+  ├─ silent=true：celebration queue 不 push、toast/慶祝 modal 不彈（只 return unlock ids）
+  └─ skipPartner=true：Partner addXp、form unlock 整段短路（I-4，Partner 用 totalWorkouts 語義）
+        │
+        ▼
+RecognitionModal 每匯入批次一次 show（E8，非 ever-once）
+  「本批次認可：X sessions・Y training days・Z PR・W 成就・T 噸」
+  CTA：useNavigate → 成就頁 / Dashboard（現有導航機制，E11 禁止字面 path）
+```
+
+**匯入流附加保證**：
+- streak union（力量日 ∪ 有氧日）仍然有效：imported 力量日自動計入 D1 streak 計算。
+- 熱量雙段 MET（src/features/stats/energy.ts）：estimateStrengthKcal 第一行 guard `session.imported === true` → 立即 return null（I-6）；Progress 熱量卡附註「匯入記錄不計入熱量估算」。
+- D2 守則：刪除 imported session 後，進度（metric / achievement progress bar）live 下降，但已解鎖的 unlockedAt 永久存在。
+
+---
 
 ## 3. PR 派生與分類回寫（P-01 / C2）
 

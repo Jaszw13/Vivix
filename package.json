@@ -2,7 +2,7 @@
   "name": "vivix",
   "private": true,
   "version": "0.0.0",
-  "description": "Vivix - 給健身新手的陪伴型教練 App",
+  "description": "Vivix — 把每一次訓練，變成看得見的進步。",
   "type": "module",
   "scripts": {
     "dev": "vite",

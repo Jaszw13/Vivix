@@ -74,6 +74,8 @@ export function estimateStrengthKcal(
   customExercises: CustomExercise[],
   bodyWeight: number | null,
 ): StrengthEnergyEstimate | null {
+  // Errata E10：匯入 session 一律不計 EE（I-6）；先於體重檢查
+  if (session.imported === true) return null;
   if (bodyWeight === null || bodyWeight <= 0) return null;
 
   const { byGroup, totalCompleted, totalRestSeconds } = completedSetsByGroup(session, customExercises);

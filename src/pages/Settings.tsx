@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Moon, Sun, User, Trash2, Dumbbell, Clock, Shield, Smartphone, Copy, RotateCcw, FastForward, AlertTriangle, Bug, Download, Eraser, Cat, RefreshCw } from 'lucide-react';
+import { Moon, Sun, User, Trash2, Dumbbell, Clock, Shield, Smartphone, Copy, RotateCcw, FastForward, AlertTriangle, Bug, Download, Eraser, Cat, RefreshCw, Upload as UploadIcon } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { Card, SectionHeader, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -12,12 +13,15 @@ import { DAY_MS } from '@/utils/time';
 import { THEME_DEFINITIONS } from '@/data/theme';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { usePartnerStore } from '@/features/partner/stores/partnerStore';
+import ImportHistoryModal from '@/components/ImportHistoryModal';
 import { cn } from '@/lib/utils';
 
 export default function Settings() {
+  const navigate = useNavigate();
   const { theme, toggleTheme } = useThemeStore();
   const { profile, updateProfile, resetAllData } = useProfileStore();
   const { getTotalSessions, getTotalVolume, personalRecords } = useWorkoutStore();
+  const [importOpen, setImportOpen] = useState(false);
   const {
     isPermanent,
     getStageInfo,
@@ -507,20 +511,40 @@ export default function Settings() {
         </Card>
       </motion.div>
 
-      {/* 危險區 */}
+      {/* 資料管理（I-2 常態入口 + 匯入 E13 Settings 入口存在） */}
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: devMenuOpen ? 0.25 : 0.25 }}
         className="mt-6"
       >
-        <SectionHeader title="資料管理" />
-        <Button variant="danger" fullWidth onClick={handleReset}>
-          <Trash2 size={16} /> 重置所有資料
-        </Button>
-        <p className="text-[10px] text-text-secondary mt-2 text-center">
-          清除所有訓練記錄與個人資料
-        </p>
+        <SectionHeader title="資料管理" subtitle="匯入、匯出與重置" />
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => setImportOpen(true)}
+            className="flex flex-col items-center gap-1 p-3 rounded-button border border-accent/40 text-accent hover:bg-accent-soft transition-colors"
+          >
+            <UploadIcon size={16} />
+            <span className="text-[10px] uppercase tracking-wider font-bold">匯入歷史記錄</span>
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={handleExportAll}
+            className="flex flex-col items-center gap-1 p-3 rounded-button border border-border text-text-secondary hover:bg-bg-secondary transition-colors"
+          >
+            <Download size={16} />
+            <span className="text-[10px] uppercase tracking-wider font-bold">匯出全部資料</span>
+          </Button>
+        </div>
+        <div className="mt-4">
+          <Button variant="danger" fullWidth onClick={handleReset}>
+            <Trash2 size={16} /> 重置所有資料
+          </Button>
+          <p className="text-[10px] text-text-secondary mt-2 text-center">
+            清除所有訓練記錄與個人資料
+          </p>
+        </div>
       </motion.div>
 
       {/* PWA 強制更新（測試者自救按鈕）—— 解決 iOS Safari SW 幽靈快取導致嘅白屏 */}
@@ -579,6 +603,20 @@ export default function Settings() {
           </Button>
         </Card>
       </motion.div>
+
+      {/* I-2 / Errata E11：CTA 走現有導航（navigate），非字面路徑 */}
+      <ImportHistoryModal
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onGoTrain={() => {
+          setImportOpen(false);
+          navigate('/');
+        }}
+        onGoAchievements={() => {
+          setImportOpen(false);
+          navigate('/achievements');
+        }}
+      />
     </PageShell>
   );
 }

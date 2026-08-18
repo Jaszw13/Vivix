@@ -7,6 +7,7 @@ import {
 import { PageShell } from '@/components/layout/PageShell';
 import { Button } from '@/components/ui/Button';
 import { Card, Badge } from '@/components/ui/Card';
+import CustomExerciseForm from '@/components/CustomExerciseForm';
 import { ExerciseSetList } from '@/components/workout/ExerciseSetList';
 import { RestTimer } from '@/components/workout/RestTimer';
 import {
@@ -22,11 +23,11 @@ import { getPlanById } from '@/data/plans';
 import { formatDuration } from '@/utils/workout';
 import type {
   ExerciseCategory, WarmupItem, MuscleGroup, EquipmentType,
-  PlannedExercise, Exercise, LiftFamily,
+  PlannedExercise, Exercise,
 } from '@/types';
 import {
-  CATEGORY_LABELS, EQUIPMENT_TYPE_LABELS,
-  MUSCLE_GROUP_OPTIONS, EQUIPMENT_TYPE_OPTIONS, exerciseCategories,
+  CATEGORY_LABELS, EQUIPMENT_TYPE_LABELS, EQUIPMENT_TYPE_OPTIONS,
+  exerciseCategories,
 } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -439,17 +440,10 @@ function AddExerciseSheet({ onClose, onSelect }: AddExerciseSheetProps) {
   const [equipmentFilter, setEquipmentFilter] = useState<EquipmentType | 'all'>('all');
   const [query, setQuery] = useState('');
 
-  // 自訂動作 v2 表單（強制分類）
+  // 自訂動作 v2 表單（共用 CustomExerciseForm，Errata E14 復用）
   const [showCustomForm, setShowCustomForm] = useState(false);
-  const [customName, setCustomName] = useState('');
-  const [customMuscle, setCustomMuscle] = useState<MuscleGroup | ''>('');
-  const [customEquip, setCustomEquip] = useState<EquipmentType | ''>('');
-  const [customSteps, setCustomSteps] = useState('');
-  const [customTips, setCustomTips] = useState('');
-  // N-5：選填力量家族（指定後正確歸入力量軌成就）
-  const [customLiftFamily, setCustomLiftFamily] = useState<LiftFamily | ''>('');
 
-  const { customExercises, addCustomExerciseV2 } = useWorkoutStore();
+  const { customExercises } = useWorkoutStore();
 
   const allList = useMemo<Exercise[]>(() => {
     return [
@@ -467,31 +461,8 @@ function AddExerciseSheet({ onClose, onSelect }: AddExerciseSheetProps) {
     });
   }, [allList, category, equipmentFilter, query]);
 
-  const canSubmitCustom = customName.trim().length > 0 && !!customMuscle && !!customEquip;
-
-  const handleSubmitCustom = () => {
-    if (!canSubmitCustom) return;
-    const name = customName.trim();
-    // 已存在相同名稱自訂動作 → 直接選取
-    const existing = customExercises.find((c) => c.name === name);
-    if (existing) {
-      onSelect(existing.id, existing.name);
-      return;
-    }
-    const created = addCustomExerciseV2({
-      name,
-      muscleGroup: customMuscle as MuscleGroup,
-      equipmentType: customEquip as EquipmentType,
-      steps: customSteps
-        .split(/\n|；|;/)
-        .map((s) => s.trim())
-        .filter(Boolean),
-      tips: customTips
-        .split(/\n|；|;/)
-        .map((s) => s.trim())
-        .filter(Boolean),
-      liftFamily: customLiftFamily || undefined,
-    });
+  const handleCustomCreated = (created: CustomExercise) => {
+    setShowCustomForm(false);
     onSelect(created.id, created.name);
   };
 
@@ -624,144 +595,17 @@ function AddExerciseSheet({ onClose, onSelect }: AddExerciseSheetProps) {
             </div>
           </>
         ) : (
-          // ============ 自訂動作 v2 表單（強制分類） ============
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <Field label="動作名稱">
-              <input
-                type="text"
-                value={customName}
-                onChange={(e) => setCustomName(e.target.value)}
-                placeholder="例如：單手啞鈴划船"
-                maxLength={30}
-                className="w-full h-11 px-3 bg-bg-card rounded-button border border-border text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-accent focus:outline-none"
-              />
-            </Field>
-
-            <Field label="部位（必填）" required>
-              <div className="grid grid-cols-3 gap-2">
-                {MUSCLE_GROUP_OPTIONS.map((o) => (
-                  <button
-                    key={o.value}
-                    type="button"
-                    onClick={() => setCustomMuscle(o.value)}
-                    className={cn(
-                      'py-2 text-xs rounded-button border transition-colors',
-                      customMuscle === o.value
-                        ? 'bg-accent text-bg-primary border-accent'
-                        : 'bg-bg-card text-text-secondary border-border hover:text-text-primary'
-                    )}
-                  >
-                    {o.label}
-                  </button>
-                ))}
-              </div>
-            </Field>
-
-            <Field label="器械類型（必填）" required>
-              <div className="grid grid-cols-4 gap-2">
-                {EQUIPMENT_TYPE_OPTIONS.map((o) => (
-                  <button
-                    key={o.value}
-                    type="button"
-                    onClick={() => setCustomEquip(o.value)}
-                    className={cn(
-                      'py-2 text-[11px] rounded-button border transition-colors',
-                      customEquip === o.value
-                        ? 'bg-accent text-bg-primary border-accent'
-                        : 'bg-bg-card text-text-secondary border-border hover:text-text-primary'
-                    )}
-                  >
-                    {o.label}
-                  </button>
-                ))}
-              </div>
-            </Field>
-
-            <Field label="力量家族（選填）">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCustomLiftFamily('')}
-                  className={cn(
-                    'py-1.5 px-3 text-[11px] rounded-button border transition-colors',
-                    customLiftFamily === ''
-                      ? 'bg-accent text-bg-primary border-accent'
-                      : 'bg-bg-card text-text-secondary border-border hover:text-text-primary'
-                  )}
-                >
-                  自動推斷
-                </button>
-                {([
-                  { value: 'bench', label: '臥推' },
-                  { value: 'squat', label: '深蹲' },
-                  { value: 'deadlift', label: '硬舉' },
-                  { value: 'ohp', label: '肩推' },
-                ] as { value: LiftFamily; label: string }[]).map((o) => (
-                  <button
-                    key={o.value}
-                    type="button"
-                    onClick={() => setCustomLiftFamily(o.value)}
-                    className={cn(
-                      'py-1.5 px-3 text-[11px] rounded-button border transition-colors',
-                      customLiftFamily === o.value
-                        ? 'bg-accent text-bg-primary border-accent'
-                        : 'bg-bg-card text-text-secondary border-border hover:text-text-primary'
-                    )}
-                  >
-                    {o.label}
-                  </button>
-                ))}
-              </div>
-              <p className="text-[9px] text-text-secondary/70 mt-1">
-                指定後此動作將歸入對應力量軌成就；未指定則依名稱自動推斷
-              </p>
-            </Field>
-
-            <Field label="步驟（選填，每行一步驟）">
-              <textarea
-                value={customSteps}
-                onChange={(e) => setCustomSteps(e.target.value)}
-                rows={4}
-                placeholder={'雙腳與肩同寬\n髖部向後推\n保持背部挺直'}
-                className="w-full px-3 py-2 bg-bg-card rounded-button border border-border text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-accent focus:outline-none"
-              />
-            </Field>
-
-            <Field label="提示（選填，每行一項）">
-              <textarea
-                value={customTips}
-                onChange={(e) => setCustomTips(e.target.value)}
-                rows={3}
-                placeholder={'核心繃緊\n不圓背\n控制節奏'}
-                className="w-full px-3 py-2 bg-bg-card rounded-button border border-border text-sm text-text-primary placeholder:text-text-secondary/50 focus:border-accent focus:outline-none"
-              />
-            </Field>
-
-            <div className="pt-2">
-              <Button fullWidth size="lg" disabled={!canSubmitCustom} onClick={handleSubmitCustom}>
-                儲存並加入訓練
-              </Button>
-              {!canSubmitCustom && (
-                <p className="text-center text-[11px] text-text-secondary mt-2">
-                  請填寫名稱、選擇部位與器械類型
-                </p>
-              )}
-            </div>
-          </div>
+          // ============ 自訂動作 v2 表單（Errata E14：復用 CustomExerciseForm） ============
+          <CustomExerciseForm
+            open={showCustomForm}
+            initialName={query || ''}
+            submitText="儲存並加入訓練"
+            onClose={() => setShowCustomForm(false)}
+            onCreated={handleCustomCreated}
+          />
         )}
       </motion.div>
     </motion.div>
-  );
-}
-
-function Field({ label, children, required }: { label: string; children: React.ReactNode; required?: boolean }) {
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-2">
-        {label} {required && <span className="text-auxiliary">*</span>}
-      </div>
-      {children}
-    </div>
   );
 }
 

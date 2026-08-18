@@ -1,6 +1,48 @@
-# Vivix 開發守則（Phase C）
+# Vivix 開發守則（Phase C + L0 定位律 v2.1）
 
-> 對應 Phase B 修復指示 v2.1。本文為長期守門規則，防止代碼再次劣化。所有 PR 必須符合此處規則。
+> 對應 Phase B 修復指示 v2.1 + 定位重定義 Errata v2.1。本文為長期守門規則，防止代碼再次劣化。所有 PR 必須符合此處規則。
+
+## L0：定位律（Positioning Law）
+
+```yaml
+L0_positioning:
+  statement: >
+    Vivix 服務「記錄新手」：開始系統化記錄訓練的人。雙 lane 架構 —
+    Lane A 訓練新手（第一次進健身房＋第一次系統記錄，教練式帶領的 5×5 入門流）；
+    Lane B 經驗記錄者（會練但沒系統記錄／從 Excel 或其他工具轉移，承認你的過去）。
+    一切功能、文案、文件必須同時對雙 lane 成立。
+  brand_line: Vivix — 把每一次訓練，變成看得見的進步。
+```
+
+**glossary（所有 PR 守則）**：
+1. 禁用統一稱呼「健身新手」作為對用戶的總稱；UI 與文件皆改用雙 lane 中性措辭：
+   - Lane A 語氣：**帶你練**（教練）。
+   - Lane B 語氣：**幫你記得**、**承認你的過去**（記錄）。
+   - 中性共用：「你」、「訓練者」、「開始系統化記錄訓練的人」。
+2. 舊張力（intermediate 計畫 vs 新手定位）**標記已解決**：計畫多樣性（5×5 / 上下分裂 / PPL）是 Lane B 剛需；
+   Lane A 預設 5×5 但不鎖死（可於設定更換計畫）。
+3. **兩種 totalWorkouts 語義（E15，嚴格避免混用）**：
+   - **統計／成就／streak 用**（I-3）＝ `sessions.length`，即**全 sessions 計，包含 imported**；
+     成就 metric、streak days、PR、部位體積、器械記憶均使用此語義。
+   - **Partner 形態解鎖／XP 用**（I-4）＝ `sessions.filter(s => s.imported !== true).length`，
+     即 `partnerStore.getTotalWorkouts()`：**僅非 imported 計**；避免 Lane B 匯入 50 筆後
+     一次性解鎖所有 Partner 形態（稀釋 I-4「親自記錄」的語義）。
+
+---
+
+### 決策紀錄（Policy ＆ Import Decisions，P-1 / I-1…I-6）
+
+| 代號 | 決策 | 生效點 |
+|---|---|---|
+| **P-1** | 目標用戶＝記錄新手（雙 lane）；L0 為最高位階，所有文案/文件必須對齊 | 所有頁面、README、DEV_RULES |
+| **I-1** | Onboarding 首步「你的訓練經驗？」三選項 → `profile.experienceLevel: 'beginner' \| 'experienced'`（原始事實 persist）；profileStore v3，舊用戶 migrate 為 `'beginner'` | profileStore v3 migrate + Onboarding StepExperience |
+| **I-2** | 匯入 v1＝ Excel 矩陣 TSV 貼上（matrixParser.ts）＋ 簡易 CSV 表格貼上（csv.ts）＋手動補錄；**禁任何新依賴**，ID 統一 `generateId`（src/utils/workout.ts） | src/utils/csv.ts、matrixParser.ts、fuzzy.ts、textSplit.ts |
+| **I-3** | imported session **計入**：PR 列表、成就、streak、部位報告、進度曲線、器械記憶、週報總噸數（即上述「統計／成就用」totalWorkouts 語義） | computePRsFromSessions、selectors.getStreakDays、selectors groupStats、energy equipmentMemory 派生 |
+| **I-4** | imported session **不計入**：Partner XP、Partner 形態解鎖（即「Partner 用」totalWorkouts 語義）；防止 Lane B 匯入一次解鎖所有形態 | partnerStore.getTotalWorkouts + settleAll skipPartner |
+| **I-5** | 匯入完成：`settleAll(undefined, { silent:true, skipPartner:true })` 後一次性「**每匯入批次一次**」認可儀式 RecognitionModal；慶祝 queue 靜音（不重複彈 toast/celebration） | settleAll opts + RecognitionModal |
+| **I-6** | 熱量估算（strength EE、週報總熱量）**僅限非 imported session**；Progress 熱量卡附註「匯入記錄不計入熱量估算」（匯入記錄缺乏 startedAt/finishedAt/rest 細節，不應進入 EE 雙段 MET） | stats/energy.ts 首行 guard、Progress EE card chip |
+
+---
 
 ## L1：持久化律（Persistence Law）
 
@@ -15,7 +57,7 @@
 | questStore v2 | claimed、completedAt | current |
 | partnerStore v2 | species、name、unlockedFormIds、cosmetics | level、totalWorkouts、totalTrainingDays |
 | equipmentMemoryStore v2 | （改讀取時派生） | memories |
-| profileStore v2 | profile、onboardingCompleted、goal | — |
+| profileStore v3 | profile（含 experienceLevel 原始事實）、onboardingCompleted、goal | — |
 | plansStore v1 | customPlans | — |
 | cardioStore v1 | sessions（id/date/machine/durationMin/kcal/avgHr/distanceKm/createdAt） | —（皆原始事實） |
 | themeStore | theme | — |
@@ -212,7 +254,7 @@ settleAll 內每日有氧結算 20 XP，每日上限 1 次；Partner 形態解�
 - 新功能干擾預設新手體驗
 - 在元件內新增衍生計算
 - 更換 persist key
-- 改休息計時行為或成就目錄數值（58 個）
+- 改休息計時行為或成就目錄既有 67（58 力量基礎 + 9 有氧）數值（僅追加新 metric/成就）
 - 在 C1–C8 之外新增功能或重構
 - 讓 mobile-app 繼續長功能
 - `as any`、非空斷言 `!`（改安全 guard）

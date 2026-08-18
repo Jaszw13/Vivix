@@ -1,8 +1,16 @@
-# Vivix 成就系統設計文件 v1.3
+# Vivix 成就系統設計文件 v1.4
 
 ## 概述
 
-58 個成就，四軌 × 五級，分部位計算，貼合雙主題設計語言。
+既有 **67 個成就（58 力量基礎 + 9 有氧）**，加上 1 個匯入行為成就 `import_first`，共四軌 × 五級，分部位計算，貼合雙主題設計語言。**既有 67 個成就的 id / threshold / copy 零變更**，只追加新 metric（`sessions_imported_total`）與 `import_first`。
+
+## Lane B 認可哲學（R-0 定位律）
+
+Vivix 的成就系統同時對雙 lane 成立：
+- **Lane A（教練流）**：成就為「從零開始」的梯度 — 第一次進健身房、第一組、第一個 1RM。
+- **Lane B（經驗記錄者）**：成就不強迫你從零 — 匯入 v1 將你的 Excel 過去視為合法歷史，**匯入的 session 計入 PR 清單、streak、部位成就、節奏成就**（I-3，統計／成就 totalWorkouts 語義）。匯入完成後顯示「認可儀式」（RecognitionModal，每批次一次），你的過去被系統承認，之後才是「現在起繼續推進」。
+
+兩者共同點：**成就解鎖是永久的**（D2），刪除 imported session 只讓 live 進度條下降，已經解鎖的成就仍然在。
 
 ## 設計原則
 
@@ -69,10 +77,10 @@ T5 在深色主題用琥珀電光，淺色主題用深金。
 
 ```
 src/data/
-  achievements.ts          # 58 個成就定義 + tier 樣式 + 工具函數
+  achievements.ts          # 既有 67（58 力量 + 9 有氧）+ import_first 成就定義
   strengthStandards.ts    # 力量標準查證資料
 src/store/
-  achievementsStore.ts    # 成就引擎 (computeMetrics, recompute, pure selectors)
+  achievementsStore.ts    # 成就引擎 (computeMetrics, currentOf switch sessions_imported_total 分支)
   plansStore.ts           # 計畫編輯器 store (T-05)
 src/features/achievements/
   AchievementsPage.tsx    # 主頁面
@@ -88,6 +96,16 @@ src/features/achievements/
     TimelineView.tsx           # 解鎖時間軸
     CelebrationModal.tsx       # 慶祝儀式
 ```
+
+## 成就增量：匯入行為 v1
+
+| ID | Track | Line | Tier | Metric | Threshold | 標題 | 文案 |
+|----|-------|------|------|--------|-----------|------|------|
+| `import_first` | behavior | import | t1 | `sessions_imported_total` | 1 | 你的過去，從今天起有了家 | 第一筆歷史匯入完成。承認你的過去，之後才是現在起繼續推進。 |
+
+- **I-5 相容**：`sessions_imported_total` 來自 `sessions.filter(s => s.imported === true).length`；匯入時 settleAll 以 `{ silent:true, skipPartner:true }` 結算 — 即便 `import_first` 在匯入批次被解鎖，也不會重複彈出 CelebrationModal（只顯示 RecognitionModal 每批次一次的認可儀式）。
+- **D2 相容**：一旦 `import_first` unlocked 永久；之後刪除所有 imported session，成就仍然在（live 進度會降到 0）。
+- **I-4 相容**：`import_first` 的 metric 為行為統計，不參與 Partner XP 與形態解鎖的 totalWorkouts 計算。
 
 ## Telemetry 事件
 

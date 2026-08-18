@@ -1,6 +1,7 @@
 /**
- * Vivix 成就目錄 v1.3 — 58 個成就，四軌 × 分級
- * 對應《執行規格 v1.3》§3 完整成就目錄 TS
+ * Vivix 成就目錄 v1.4 — 既有 67（58 力量基礎 + 9 有氧）+ 1 匯入行為成就 import_first
+ * 對應《執行規格 v1.3》§3 + E-05 cardio 增量 + I-2 匯入行為成就
+ * Errata E4：舊 58 成就 id/threshold/copy 零變更；cardio +9 零變更；僅追加 sessions_imported_total metric + import_first
  */
 import type { MuscleGroup, LiftFamily } from '@/types';
 
@@ -14,7 +15,8 @@ export type AchievementMetric =
   | 'volume_delta_months' | 'pr_count_session'
   | 'group_pr' | 'group_pr_all' | 'group_coverage'
   | 'warmup_count' | 'full_plan_count' | 'perfect_log_count' | 'explorer'
-  | 'cardio_minutes' | 'cardio_sessions' | 'cardio_weekly_rhythm';
+  | 'cardio_minutes' | 'cardio_sessions' | 'cardio_weekly_rhythm'
+  | 'sessions_imported_total'; // I-2：匯入行為 metric（僅成就 import_first 使用）
 
 export interface AchievementDef {
   id: string;
@@ -120,6 +122,9 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   A('cardio_sess_t2', 'consistency','cardio_sess', 2,'cardio_sessions',10,'十次有氧達成','10 次有氧完成。每一次出發都算。'),
   A('cardio_sess_t3', 'consistency','cardio_sess', 3,'cardio_sessions',25,'二十五次里程碑','25 次有氧完成。節律已在體內。'),
   A('cardio_weekly',  'consistency','cardio_wk',   2,'cardio_weekly_rhythm',4,'四週連動','連續 4 週至少 1 次有氧。你已經建立有氧節律。'),
+
+  // ── 匯入行為 v1（Errata E4；既有 67 成就零變更，僅追加）──
+  A('import_first',    'behavior',   'import',      1,'sessions_imported_total',1,'你的過去，從今天起有了家','第一筆歷史匯入完成。承認你的過去，之後才是現在起繼續推進。'),
 ];
 
 // ── Tier 視覺樣式 ──
