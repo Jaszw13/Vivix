@@ -1,15 +1,15 @@
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useEffect, useMemo } from 'react';
-import { motion } from 'framer-motion';
-import { Play, Dumbbell, Plus, Trash2, Copy, RotateCcw, Edit3, Check, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Play, Dumbbell, Plus, Trash2, Copy, RotateCcw, Edit3, Check, X, ChevronUp, ChevronDown, Search, CheckCircle2 } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { Button } from '@/components/ui/Button';
 import { Card, Badge, SectionHeader } from '@/components/ui/Card';
 import { usePlansStore } from '@/store/plansStore';
 import { useWorkoutStore } from '@/store/workoutStore';
-import { exercises as builtinExercises } from '@/data/exercises';
-import { DIFFICULTY_LABELS, MUSCLE_GROUP_LABELS } from '@/types';
-import type { MuscleGroup } from '@/types';
+import { exercises as builtinExercisesList } from '@/data/exercises';
+import { DIFFICULTY_LABELS, MUSCLE_GROUP_LABELS, EQUIPMENT_TYPE_LABELS } from '@/types';
+import type { MuscleGroup, EquipmentType } from '@/types';
 import { cn } from '@/lib/utils';
 
 export default function PlanDetail() {
@@ -43,6 +43,23 @@ export default function PlanDetail() {
   const [nameDraft, setNameDraft] = useState('');
   const [pickerDayId, setPickerDayId] = useState<string | null>(null);
   const [pickerFilter, setPickerFilter] = useState<MuscleGroup | 'all'>('all');
+  const [pickerQuery, setPickerQuery] = useState('');
+  const [pickerEquip, setPickerEquip] = useState<EquipmentType | 'all'>('all');
+  const [toast, setToast] = useState<string | null>(null);
+
+  // Task 1：打通自訂動作資料流（L2 派生）
+  const customExercises = useWorkoutStore((s) => s.customExercises);
+  const allExercises = useMemo(
+    () => [...builtinExercisesList, ...customExercises],
+    [customExercises],
+  );
+
+  // Toast 自動消失
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2400);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   // 處理 ?action=reset
   useEffect(() => {
@@ -79,9 +96,14 @@ export default function PlanDetail() {
   };
 
   const filteredExercises = useMemo(() => {
-    if (pickerFilter === 'all') return builtinExercises;
-    return builtinExercises.filter((e) => e.muscleGroup === pickerFilter);
-  }, [pickerFilter]);
+    const q = pickerQuery.trim().toLowerCase();
+    return allExercises.filter((e) => {
+      if (pickerFilter !== 'all' && e.muscleGroup !== pickerFilter) return false;
+      if (pickerEquip !== 'all' && e.equipmentType !== pickerEquip) return false;
+      if (q && !e.name.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [allExercises, pickerFilter, pickerEquip, pickerQuery]);
 
   if (!plan) {
     return (
@@ -296,7 +318,14 @@ export default function PlanDetail() {
                   {/* 新增動作 */}
                   {editMode && (
                     <button
-                      onClick={() => setPickerDayId(pickerDayId === day.id ? null : day.id)}
+                      onClick={() => {
+                        if (pickerDayId !== day.id) {
+                          setPickerQuery('');
+                          setPickerEquip('all');
+                          setPickerFilter('all');
+                        }
+                        setPickerDayId(pickerDayId === day.id ? null : day.id);
+                      }}
                       className="flex items-center gap-2 text-xs text-accent font-bold mt-2 py-1"
                     >
                       <Plus size={14} /> 新增動作
@@ -306,7 +335,19 @@ export default function PlanDetail() {
                   {/* 動作選擇器 */}
                   {editMode && pickerDayId === day.id && (
                     <div className="mt-2 p-3 bg-bg-secondary rounded-2xl border border-border/40">
-                      <div className="flex gap-1.5 mb-2 overflow-x-auto scrollbar-hide">
+                      {/* 搜尋框 */}
+                      <div className="relative mb-2">
+                        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary" />
+                        <input
+                          type="text"
+                          value={pickerQuery}
+                          onChange={(e) => setPickerQuery(e.target.value)}
+                          placeholder="搜尋內建或自訂動作…"
+                          className="w-full h-9 pl-8 pr-3 bg-bg-card rounded-button border border-border text-xs text-text-primary placeholder:text-text-secondary focus:border-accent transition-colors"
+                        />
+                      </div>
+                      {/* 部位 filter */}
+                      <div className="flex gap-1.5 mb-1.5 overflow-x-auto scrollbar-hide">
                         <button
                           onClick={() => setPickerFilter('all')}
                           className={cn(
@@ -329,18 +370,58 @@ export default function PlanDetail() {
                           </button>
                         ))}
                       </div>
-                      <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+                      {/* 器械 filter */}
+                      <div className="flex gap-1.5 mb-2 overflow-x-auto scrollbar-hide">
+                        <button
+                          onClick={() => setPickerEquip('all')}
+                          className={cn(
+                            'px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider whitespace-nowrap',
+                            pickerEquip === 'all' ? 'bg-accent/80 text-bg-primary' : 'bg-bg-card/60 text-text-secondary',
+                          )}
+                        >
+                          全器械
+                        </button>
+                        {(['barbell', 'dumbbell', 'machine', 'cable', 'bodyweight', 'kettlebell', 'band', 'other'] as EquipmentType[]).map((eq) => (
+                          <button
+                            key={eq}
+                            onClick={() => setPickerEquip(eq)}
+                            className={cn(
+                              'px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider whitespace-nowrap',
+                              pickerEquip === eq ? 'bg-accent/80 text-bg-primary' : 'bg-bg-card/60 text-text-secondary',
+                            )}
+                          >
+                            {EQUIPMENT_TYPE_LABELS[eq]}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex flex-col gap-1 max-h-56 overflow-y-auto">
+                        {filteredExercises.length === 0 && (
+                          <div className="py-5 text-center text-[11px] text-text-secondary/70">
+                            找不到符合的動作
+                          </div>
+                        )}
                         {filteredExercises.map((ex) => (
                           <button
                             key={ex.id}
                             onClick={() => {
                               addExerciseToDay(plan.id, day.id, ex.id);
+                              setToast(`已加入「${ex.name}」`);
                               setPickerDayId(null);
                             }}
                             className="flex items-center justify-between px-2 py-1.5 rounded hover:bg-bg-card text-left"
                           >
-                            <span className="text-xs text-text-primary">{ex.name}</span>
-                            <span className="text-[9px] text-text-secondary uppercase">{MUSCLE_GROUP_LABELS[ex.muscleGroup]}</span>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="text-xs text-text-primary truncate">{ex.name}</span>
+                              {ex.isCustom && (
+                                <Badge variant="auxiliary" className="flex-shrink-0 !text-[8px] !px-1.5 !py-0">
+                                  自訂
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <span className="text-[8px] text-text-secondary uppercase">{MUSCLE_GROUP_LABELS[ex.muscleGroup]}</span>
+                              <span className="text-[8px] text-text-secondary uppercase opacity-60">· {EQUIPMENT_TYPE_LABELS[ex.equipmentType]}</span>
+                            </div>
                           </button>
                         ))}
                       </div>
@@ -382,6 +463,21 @@ export default function PlanDetail() {
           ))}
         </div>
       </div>
+
+      {/* 全局 Toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 24 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-bg-primary border border-accent/40 rounded-button shadow-xl flex items-center gap-2"
+          >
+            <CheckCircle2 size={16} className="text-accent" />
+            <span className="text-xs text-text-primary font-medium">{toast}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </PageShell>
   );
 }

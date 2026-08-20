@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { Search, Dumbbell, Edit3, Trash2, AlertTriangle, Plus } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, Dumbbell, Edit3, Trash2, AlertTriangle, Plus, CheckCircle2 } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { Card, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -15,6 +15,7 @@ import {
 } from '@/types';
 import type { MuscleGroup, EquipmentType, Exercise } from '@/types';
 import { useWorkoutStore } from '@/store/workoutStore';
+import CustomExerciseForm, { type CustomExerciseFormProps } from '@/components/CustomExerciseForm';
 import { cn } from '@/lib/utils';
 
 type CategoryFilter = MuscleGroup | 'all';
@@ -30,6 +31,29 @@ export default function Exercises() {
   const [equipment, setEquipment] = useState<EquipmentFilter>('all');
   const [query, setQuery] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Task 2：新增自訂動作入口
+  const [addOpen, setAddOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const lastCustomIdRef = useRef<string | null>(null);
+  const newItemRef = useRef<HTMLButtonElement | null>(null);
+
+  // Toast 自動消失
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2400);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  // 滾動到新建立的自訂動作
+  useEffect(() => {
+    if (!lastCustomIdRef.current) return;
+    const id = lastCustomIdRef.current;
+    requestAnimationFrame(() => {
+      const el = newItemRef.current;
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    lastCustomIdRef.current = null;
+  }, [customExercises.length]);
 
   // 合併內建 + 自訂動作
   const allExercises = useMemo<Exercise[]>(
@@ -68,19 +92,28 @@ export default function Exercises() {
         </motion.div>
       )}
 
-      {/* 搜尋框 */}
-      <div className="relative mb-4">
-        <Search
-          size={16}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary"
-        />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜尋動作…"
-          className="w-full h-11 pl-9 pr-3 bg-bg-card rounded-button border border-border text-sm text-text-primary placeholder:text-text-secondary focus:border-accent transition-colors"
-        />
+      {/* 搜尋框 + CTA */}
+      <div className="flex gap-2 mb-4 items-center">
+        <div className="relative flex-1">
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary"
+          />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜尋動作…"
+            className="w-full h-11 pl-9 pr-3 bg-bg-card rounded-button border border-border text-sm text-text-primary placeholder:text-text-secondary focus:border-accent transition-colors"
+          />
+        </div>
+        <Button
+          size="sm"
+          onClick={() => setAddOpen(true)}
+          className="flex-shrink-0 h-11"
+        >
+          <Plus size={14} /> 新增自訂
+        </Button>
       </div>
 
       {/* 部位 filter */}
@@ -133,6 +166,7 @@ export default function Exercises() {
           return (
             <motion.button
               key={ex.id}
+              ref={ex.isCustom && ex.id === lastCustomIdRef.current ? newItemRef : undefined}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: (i % 6) * 0.04 }}
@@ -228,6 +262,39 @@ export default function Exercises() {
           />
         );
       })()}
+
+      {/* Task 2：新增自訂動作入口 Form */}
+      <AnimatePresence>
+        <CustomExerciseForm
+          open={addOpen}
+          onClose={() => setAddOpen(false)}
+          onCreated={(ex) => {
+            // L3：新增僅擴充 Taxonomy，因無歷史 session 不結算
+            lastCustomIdRef.current = ex.id;
+            setToast(`已新增至動作庫：${ex.name}`);
+            setAddOpen(false);
+            // 切到「全部部位/器械」並清空搜尋，確保新動作可見
+            setCategory('all');
+            setEquipment('all');
+            setQuery('');
+          }}
+        />
+      </AnimatePresence>
+
+      {/* 全局 Toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 24 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-bg-primary border border-accent/40 rounded-button shadow-xl flex items-center gap-2"
+          >
+            <CheckCircle2 size={16} className="text-accent" />
+            <span className="text-xs text-text-primary font-medium">{toast}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </PageShell>
   );
 }
