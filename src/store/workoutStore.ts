@@ -241,18 +241,29 @@ export const useWorkoutStore = create<WorkoutState>()(
       },
 
       startSession: (planId, planName, day) => {
+        const { customExercises } = get();
         const exercises: ExerciseLog[] = day.exercises.map((pe) => {
-          const snap = resolveExerciseSnapshot(pe.exerciseId, pe.name);
+          // S-02 修復：用 resolveCurrentTaxonomy（builtin+custom）取代 builtin-only 的 resolveExerciseSnapshot
+          // 優先級：當前定義 > snapshot 兜底，確保 custom-xxx session 建立時取得正確 name/muscleGroup/equipmentType
+          const tax = resolveCurrentTaxonomy(
+            pe.exerciseId,
+            customExercises,
+            {
+              muscleGroup: pe.snapshot?.muscleGroup,
+              equipmentType: pe.snapshot?.equipmentType,
+              name: pe.snapshot?.name ?? pe.name,
+            },
+          );
           const log = _createExerciseLog(
             pe.exerciseId,
-            pe.snapshot?.name ?? pe.name,
+            tax.name,
             pe.targetSets,
             pe.targetWeight
           );
           return {
             ...log,
-            muscleGroup: pe.snapshot?.muscleGroup ?? snap.muscleGroup,
-            equipmentType: pe.snapshot?.equipmentType ?? snap.equipmentType,
+            muscleGroup: tax.muscleGroup ?? pe.snapshot?.muscleGroup,
+            equipmentType: tax.equipmentType ?? pe.snapshot?.equipmentType,
           };
         });
         const session: WorkoutSession = {
@@ -303,15 +314,24 @@ export const useWorkoutStore = create<WorkoutState>()(
       addExerciseToActive: (pe) => {
         const active = get().activeSession;
         if (!active) return;
-        const snap = resolveExerciseSnapshot(pe.exerciseId, pe.name);
+        // S-02 修復：resolveCurrentTaxonomy（builtin+custom），同步 startSession 的解析策略
+        const tax = resolveCurrentTaxonomy(
+          pe.exerciseId,
+          get().customExercises,
+          {
+            muscleGroup: pe.snapshot?.muscleGroup,
+            equipmentType: pe.snapshot?.equipmentType,
+            name: pe.snapshot?.name ?? pe.name,
+          },
+        );
         const newEx = _createExerciseLog(
           pe.exerciseId,
-          pe.snapshot?.name ?? pe.name,
+          tax.name,
           pe.targetSets || 3,
           pe.targetWeight
         );
-        newEx.muscleGroup = pe.snapshot?.muscleGroup ?? snap.muscleGroup;
-        newEx.equipmentType = pe.snapshot?.equipmentType ?? snap.equipmentType;
+        newEx.muscleGroup = tax.muscleGroup ?? pe.snapshot?.muscleGroup;
+        newEx.equipmentType = tax.equipmentType ?? pe.snapshot?.equipmentType;
         set({
           activeSession: {
             ...active,

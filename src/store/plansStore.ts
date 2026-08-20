@@ -13,7 +13,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { TrainingPlan, PlanDay, PlannedExercise, MuscleGroup, EquipmentType } from '@/types';
 import { trainingPlans, getPlanById as getPresetPlanById, migratePlanToV2 } from '@/data/plans';
-import { getExerciseById } from '@/data/exercises';
+import { findExerciseById } from '@/features/exercises/taxonomy';
+import { useWorkoutStore } from '@/store/workoutStore';
 
 interface PlansState {
   customPlans: TrainingPlan[];
@@ -38,7 +39,7 @@ interface PlansState {
   reorderDay: (planId: string, dayId: string, direction: 'up' | 'down') => void;
 
   // 動作操作（在指定訓練日內）
-  addExerciseToDay: (planId: string, dayId: string, exerciseId: string, targetSets?: number, targetReps?: string) => void;
+  addExerciseToDay: (planId: string, dayId: string, exerciseId: string, opts?: { targetSets?: number; targetReps?: string; definition?: { name: string; muscleGroup: MuscleGroup; equipmentType: EquipmentType } }) => void;
   updateExerciseInDay: (planId: string, dayId: string, exerciseId: string, patch: Partial<Pick<PlannedExercise, 'targetSets' | 'targetReps' | 'targetWeight' | 'restSeconds'>>) => void;
   removeExerciseFromDay: (planId: string, dayId: string, exerciseId: string) => void;
 }
@@ -47,16 +48,32 @@ function genId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-/** 建立 PlannedExercise snapshot */
+/**
+ * 建立 PlannedExercise snapshot（S-02 修復：打通自訂動作資料流）
+ *
+ * 優先序（L2 合規）：
+ *   1. 呼叫端顯式傳入 definition（PlanDetail 從 getAllExercises() 取得物件時直接傳入，免重查）
+ *   2. findExerciseById(exerciseId, customExercises)：builtin + custom 聯合查詢
+ *   3. 最後兜底：保留名「未知動作」（僅限 exerciseId 確實無法解析的已刪動作）
+ *
+ * customExercises 由 useWorkoutStore 傳入（store 層自行 pull latest state，免 caller 擔心）。
+ */
 function buildPlannedExercise(
   exerciseId: string,
-  targetSets = 3,
-  targetReps = '8-12',
+  opts: {
+    targetSets?: number;
+    targetReps?: string;
+    definition?: { name: string; muscleGroup: MuscleGroup; equipmentType: EquipmentType };
+    customExercises?: Array<{ id: string; name: string; muscleGroup?: MuscleGroup; equipmentType?: EquipmentType }>;
+  } = {},
 ): PlannedExercise {
-  const ex = getExerciseById(exerciseId);
-  const muscleGroup: MuscleGroup = (ex?.muscleGroup as MuscleGroup) ?? (ex?.category as MuscleGroup) ?? 'chest';
-  const equipmentType: EquipmentType = ex?.equipmentType ?? 'other';
-  const name = ex?.name ?? '未知動作';
+  const { targetSets = 3, targetReps = '8-12', definition, customExercises = [] } = opts;
+  const resolved = definition ?? findExerciseById(exerciseId, customExercises);
+  const muscleGroup: MuscleGroup =
+    (resolved?.muscleGroup as MuscleGroup) ??
+    'chest';
+  const equipmentType: EquipmentType = resolved?.equipmentType ?? 'other';
+  const name = resolved?.name ?? '未知動作';
   return {
     id: genId('pe'),
     exerciseId,
@@ -219,8 +236,10 @@ export const usePlansStore = create<PlansState>()(
         }));
       },
 
-      addExerciseToDay: (planId, dayId, exerciseId, targetSets, targetReps) => {
-        const pe = buildPlannedExercise(exerciseId, targetSets, targetReps);
+      addExerciseToDay: (planId, dayId, exerciseId, opts = {}) => {
+        // S-02：寫入時拉取最新 customExercises（workoutStore import 零循環）
+        const customEx = useWorkoutStore.getState().customExercises;
+        const pe = buildPlannedExercise(exerciseId, { ...opts, customExercises: customEx });
         set((s) => ({
           customPlans: s.customPlans.map((p) => {
             if (p.id !== planId) return p;

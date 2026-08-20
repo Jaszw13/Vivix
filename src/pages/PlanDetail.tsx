@@ -270,43 +270,63 @@ export default function PlanDetail() {
 
                 {/* 動作列表 */}
                 <div className="flex flex-col gap-2 mt-3 pt-3 border-t border-border/40">
-                  {day.exercises.map((ex) => (
-                    <div key={ex.id} className="flex items-center gap-3 py-1.5">
-                      <div className="w-7 h-7 rounded bg-accent-soft flex items-center justify-center flex-shrink-0">
-                        <Dumbbell size={13} className="text-accent" />
-                      </div>
-                      <span className="text-sm text-text-primary flex-1 truncate">
-                        {ex.name}
-                      </span>
-                      {editMode ? (
-                        <div className="flex items-center gap-1">
-                          <input
-                            type="number"
-                            value={ex.targetSets}
-                            onChange={(e) => updateExerciseInDay(plan.id, day.id, ex.exerciseId, { targetSets: parseInt(e.target.value) || 0 })}
-                            className="w-12 bg-bg-secondary border border-border/40 rounded px-1 py-0.5 font-mono text-xs text-center"
-                          />
-                          <span className="text-text-secondary text-xs">×</span>
-                          <input
-                            value={ex.targetReps}
-                            onChange={(e) => updateExerciseInDay(plan.id, day.id, ex.exerciseId, { targetReps: e.target.value })}
-                            className="w-16 bg-bg-secondary border border-border/40 rounded px-1 py-0.5 font-mono text-xs text-center"
-                          />
-                          <button
-                            onClick={() => removeExerciseFromDay(plan.id, day.id, ex.exerciseId)}
-                            className="text-auxiliary ml-1"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+                  {day.exercises.map((ex) => {
+                    // S-02 self-heal：當前定義優先、snapshot 兜底；舊存檔的「未知動作」立即修復
+                    const def = allExercises.find((e) => e.id === ex.exerciseId);
+                    const resolvedName = def?.name ?? ex.snapshot?.name ?? ex.name ?? '未知動作';
+                    const isCustom = def?.isCustom ?? false;
+                    const isDeletedCustom =
+                      !def && ex.exerciseId.startsWith('custom-') && (ex.snapshot?.name ?? ex.name);
+                    return (
+                      <div key={ex.id} className="flex items-center gap-3 py-1.5">
+                        <div className="w-7 h-7 rounded bg-accent-soft flex items-center justify-center flex-shrink-0">
+                          <Dumbbell size={13} className="text-accent" />
                         </div>
-                      ) : (
-                        <span className="font-mono text-xs text-text-secondary">
-                          {ex.targetSets}×{ex.targetReps}
-                          {ex.targetWeight ? ` · ${ex.targetWeight}kg` : ''}
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <span className="text-sm text-text-primary truncate">
+                            {resolvedName}
+                          </span>
+                          {isCustom && (
+                            <Badge variant="auxiliary" className="flex-shrink-0 !text-[8px] !px-1.5 !py-0">
+                              自訂
+                            </Badge>
+                          )}
+                          {isDeletedCustom && (
+                            <Badge variant="default" className="flex-shrink-0 !text-[8px] !px-1.5 !py-0 opacity-70">
+                              已刪
+                            </Badge>
+                          )}
+                        </div>
+                        {editMode ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              value={ex.targetSets}
+                              onChange={(e) => updateExerciseInDay(plan.id, day.id, ex.exerciseId, { targetSets: parseInt(e.target.value) || 0 })}
+                              className="w-12 bg-bg-secondary border border-border/40 rounded px-1 py-0.5 font-mono text-xs text-center"
+                            />
+                            <span className="text-text-secondary text-xs">×</span>
+                            <input
+                              value={ex.targetReps}
+                              onChange={(e) => updateExerciseInDay(plan.id, day.id, ex.exerciseId, { targetReps: e.target.value })}
+                              className="w-16 bg-bg-secondary border border-border/40 rounded px-1 py-0.5 font-mono text-xs text-center"
+                            />
+                            <button
+                              onClick={() => removeExerciseFromDay(plan.id, day.id, ex.exerciseId)}
+                              className="text-auxiliary ml-1"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="font-mono text-xs text-text-secondary">
+                            {ex.targetSets}×{ex.targetReps}
+                            {ex.targetWeight ? ` · ${ex.targetWeight}kg` : ''}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
 
                   {/* 空狀態 */}
                   {day.exercises.length === 0 && (
@@ -404,7 +424,13 @@ export default function PlanDetail() {
                           <button
                             key={ex.id}
                             onClick={() => {
-                              addExerciseToDay(plan.id, day.id, ex.id);
+                              addExerciseToDay(plan.id, day.id, ex.id, {
+                                definition: {
+                                  name: ex.name,
+                                  muscleGroup: ex.muscleGroup as MuscleGroup,
+                                  equipmentType: ex.equipmentType as EquipmentType,
+                                },
+                              });
                               setToast(`已加入「${ex.name}」`);
                               setPickerDayId(null);
                             }}
