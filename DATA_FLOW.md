@@ -356,8 +356,8 @@ style={{ color: colors.buttonFg }} 等
 ```
 app start
   │
-  ├─ trialStore（v5）→ 計算試用階段
-  │    Stage 0-4：2→4→8→15→31→永久天數
+  ├─ trialStore（v6）→ 計算試用階段
+  │    Stage 0-3：1/7/30/永久天數（T1）；stage 0 免碼升級
   │    數字碼驗證（usedCodes persist）
   │
   └─ profileStore.onboardingCompleted
@@ -365,7 +365,87 @@ app start
        └─ true → 進入主畫面
 ```
 
-## 11. 禁止的資料流
+## 10. PR 慶祝流程（T4 / L5）
+
+```
+set 完成（ExerciseSetList）
+  │
+  ├─ checkPRBreakthrough(set)：比對當前 PR（weighted → 1RM；bodyweight → reps）
+  │   破紀錄 → flashPRCelebration(setId)
+  │     ├─ set 行顯示 🎉 + animate-confetti CSS（1.5s 自動消失）
+  │     └─ 純 UI 事件，不呼叫 telemetry（L5 規則 1）
+  │
+  └─ toggleSetCompleted + auto-start restTimer（T3 dock）
+
+finishSession → settleAll(rewardCtx)
+  │
+  └─ 第 5 節：PR 破紀錄 telemetry
+       ├─ getSessionPRs(lastSession)
+       ├─ prevPRs = personalRecords.filter(pr => pr.date !== rewardCtx.date)
+       ├─ 逐筆比對（repPR 或 estimated1RM）
+       └─ telemetry.log('pr_celebrated', { exerciseId, isBodyweight })
+
+WorkoutSummary mount
+  │
+  └─ 計算 newRecords = sessionPRs 中比 prevPRs 進步者
+       └─ 顯示「新紀錄」卡（old → new 對比）
+```
+
+**L5 規則**：即時微慶祝僅觸發動畫；telemetry 一律走 settleAll 第 5 節；`silent: true` 時不觸發。
+
+## 12. 週報觸發流程（T5）
+
+```
+App.tsx mount
+  │
+  ├─ currentWeek = getISOWeek(new Date())
+  ├─ weeklyReportSeenWeek !== currentWeek？
+  │    │ 是
+  │    └─ 檢查上週是否有 session
+  │         ├─ lastWeekStart = getWeekStart(now, -1)
+  │         ├─ lastWeekEnd = addDays(lastWeekStart, 7)
+  │         ├─ sessions.some(d >= lastWeekStart && d < lastWeekEnd)？
+  │         │    是 → setShowWeeklyReport(true) + markWeeklyReportSeen(currentWeek)
+  │         │    否 → 不彈（本週不再檢查）
+  │
+  └─ WeeklyReportModal（weekOffset = -1）
+       ├─ computeWeeklyReport(sessions, cardioSessions, achievementUnlocks, -1)
+       │    ├─ filterWeekSessions（上週區間）
+       │    ├─ totalVolume / volumeDelta（vs 上上週）
+       │    ├─ prs = weekSessions.flatMap(getSessionPRs)
+       │    ├─ achievementsUnlocked（unlockedAt 落在上週區間）
+       │    ├─ streak = getStreakDays(sessions, cardioSessions)（全域，非只本週）
+       │    └─ partnerMessage = generatePartnerMessage（規則式，休息週不羞辱）
+       │
+       └─ 內建歷週導覽（‹ ›）→ setOffset（每次重算）
+```
+
+**L1 規則**：`computeWeeklyReport` 全派生不 persist；唯一 persist 的是 `weeklyReportSeenWeek`（「是否顯示過」事實）。
+
+## 13. 月曆 planSnapshot 流（T6）
+
+```
+startSession(planId, dayId)
+  │
+  └─ session.planSnapshot = { planId, dayId, dayName }（原始事實，persist）
+
+workoutStore migrate v8→v9
+  │
+  └─ 舊 session 補 planSnapshot = null（顯示「自由訓練」）
+
+TrainingCalendar（Progress 頁）
+  │
+  ├─ sessionMap = Map(date → session)
+  ├─ 訓練日 → accent 點；今天 → ring
+  └─ 點擊某天 → bottom sheet
+       ├─ planSnapshot 存在 → dayName（如「PPL · 拉日 B」）
+       ├─ imported === true → 「歷史記錄」
+       ├─ 兩者皆無 → 「自由訓練」
+       ├─ 動作 chips（Badge）
+       └─ 統計：總噸數（calculateTotalVolume）+ PR 數（getSessionPRs）
+```
+
+## 14. 禁止的資料流
 
 - 直接在元件內 inline 計算統計（應走 selectors）
 - 直接在元件內 inline 查分類（應走 taxonomy 權威）
@@ -375,5 +455,7 @@ app start
 - **persist 熱量／MET 計算結果**（strengthKcal / cardio fallback kcal / low/high/activeMin/restMin/isFallback）；`CardioSession.kcal` 只有用戶手動輸入的機器讀數可 persist（事實定義，詳 §1 與 CALORIE_MODEL.md §4.1）
 - 更換 persist key 造成資料丟失
 - 改休息計時行為或成就目錄數值（58 個；新 +9 cardio 成就不碰 58 舊）
+- 改 T3 計時器架構行為（dock card + mini bar + restTimerStore；auto-start/±15s/暫停/音效/震動零變化）
+- persist 週報衍生數據（computeWeeklyReport 全派生；僅 weeklyReportSeenWeek 可 persist）
 - 在 C1–C8 之外新增功能或重構
 - 醫療級宣稱；穿戴裝置整合（心率帶、手錶、功率計皆不做）

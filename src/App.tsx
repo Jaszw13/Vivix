@@ -15,9 +15,14 @@ import Settings from '@/pages/Settings';
 import { PartnerPage } from '@/features/partner/components/PartnerPage';
 import { TrialLock } from '@/components/TrialLock';
 import { FeedbackModal } from '@/components/FeedbackModal';
+import { WeeklyReportModal } from '@/components/WeeklyReportModal';
+import { MiniTimerBar } from '@/components/layout/MiniTimerBar';
 import { useTrialStore } from '@/store/trialStore';
 import { useProfileStore } from '@/store/profileStore';
+import { useWorkoutStore } from '@/store/workoutStore';
+import { useRestTimerStore } from '@/store/restTimerStore';
 import { settleOnLoad } from '@/features/stats/settleAll';
+import { getISOWeek, getWeekStart, addDays } from '@/utils/time';
 
 /**
  * App 級 ErrorBoundary：
@@ -127,20 +132,52 @@ function AppContent() {
   const { shouldShowFeedback } = useTrialStore();
   // AppContent 唔再需要讀 onboardingCompleted，守衛各自讀取，避免同一 state 變化導致雙重 re-render 干擾路由
   const [showFeedback, setShowFeedback] = useState(false);
+  // T5：週報自動彈窗
+  const weeklyReportSeenWeek = useProfileStore((s) => s.weeklyReportSeenWeek);
+  const markWeeklyReportSeen = useProfileStore((s) => s.markWeeklyReportSeen);
+  const [showWeeklyReport, setShowWeeklyReport] = useState(false);
 
-  // 啟動時檢查是否需要顯示反饋
+  // 啟動時：孤兒 key 清理 + 補結算 + 週報觸發
   useEffect(() => {
     // R-3：C4 後 equipment memory 改派生，清理 v2 前遺留孤兒 key（一次性、冪等）
     try { localStorage.removeItem('vivix-equipment-memory'); } catch {}
     // C5：載入後一次性補結算（silent — 不彈慶祝，僅補解锁）
     settleOnLoad();
+
+    // T5：新週首次打開 → 彈出上週報告（僅當上週 ≥1 session）
+    const currentWeek = getISOWeek(new Date());
+    if (weeklyReportSeenWeek !== currentWeek) {
+      const sessions = useWorkoutStore.getState().sessions;
+      const lastWeekStart = getWeekStart(new Date(), -1);
+      const lastWeekEnd = addDays(lastWeekStart, 7);
+      const hasLastWeekSession = sessions.some((s) => {
+        const d = new Date(s.date);
+        return d >= lastWeekStart && d < lastWeekEnd;
+      });
+      if (hasLastWeekSession) {
+        setShowWeeklyReport(true);
+        markWeeklyReportSeen(currentWeek);
+      }
+    }
+  }, [weeklyReportSeenWeek, markWeeklyReportSeen]);
+
+  // 反饋彈窗：週報顯示中則延後
+  useEffect(() => {
+    if (showWeeklyReport) return;
     const timer = setTimeout(() => {
       if (shouldShowFeedback()) {
         setShowFeedback(true);
       }
     }, 2000); // 延遲 2 秒，避免一開啟就彈出
     return () => clearTimeout(timer);
-  }, [shouldShowFeedback]);
+  }, [shouldShowFeedback, showWeeklyReport]);
+
+  // T3：全局 rest timer ticker（100ms；tick 只在狀態轉移時 set，不觸發頻繁 re-render）
+  useEffect(() => {
+    const tick = useRestTimerStore.getState().tick;
+    const id = setInterval(tick, 100);
+    return () => clearInterval(id);
+  }, []);
 
   return (
     <>
@@ -159,6 +196,12 @@ function AppContent() {
         <Route path="/partner" element={<PartnerPage />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
+      <MiniTimerBar />
+      <WeeklyReportModal
+        open={showWeeklyReport}
+        onClose={() => setShowWeeklyReport(false)}
+        weekOffset={-1}
+      />
       <FeedbackModal show={showFeedback} />
     </>
   );

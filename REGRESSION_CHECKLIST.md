@@ -327,3 +327,72 @@ npx vite build
 - [ ] `npx vite build` → ✓ built 成功，**PWA precache entries ≥ 16**（E9 刪括號，改 ≥ 16）
 - [ ] 無新 dependencies（package.json dependencies/devDependencies 長度未擴增；禁 xlsx / papaparse / nanoid）
 - [ ] `mobile-app/`：完全未修改（FROZEN.md 合規）
+
+## 15. 用戶回饋 v1 回歸（T1–T6）
+
+對應《Vivix 用戶回饋整合 v1.docx》驗收矩陣。
+
+### 15.1 T1 試用 4 階段
+
+- [ ] `trialStore` version === 6；STAGES 長度 = 4（1/7/30/永久）
+- [ ] stage 0 免碼直接升級；redeemCode 正確推進階段
+- [ ] 舊用戶（v5 5階段）migrate 後正確對應新 4 階段
+
+### 15.2 T2 0kg + 次數 PR + planSnapshot
+
+- [ ] 重量輸入可為 0（ExerciseSetList / AddExerciseSheet `min=0`）
+- [ ] 引體上升 weight=0 × 12 reps → PR 顯示「BW × 12」
+- [ ] 同動作下次做 15 reps → PR 更新為 15
+- [ ] weighted 與 bodyweight PR 獨立計算（key 加 `-bw` 後綴）
+- [ ] Dashboard top 5 PR 排除 weight=0（避免混淆 1RM 排行）
+- [ ] 既有 weighted PR 不消失（migrate 保留）
+- [ ] `WorkoutSession.planSnapshot` 欄位存在；startSession 寫入 `{ planId, dayId, dayName }`
+
+### 15.3 T3 計時器架構
+
+- [ ] 完成一組 → 底部 sticky card 自動開始計時
+- [ ] ±15s / 暫停 / 繼續正常
+- [ ] 離開 Workout 頁 → 底部顯示 mini bar
+- [ ] 點擊 mini bar「返回訓練」→ 回到 Workout 頁
+- [ ] 音效 / 震動保留（timerFeedback.ts）
+- [ ] 最後 3 秒預熱保留
+- [ ] `restTimerStore` 不 persist；timestamp-based
+
+### 15.4 T4 破 PR 兩層慶祝
+
+- [ ] 破 PR 時 set 行顯示 🎉 + confetti 動畫 1.5s
+- [ ] 動畫結束後消失，不影響後續操作
+- [ ] WorkoutSummary 顯示新紀錄卡（old → new）
+- [ ] telemetry 記錄 `pr_celebrated` 事件（settleAll 第 5 節）
+- [ ] 一次 finish 仍只一批成就慶祝（L3 不破）
+- [ ] `silent: true` 時不觸發 pr_celebrated
+
+### 15.5 T5 週報
+
+- [ ] 新週首次打開 → 自動彈出上週報告（僅當上週 ≥1 session）
+- [ ] 報告內容：次數／天數／噸數／vs 上週 %／PR／成就／streak／Partner 一句話
+- [ ] Partner 文案規則正確（休息週不羞辱）
+- [ ] 關閉後本週不再彈（weeklyReportSeenWeek persist）
+- [ ] Progress 可回看歷週（‹ › 導覽）
+- [ ] `computeWeeklyReport` 純函數；不 persist 衍生數據
+
+### 15.6 T6 月曆
+
+- [ ] 月曆正確顯示（含閏年／月份切換）
+- [ ] 已練日期顯示 accent 點
+- [ ] 今天顯示 ring
+- [ ] 點擊某天 → sheet 顯示：計畫日名 or「自由訓練」or「歷史記錄」+ 動作 chips + 總噸數 + PR 數
+- [ ] imported session 顯示「歷史記錄」
+- [ ] 舊 session（無 planSnapshot）顯示「自由訓練」
+
+### 15.7 全局守門（AC）
+
+- [ ] AC-T1: trialStore version === 6；STAGES = 4
+- [ ] AC-T2: PersonalRecord 有 repPR?；getSessionPRs 分兩路
+- [ ] AC-T3: restTimerStore 存在；不 persist；timestamp-based
+- [ ] AC-T4: ExerciseSetList 有 confetti；WorkoutSummary 有新紀錄卡
+- [ ] AC-T5: profileStore.weeklyReportSeenWeek 存在；computeWeeklyReport 純函數
+- [ ] AC-T6: WorkoutSession.planSnapshot 可選；TrainingCalendar 元件存在
+- [ ] AC-BUILD: tsc 0 errors；vite build 成功；precache ≥ 16
+- [ ] AC-NOREG: 休息計時行為（auto-start/±15s/暫停/音效）零變化
+- [ ] AC-GREP: `grep "as any" src` = 0；`grep "#[0-9a-f]{6}" src/components` = 0；非空斷言 = 0

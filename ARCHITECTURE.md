@@ -78,15 +78,17 @@ RecognitionModal 每匯入批次一次（E8，非 ever-once）
                 │ read-only hooks
 ┌───────────────▼──────────────────────────────────────────┐
 │  Components（src/components, src/features/*/components）  │
-│  Card / Badge / RestTimer / AchievementBadge ...        │
+│  Card / Badge / RestTimer / MiniTimerBar /             │
+│  WeeklyReportModal / TrainingCalendar / ...            │
 └───────────────┬──────────────────────────────────────────┘
                 │
 ┌───────────────▼──────────────────────────────────────────┐
 │  權威模組層（Authoritative Modules）                      │
 │  • exercises/taxonomy.ts   分類權威                       │
 │  • stats/selectors.ts      統計權威（streak/PR/group...） │
-│  • stats/settleAll.ts      編排權威（L3 唯一入口）        │
+│  • stats/settleAll.ts      跨排權威（L3 唯一入口）        │
 │  • stats/energy.ts         熱量估算權威（雙段 MET）       │
+│  • stats/weeklyReport.ts   週報派生權威（T5）             │
 │  • data/metTable.ts        MET 常數權威（Compendium）     │
 │  • utils/time.ts           時間常數權威                   │
 │  • utils/format.ts         日期格式權威                   │
@@ -98,7 +100,7 @@ RecognitionModal 每匯入批次一次（E8，非 ever-once）
 │  workoutStore / achievementsStore / questStore /         │
 │  partnerStore / profileStore / equipmentMemoryStore /   │
 │  cardioStore / plansStore / themeStore / trialStore /   │
-│  featureFlags
+│  featureFlags / restTimerStore（不 persist）             │
 └───────────────┬──────────────────────────────────────────┘
                 │ persist (localStorage)
 ┌───────────────▼──────────────────────────────────────────┐
@@ -114,11 +116,12 @@ RecognitionModal 每匯入批次一次（E8，非 ever-once）
 | 模組 | 職責 | 唯一性保證 |
 |------|------|-----------|
 | `src/features/exercises/taxonomy.ts` | `resolveCurrentTaxonomy` / `resolveExerciseSnapshot` / `getAllExercisesWith` / `findExerciseById` | `workoutStore.ts` re-export 保持 import 兼容；所有分類查找皆 import 本模組 |
-| `src/utils/time.ts` | `DAY_MS` / `WEEK_MS` / `FOURTEEN_DAYS_MS` / `dayKey` / `diffDays` | grep `86400000` 僅出現於此 |
+| `src/utils/time.ts` | `DAY_MS` / `WEEK_MS` / `FOURTEEN_DAYS_MS` / `dayKey` / `diffDays` / `addDays` / `getISOWeek` / `getWeekStart`（T5 週報用） | grep `86400000` 僅出現於此 |
 | `src/utils/format.ts` | `formatDateShort` / `formatDateFull` / `formatUnlockDate` / `formatWeekdayShort` | grep `toLocaleDateString` 於 pages/components = 0 |
 | `src/data/theme.ts` | `REST_TIMER_THEME` / `THEME_DEFINITIONS` / `CHART_WEEK_COLORS` / `OVERLAY_SCRIM` | grep hex 於 components/pages = 0 |
 | `src/features/stats/selectors.ts` | `getStreakDays`（D1 + E-D3 union 語義：力量日 ∪ 有氧日）；熱量統計（每週力量/有氧 kcal、總和）同源於本檔；PR／groupStats／volume 現仍為 workoutStore 單一函數（`computePRsFromSessions`／`getGroupStats`），無重複實作；漸進移入為 backlog B-01 | store/元件不得 inline 重算 |
-| `src/features/stats/settleAll.ts` | `settleAll` / `settleTaxonomyChange` / `settleOnLoad`；cardio metrics 納入 buildAchieveCtx；有氧日 XP（20/日上限 1 次）；streak union 所有消費端 | 跨 store 結算唯一入口（L3） |
+| `src/features/stats/settleAll.ts` | `settleAll` / `settleTaxonomyChange` / `settleOnLoad`；cardio metrics 納入 buildAchieveCtx；有氧日 XP（20/日上限 1 次）；streak union 所有消費端；T4 `pr_celebrated` telemetry 第 5 節 | 跨 store 結算唯一入口（L3） |
+| `src/features/stats/weeklyReport.ts` | `computeWeeklyReport`（純函數；全派生不 persist）、`generatePartnerMessage`（規則式文案） | T5 週報唯一計算來源；元件禁止 inline |
 | `src/features/stats/energy.ts` | `estimateStrengthKcal`（雙段 MET，null＝體重未填）；`estimateCardioKcal`（用戶 kcal 優先，否則 MET fallback，null＝體重未填且無 kcal）；純函式 | 僅 selectors.ts 消費；元件禁止 inline import |
 | `src/data/metTable.ts` | `STRENGTH_ACTIVE_MET` / `CARDIO_MET` / `REST_MET` / `CALORIE_ERROR_BAND_LOW|HIGH` / `FALLBACK_*_SECONDS`；fetchedAt = 2026-08-16（2024 Compendium 查證） | 常數單一來源；禁止散落常數 |
 
@@ -258,8 +261,8 @@ metric 擴充：`cardioMinutesTotal` / `cardioSessionsTotal` / `cardioWeeklyRhyt
 
 ## 10. 試用鎖與 Onboarding
 
-- 試用：5 階段漸進解鎖（2→4→8→15→31→永久天數），數字碼驗證
-- `trialStore` v5；persist key `vivix-trial-*` 不變
+- 試用：4 階段漸進解鎖（1/7/30/永久天數），數字碼驗證；stage 0 免碼直接升級（T1）
+- `trialStore` v6；persist key `vivix-trial-*` 不變
 - Onboarding：首次啟動流程，完成後 `profileStore.onboardingCompleted = true`
 - 試用續用碼本期保留；商業化前移 env（D6，寫入 DEV_RULES，本期不動）
 
@@ -280,6 +283,31 @@ metric 擴充：`cardioMinutesTotal` / `cardioSessionsTotal` / `cardioWeeklyRhyt
 
 ## 13. 完成一組 → 休息計時（不可破壞）
 
-- 像素與行為皆不變
+- T3 架構升級：RestTimer 改為 Workout 頁底部 sticky 內嵌卡片（dock）；離開頁面顯示全局 `MiniTimerBar`
+- `restTimerStore`（不 persist）：timestamp-based 純 UI 狀態；全局 ticker 100ms 在 App.tsx
+- `timerFeedback.ts`：完成反饋（音效＋震動）邏輯模組化，使 store 在計時完成時也能觸發
+- 像素與行為皆不變：auto-start / ±15s / 暫停 / 音效 / 震動 / 最後 3 秒預熱零變化
 - `RestTimer` 顏色讀 `REST_TIMER_THEME.buttonFg`（原硬編碼 `#FFF` / `#0A0A0B`）
 - 任何修改不得改變此體驗
+
+## 14. PR 兩層慶祝（T4 / L5）
+
+- **即時微慶祝**：`ExerciseSetList` 偵測破 PR → set 行 `animate-confetti` CSS 動畫（1.5s 非阻斷）
+- **總結慶祝**：`WorkoutSummary` 新紀錄卡（old → new 對比；weighted 看 1RM，bodyweight 看 reps）
+- **telemetry**：`pr_celebrated` 在 `settleAll` 第 5 節統一 log（不經 UI 層）
+- `getSessionPRs` 分兩路：weighted（estimated1RM）vs bodyweight（repPR，key 加 `-bw` 後綴）
+
+## 15. 週報（T5）
+
+- `computeWeeklyReport`（`features/stats/weeklyReport.ts`）：純函數，全派生不 persist
+- `profileStore.weeklyReportSeenWeek`（v4）：記錄「是否顯示過」防重複彈窗（唯一 persist 的事實）
+- 自動觸發：App.tsx mount 時檢查 `weeklyReportSeenWeek !== currentWeek` 且上週有 session → 彈出上週報告
+- `WeeklyReportModal`：bottom sheet；內建歷週導覽（‹ ›）；Progress 頁有「歷週訓練報告」入口
+- Partner 文案規則：休息週不羞辱（「這週休息也很好，下週繼續。」）
+
+## 16. 月曆（T6）
+
+- `TrainingCalendar`（`components/progress/TrainingCalendar.tsx`）：月曆網格；訓練日 accent 點；今天 ring
+- 點擊某天 → bottom sheet 顯示：planSnapshot.dayName / 「歷史記錄」（imported）/ 「自由訓練」（null）+ 動作 chips + 總噸數 + PR 數
+- `WorkoutSession.planSnapshot`：startSession 時寫入 `{ planId, dayId, dayName }`；舊 session migrate 補 null
+- Progress 頁月份切換（‹ ›）；不 persist calendar state（每次進頁預設當月）

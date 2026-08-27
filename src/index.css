@@ -150,3 +150,13 @@ select:focus {
   font-family: "JetBrains Mono", monospace;
   font-variant-numeric: tabular-nums;
 }
+
+/* T4：破 PR 即時微慶祝動畫（L5 慶祝律；非阻斷，1.5s 自動消失） */
+@keyframes confetti {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.85; }
+  100% { transform: scale(1); opacity: 0; }
+}
+.animate-confetti {
+  animation: confetti 1.5s ease-out;
+}

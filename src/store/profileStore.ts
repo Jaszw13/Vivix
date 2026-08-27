@@ -25,10 +25,14 @@ interface ProfileState {
   onboardingCompleted: boolean;
   /** onboarding 中選擇的目標 */
   goal: TrainingGoalValue | null;
+  /** T5：本週已顯示過週報的 ISO 週序號（防重複彈窗）；null=從未顯示 */
+  weeklyReportSeenWeek: string | null;
   updateProfile: (patch: Partial<UserProfile>) => void;
   completeOnboarding: (goal: TrainingGoalValue) => void;
   resetOnboarding: () => void;
   resetAllData: () => void;
+  /** T5：標記某週的週報已顯示 */
+  markWeeklyReportSeen: (weekKey: string) => void;
 }
 
 const defaultProfile: UserProfile = {
@@ -46,8 +50,10 @@ export const useProfileStore = create<ProfileState>()(
       profile: defaultProfile,
       onboardingCompleted: false,
       goal: null,
+      weeklyReportSeenWeek: null,
       updateProfile: (patch) =>
         set((state) => ({ profile: { ...state.profile, ...patch } })),
+      markWeeklyReportSeen: (weekKey) => set({ weeklyReportSeenWeek: weekKey }),
       completeOnboarding: (goal) => {
         // onboarding 完成後，順便把名字更新得更個人化
         const stored = localStorage.getItem('ironpulse-profile');
@@ -71,6 +77,7 @@ export const useProfileStore = create<ProfileState>()(
           profile: { ...defaultProfile, createdAt: new Date().toISOString() },
           onboardingCompleted: false,
           goal: null,
+          weeklyReportSeenWeek: null,
         });
         // 重新載入以重置所有 store
         window.location.reload();
@@ -78,11 +85,12 @@ export const useProfileStore = create<ProfileState>()(
     }),
     {
       name: 'ironpulse-profile',
-      version: 3,
+      version: 4,
       partialize: (state) => ({
         profile: state.profile,
         onboardingCompleted: state.onboardingCompleted,
         goal: state.goal,
+        weeklyReportSeenWeek: state.weeklyReportSeenWeek,
       }),
       // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
       onRehydrateStorage: () => {
@@ -129,10 +137,16 @@ export const useProfileStore = create<ProfileState>()(
           raw.goal === 'muscle' || raw.goal === 'fatloss' || raw.goal === 'health'
             ? raw.goal
             : null;
+        // T5 v3→v4：補 weeklyReportSeenWeek（null = 從未顯示）
+        const weeklyReportSeenWeek: string | null =
+          typeof raw.weeklyReportSeenWeek === 'string'
+            ? raw.weeklyReportSeenWeek
+            : null;
         return {
           profile: migratedProfile,
           onboardingCompleted,
           goal,
+          weeklyReportSeenWeek,
         };
       },
     }

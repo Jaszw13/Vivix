@@ -20,6 +20,8 @@ import { Trophy, TrendingUp, BarChart3, AlertCircle, Dumbbell, Activity, Plus, X
 import { PageShell } from '@/components/layout/PageShell';
 import { Card, SectionHeader, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { WeeklyReportModal } from '@/components/WeeklyReportModal';
+import { TrainingCalendar } from '@/components/progress/TrainingCalendar';
 import { useWorkoutStore, getAllExercises } from '@/store/workoutStore';
 import { useProfileStore } from '@/store/profileStore';
 import { useCardioStore } from '@/store/cardioStore';
@@ -56,6 +58,12 @@ export default function Progress() {
   const deleteCardio = useCardioStore((s) => s.deleteCardio);
   const [cardioAddOpen, setCardioAddOpen] = useState(false);
   const WEEK_COLORS = CHART_WEEK_COLORS;
+  // T5：歷週報告
+  const [showReport, setShowReport] = useState(false);
+  const [reportWeekOffset, setReportWeekOffset] = useState(-1);
+  // T6：月曆
+  const [calendarYear, setCalendarYear] = useState(new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState(new Date().getMonth());
 
   // T-02：部位 selector（'all' 代表全局）
   const [scope, setScope] = useState<ProgressScope>('all');
@@ -196,6 +204,63 @@ export default function Progress() {
 
   return (
     <PageShell title="進度追蹤">
+      {/* ===== T5 歷週報告入口 ===== */}
+      <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="mb-4">
+        <button
+          onClick={() => {
+            setReportWeekOffset(-1);
+            setShowReport(true);
+          }}
+          className="w-full flex items-center justify-between p-3 rounded-card border border-border/40 bg-bg-card hover:border-accent/40 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <BarChart3 size={18} className="text-accent" />
+            <span className="text-sm font-bold text-text-primary">歷週訓練報告</span>
+          </div>
+          <span className="text-[10px] uppercase tracking-widest text-text-secondary">
+            查看 ›
+          </span>
+        </button>
+      </motion.div>
+
+      {/* ===== T6 月曆 ===== */}
+      <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="mb-5">
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <button
+              onClick={() => {
+                if (calendarMonth === 0) {
+                  setCalendarMonth(11);
+                  setCalendarYear((y) => y - 1);
+                } else {
+                  setCalendarMonth((m) => m - 1);
+                }
+              }}
+              className="w-8 h-8 flex items-center justify-center text-text-secondary hover:text-accent transition-colors"
+            >
+              ‹
+            </button>
+            <h3 className="font-display text-base tracking-wide uppercase text-text-primary">
+              {calendarYear} 年 {calendarMonth + 1} 月
+            </h3>
+            <button
+              onClick={() => {
+                if (calendarMonth === 11) {
+                  setCalendarMonth(0);
+                  setCalendarYear((y) => y + 1);
+                } else {
+                  setCalendarMonth((m) => m + 1);
+                }
+              }}
+              className="w-8 h-8 flex items-center justify-center text-text-secondary hover:text-accent transition-colors"
+            >
+              ›
+            </button>
+          </div>
+          <TrainingCalendar year={calendarYear} month={calendarMonth} />
+        </Card>
+      </motion.div>
+
       {/* ===== 部位 selector（T-02 新增） ===== */}
       <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="mb-5">
         <p className="text-[10px] uppercase tracking-widest text-text-secondary mb-2">
@@ -330,7 +395,12 @@ export default function Progress() {
                       {pr.exerciseName}
                     </div>
                     <div className="font-mono text-[10px] text-text-secondary flex items-center gap-2 flex-wrap">
-                      <span>{pr.weight}kg × {pr.reps} · {formatDate(pr.date)}</span>
+                      <span>
+                        {pr.repPR !== undefined
+                          ? `BW × ${pr.repPR} reps`
+                          : `${pr.weight}kg × ${pr.reps}`}
+                        {' · '}{formatDate(pr.date)}
+                      </span>
                       {mg && (
                         <Badge variant="auxiliary" className="!py-0 !text-[9px]">
                           {MUSCLE_GROUP_LABELS[mg]}
@@ -344,12 +414,25 @@ export default function Progress() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-mono text-lg font-bold text-accent">
-                      {pr.estimated1RM}
-                    </div>
-                    <div className="text-[9px] uppercase tracking-widest text-text-secondary">
-                      1RM kg
-                    </div>
+                    {pr.repPR !== undefined ? (
+                      <>
+                        <div className="font-mono text-lg font-bold text-accent">
+                          {pr.repPR}
+                        </div>
+                        <div className="text-[9px] uppercase tracking-widest text-text-secondary">
+                          reps
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="font-mono text-lg font-bold text-accent">
+                          {pr.estimated1RM}
+                        </div>
+                        <div className="text-[9px] uppercase tracking-widest text-text-secondary">
+                          1RM kg
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               );
@@ -831,6 +914,13 @@ export default function Progress() {
         open={cardioAddOpen}
         onClose={() => setCardioAddOpen(false)}
         onSubmit={(payload) => { addCardio(payload); setCardioAddOpen(false); }}
+      />
+
+      {/* T5：歷週報告 Modal */}
+      <WeeklyReportModal
+        open={showReport}
+        onClose={() => setShowReport(false)}
+        weekOffset={reportWeekOffset}
       />
     </PageShell>
   );

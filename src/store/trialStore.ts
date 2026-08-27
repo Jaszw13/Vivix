@@ -10,24 +10,20 @@ export interface TrialStage {
   code?: string;
 }
 
-// 標準模式：天數 （2026-08-11 調整：Stage 0-4 全數 +1，Stage 5 永久保持 -1）
+// P-7：4 階段試用（1/7/30/永久）；stage 0 免碼首日即用
 export const STANDARD_STAGES: TrialStage[] = [
-  { durationMs: 2 * DAY_MS, label: '首次試用' }, // Stage 0: 1→2 天
-  { durationMs: 4 * DAY_MS, label: '第二階段', code: '547' }, // Stage 1: 3→4 天
-  { durationMs: 8 * DAY_MS, label: '第三階段', code: '2678' }, // Stage 2: 7→8 天
-  { durationMs: 15 * DAY_MS, label: '第四階段', code: '91431' }, // Stage 3: 14→15 天
-  { durationMs: 31 * DAY_MS, label: '第五階段', code: '695497' }, // Stage 4: 30→31 天
-  { durationMs: -1, label: '永久會員', code: 'IRON-ETERNAL' }, // Stage 5: 永久，不變
+  { durationMs: 1 * DAY_MS, label: '首日體驗' }, // Stage 0: 1 天，免碼
+  { durationMs: 7 * DAY_MS, label: '一週試用', code: '91531' }, // Stage 1: 7 天
+  { durationMs: 30 * DAY_MS, label: '一月深度', code: '695497' }, // Stage 2: 30 天
+  { durationMs: -1, label: '永久夥伴', code: 'Vivix-Eternal' }, // Stage 3: 永久
 ];
 
 // 開發測試模式：每階段 1 分鐘
 export const DEV_STAGES: TrialStage[] = [
-  { durationMs: 60 * 1000, label: '[DEV] 首次試用' },
-  { durationMs: 60 * 1000, label: '[DEV] 第二階段', code: '547' },
-  { durationMs: 60 * 1000, label: '[DEV] 第三階段', code: '2678' },
-  { durationMs: 60 * 1000, label: '[DEV] 第四階段', code: '91431' },
-  { durationMs: 60 * 1000, label: '[DEV] 第五階段', code: '695497' },
-  { durationMs: -1, label: '[DEV] 永久會員', code: 'IRON-ETERNAL' },
+  { durationMs: 60 * 1000, label: '[DEV] 首日體驗' },
+  { durationMs: 60 * 1000, label: '[DEV] 一週試用', code: '91531' },
+  { durationMs: 60 * 1000, label: '[DEV] 一月深度', code: '695497' },
+  { durationMs: -1, label: '[DEV] 永久夥伴', code: 'Vivix-Eternal' },
 ];
 
 // 反饋間隔
@@ -129,13 +125,35 @@ export const useTrialStore = create<TrialState>()(
           return { success: false, message: '已是永久會員，無需續用' };
         }
 
-        const trimmed = code.trim();
         const stages = getStages(state);
         const nextStage = stages[currentStage + 1];
 
-        if (!nextStage || !nextStage.code) {
+        if (!nextStage) {
           return { success: false, message: '無下一階段可解鎖' };
         }
+
+        // P-7：stage 0→1 免碼直接升級（首日體驗 → 一週試用）
+        if (currentStage === 0) {
+          const newExpiresAt =
+            nextStage.durationMs === -1 ? null : addIso(nextStage.durationMs);
+          set({
+            currentStage: 1,
+            expiresAt: newExpiresAt,
+            lastFeedbackAt: null,
+            feedbackDismissedAt: null,
+          });
+          return {
+            success: true,
+            message: `已解鎖 ${nextStage.label} · ${(nextStage.durationMs / DAY_MS).toFixed(0)} 天`,
+          };
+        }
+
+        // stage 1+ 需對應碼
+        if (!nextStage.code) {
+          return { success: false, message: '無下一階段可解鎖' };
+        }
+
+        const trimmed = code.trim();
 
         if (trimmed !== nextStage.code) {
           return { success: false, message: '續用碼無效' };
@@ -301,7 +319,7 @@ export const useTrialStore = create<TrialState>()(
     }),
     {
       name: 'ironpulse-trial',
-      version: 5,
+      version: 6,
       // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
       onRehydrateStorage: () => {
         return (state, error) => {
@@ -315,36 +333,31 @@ export const useTrialStore = create<TrialState>()(
       },
       migrate: (persistedState, version) => {
         const s = (persistedState ?? {}) as Partial<TrialState>;
-        // v2: HMAC 版；v3: 明文碼；v4: 新增 Stage 1（3天/547）；
-        // v5: Stage 0-4 天數全部 +1（詳見 STANDARD_STAGES 注釋）。
+        // v2: HMAC 版；v3: 明文碼；v4: 新增 Stage 1；v5: Stage 0-4 +1天
+        // v6: P-7 4 階段（1/7/30/永久）；舊 stage 等價映射
         const usedCodes =
           (s as { usedCodes?: string[] }).usedCodes ??
           ((s as { usedSignatures?: string[] }).usedSignatures ?? []);
-        // v3→v4 / v4→v5：唔會重置舊用戶 expiresAt，避免用戶突然被減少天數 / 提前到期。
-        //   只會對 **新 redeem 續用碼** 採用新 stage duration（redeemCode 內讀 STANDARD_STAGES）。
-        const resetStage = version < 4;
-        // v5：如果舊 expiresAt 仍然未到期就原狀保留；如果到期咗就跟新 Stage 0 重新給 2 天（遷移當日即生效的優惠）。
+        const oldStage = typeof s.currentStage === 'number' ? s.currentStage : 0;
+        // 等價映射（按天數）：
+        // 舊 stage 0 (2天) → 新 stage 0 (1天)
+        // 舊 stage 1 (4天) / stage 2 (8天) → 新 stage 1 (7天)
+        // 舊 stage 3 (15天) / stage 4 (31天) → 新 stage 2 (30天)
+        // 舊 stage 5 (永久) → 新 stage 3 (永久)
+        const newStage = oldStage === 5 ? 3 : oldStage <= 2 ? Math.min(oldStage, 1) : 2;
         const now = Date.now();
         const oldExp = s.expiresAt ? new Date(s.expiresAt).getTime() : null;
         const stillValid = oldExp !== null && oldExp >= now;
+        const stages = STANDARD_STAGES;
+        const newStageDef = stages[newStage] ?? stages[0];
         return {
           deviceId: s.deviceId || generateDeviceId(),
-          installedAt: resetStage
-            ? new Date().toISOString()
-            : s.installedAt || new Date().toISOString(),
-          currentStage: resetStage
-            ? 0
-            : typeof s.currentStage === 'number'
-              ? s.currentStage
-              : 0,
-          expiresAt: resetStage
-            ? addIso(2 * DAY_MS)
-            : version < 5
-              ? stillValid
-                ? s.expiresAt // 舊用戶仲有效 → 保留原本到期日
-                : addIso(2 * DAY_MS) // 舊用戶過期咗 → 補償式俾 2 天 Stage 0 新 duration
-              : s.expiresAt || null,
-          usedCodes: resetStage ? [] : usedCodes,
+          installedAt: s.installedAt || new Date().toISOString(),
+          currentStage: newStage,
+          expiresAt: stillValid
+            ? s.expiresAt
+            : newStageDef.durationMs === -1 ? null : addIso(newStageDef.durationMs),
+          usedCodes: usedCodes,
           lastFeedbackAt: s.lastFeedbackAt || null,
           feedbackCount: typeof s.feedbackCount === 'number' ? s.feedbackCount : 0,
           feedbackDismissedAt: s.feedbackDismissedAt || null,

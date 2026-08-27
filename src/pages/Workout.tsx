@@ -15,6 +15,7 @@ import {
   getAllExercises,
   type CustomExercise,
 } from '@/store/workoutStore';
+import { useRestTimerStore } from '@/store/restTimerStore';
 import { useEquipmentMemoryStore } from '@/store/equipmentMemoryStore';
 import {
   exercises as builtinExercises,
@@ -49,8 +50,6 @@ export default function Workout() {
     substituteExerciseInActive,
   } = useWorkoutStore();
 
-  const [showTimer, setShowTimer] = useState(false);
-  const [timerPresetSec, setTimerPresetSec] = useState<number | undefined>(undefined);
   const [elapsed, setElapsed] = useState(0);
   const [showAddExercise, setShowAddExercise] = useState(false);
   // T-04：替換彈窗
@@ -63,6 +62,8 @@ export default function Workout() {
 
   // 完成訓練後，同步寫入器械記憶（T-06）
   const updateFromSession = useEquipmentMemoryStore((s) => s.updateFromSession);
+  // T3：rest timer 由 store 持有（dock + mini bar 共享）
+  const startRestTimer = useRestTimerStore((s) => s.start);
 
   useEffect(() => {
     if (!activeSession) {
@@ -117,8 +118,7 @@ export default function Workout() {
 
   const openWarmupTimer = (seconds: number) => {
     if (seconds <= 0) return;
-    setTimerPresetSec(seconds);
-    setShowTimer(true);
+    startRestTimer(seconds);
   };
 
   const buildPlannedExercise = (exerciseId: string, name: string): PlannedExercise => {
@@ -319,10 +319,7 @@ export default function Workout() {
                   >
                     <ExerciseSetList
                       exercise={ex}
-                      onSetCompleted={() => {
-                        setTimerPresetSec(undefined);
-                        setShowTimer(true);
-                      }}
+                      onSetCompleted={() => startRestTimer(90)}
                       onSubstitute={() => {
                         const found = getAllExercises().find((e) => e.id === ex.exerciseId);
                         const mg = (ex.muscleGroup as MuscleGroup) ??
@@ -358,6 +355,8 @@ export default function Workout() {
 
       {/* 底部操作 */}
       <div className="sticky bottom-0 -mx-4 px-2 pt-3 pb-4 bg-gradient-to-t from-bg-primary via-bg-primary to-transparent">
+        {/* T3：Docked rest timer（sticky 內嵌卡片） */}
+        <RestTimer />
         <div className="flex gap-2 w-full">
           <Button
             variant="secondary"
@@ -371,10 +370,7 @@ export default function Workout() {
           <Button
             variant="secondary"
             className="w-14 h-14 px-0 flex-shrink-0"
-            onClick={() => {
-              setTimerPresetSec(undefined);
-              setShowTimer(true);
-            }}
+            onClick={() => startRestTimer(90)}
           >
             <Timer size={18} />
           </Button>
@@ -384,19 +380,6 @@ export default function Workout() {
           </Button>
         </div>
       </div>
-
-      {/* 休息 / 熱身計時器 */}
-      <AnimatePresence>
-        {showTimer && (
-          <RestTimer
-            initialSeconds={timerPresetSec}
-            onClose={() => {
-              setShowTimer(false);
-              setTimerPresetSec(undefined);
-            }}
-          />
-        )}
-      </AnimatePresence>
 
       {/* 新增動作彈窗 */}
       <AnimatePresence>

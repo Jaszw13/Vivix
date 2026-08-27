@@ -382,7 +382,8 @@ export default function Dashboard() {
           }
         />
         <div className="flex gap-3 overflow-x-auto scrollbar-hide -mx-4 px-4 pb-1">
-          {personalRecords.slice(0, 5).map((pr, i) => (
+          {/* P-4：Dashboard top 5 PR 排除 bodyweight（weight=0），避免混淆 1RM 排行 */}
+          {personalRecords.filter((pr) => pr.weight > 0).slice(0, 5).map((pr, i) => (
             <motion.div
               key={pr.exerciseId}
               initial={{ opacity: 0, x: 20 }}

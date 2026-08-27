@@ -24,3 +24,31 @@ export function diffDays(a: Date | string, b: Date | string): number {
   const bMid = new Date(db.getFullYear(), db.getMonth(), db.getDate()).getTime();
   return Math.round((aMid - bMid) / DAY_MS);
 }
+
+/** 加減天數，回傳新 Date（不改原值） */
+export function addDays(date: Date | string, days: number): Date {
+  const d = typeof date === 'string' ? new Date(date) : new Date(date.getTime());
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+/** 取 ISO 週序號字串 "2026-W35"（週一為首日） */
+export function getISOWeek(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : new Date(date.getTime());
+  // ISO 週以週四定位年份
+  const thursday = addDays(d, 4 - ((d.getDay() + 6) % 7));
+  const year = thursday.getFullYear();
+  const jan1 = new Date(year, 0, 1);
+  const daysSinceJan1 = Math.floor((thursday.getTime() - jan1.getTime()) / DAY_MS);
+  const weekNum = Math.ceil((daysSinceJan1 + 1) / 7);
+  return `${year}-W${weekNum.toString().padStart(2, '0')}`;
+}
+
+/** 取某週的週一 00:00（本地時區）；weekOffset=0 為本週，-1 為上週 */
+export function getWeekStart(date: Date | string, weekOffset = 0): Date {
+  const d = typeof date === 'string' ? new Date(date) : new Date(date.getTime());
+  const dayOfWeek = (d.getDay() + 6) % 7; // 週一=0, 週日=6
+  const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - dayOfWeek);
+  monday.setDate(monday.getDate() + weekOffset * 7);
+  return monday;
+}

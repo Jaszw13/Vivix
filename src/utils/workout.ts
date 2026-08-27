@@ -26,19 +26,40 @@ export function getSessionPRs(session: WorkoutSession): PersonalRecord[] {
   return session.exercises.flatMap((ex) => {
     const completed = ex.sets.filter((s) => s.completed);
     if (completed.length === 0) return [];
-    const max = completed.reduce((m, s) =>
-      estimate1RM(s.weight, s.reps) > estimate1RM(m.weight, m.reps) ? s : m
-    );
-    return [
-      {
+
+    // P-4：分兩類 — weighted (weight>0) 走 Epley；bodyweight (weight=0) 走 repPR
+    const weighted = completed.filter((s) => s.weight > 0);
+    const bodyweight = completed.filter((s) => s.weight === 0);
+    const prs: PersonalRecord[] = [];
+
+    if (weighted.length > 0) {
+      const max = weighted.reduce((m, s) =>
+        estimate1RM(s.weight, s.reps) > estimate1RM(m.weight, m.reps) ? s : m
+      );
+      prs.push({
         exerciseId: ex.exerciseId,
         exerciseName: ex.name,
         weight: max.weight,
         reps: max.reps,
         date: session.date,
         estimated1RM: estimate1RM(max.weight, max.reps),
-      },
-    ];
+      });
+    }
+
+    if (bodyweight.length > 0) {
+      const maxReps = Math.max(...bodyweight.map((s) => s.reps));
+      prs.push({
+        exerciseId: ex.exerciseId + '-bw',
+        exerciseName: ex.name + ' (BW)',
+        weight: 0,
+        reps: maxReps,
+        date: session.date,
+        estimated1RM: 0,
+        repPR: maxReps,
+      });
+    }
+
+    return prs;
   });
 }
 

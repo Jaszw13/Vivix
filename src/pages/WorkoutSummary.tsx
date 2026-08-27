@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Trophy, TrendingUp, Flame, Check, Sparkles, Star, Info, Zap } from 'lucide-react';
 import type { WorkoutSession } from '@/types';
-import { estimate1RM, formatDateFull } from '@/utils/workout';
+import { estimate1RM, formatDateFull, getSessionPRs } from '@/utils/workout';
 import { Card, SectionHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PageShell } from '@/components/layout/PageShell';
@@ -102,7 +102,20 @@ export default function WorkoutSummary() {
   // E-01 力量熱量估算卡：衍生，不 persist（L1）
   const profile = useProfileStore((s) => s.profile);
   const customExercises = useWorkoutStore((s) => s.customExercises);
+  const personalRecords = useWorkoutStore((s) => s.personalRecords);
   const strengthEnergy = estimateStrengthKcal(session, customExercises, profile.bodyWeight);
+
+  // T4：新紀錄卡 — 本次 session 刷新的 PR（old → new）
+  const sessionPRs = getSessionPRs(session);
+  const prevPRs = personalRecords.filter((pr) => pr.date !== session.date);
+  const newRecords = sessionPRs.filter((pr) => {
+    const prev = prevPRs.find((p) => p.exerciseId === pr.exerciseId);
+    if (!prev) return true; // 首次記錄
+    if (pr.repPR !== undefined) {
+      return (prev.repPR ?? 0) < pr.repPR; // bodyweight：次數進步
+    }
+    return pr.estimated1RM > prev.estimated1RM; // weighted：1RM 進步
+  });
   // telemetry：首次展示時 log；strength_ee_locked_prompt_shown 鎖定態顯示時 log
   const eeTelemetryRef = useRef(false);
   useEffect(() => {
@@ -210,6 +223,63 @@ export default function WorkoutSummary() {
                 </Card>
               ))}
             </div>
+          </motion.div>
+        )}
+
+        {/* T4：新紀錄卡（L5 總結慶祝；old → new） */}
+        {newRecords.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.45 }}
+            className="mt-6"
+          >
+            <SectionHeader title="新紀錄" subtitle="本次訓練刷新的個人紀錄" />
+            <Card className="p-3 border-accent/40 bg-accent/5">
+              {newRecords.map((pr) => {
+                const prev = prevPRs.find((p) => p.exerciseId === pr.exerciseId);
+                return (
+                  <div
+                    key={pr.exerciseId}
+                    className="flex items-center justify-between py-2.5 border-b last:border-0 border-border/40"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-text-primary truncate">
+                        {pr.exerciseName}
+                      </div>
+                      <div className="font-mono text-[10px] text-text-secondary mt-0.5">
+                        {prev
+                          ? (pr.repPR !== undefined
+                              ? `舊紀錄 BW × ${prev.repPR ?? 0}`
+                              : `舊紀錄 ${prev.weight}kg × ${prev.reps}`)
+                          : '首次記錄'}
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0 ml-2">
+                      {pr.repPR !== undefined ? (
+                        <>
+                          <div className="font-mono text-lg font-bold text-accent">
+                            BW × {pr.repPR}
+                          </div>
+                          <div className="text-[9px] uppercase tracking-widest text-text-secondary">
+                            reps
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="font-mono text-lg font-bold text-accent">
+                            {pr.weight}kg × {pr.reps}
+                          </div>
+                          <div className="text-[9px] uppercase tracking-widest text-text-secondary">
+                            1RM {pr.estimated1RM}kg
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </Card>
           </motion.div>
         )}
 

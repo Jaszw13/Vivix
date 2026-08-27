@@ -52,18 +52,19 @@ L0_positioning:
 
 | Store | persist | 不 persist（衍生） |
 |-------|---------|------------------|
-| workoutStore v8 | sessions（含 startedAt/finishedAt）、customExercises、activePlanId、nextDayIndex、taxonomyVersion | personalRecords |
+| workoutStore v9 | sessions（含 startedAt/finishedAt/planSnapshot）、customExercises、activePlanId、nextDayIndex、taxonomyVersion | personalRecords |
 | achievementsStore v4 | progress[id].unlockedAt（永久 D2）、seen、pending | lastMetrics、current |
 | questStore v2 | claimed、completedAt | current |
 | partnerStore v2 | species、name、unlockedFormIds、cosmetics | level、totalWorkouts、totalTrainingDays |
 | equipmentMemoryStore v2 | （改讀取時派生） | memories |
-| profileStore v3 | profile（含 experienceLevel 原始事實）、onboardingCompleted、goal | — |
+| profileStore v4 | profile（含 experienceLevel 原始事實）、onboardingCompleted、goal、weeklyReportSeenWeek | — |
 | plansStore v1 | customPlans | — |
 | cardioStore v1 | sessions（id/date/machine/durationMin/kcal/avgHr/distanceKm/createdAt） | —（皆原始事實） |
 | themeStore | theme | — |
-| trialStore v5 | stage、usedCodes、... | — |
+| trialStore v6 | stage、usedCodes、... | — |
 | featureFlags v2 | partnerEnabled | （已刪 4 個無消費端 flag） |
 | telemetryStore v2 | events | — |
+| restTimerStore | （不 persist；純 UI 狀態） | endsAt/pausedAt/pauseRemaining/totalSeconds/active/finished/overTime |
 
 ### 規則
 
@@ -149,6 +150,27 @@ migrate: (persistedState: unknown) => {
   };
 },
 ```
+
+## L5：慶祝律（Celebration Law）
+
+PR 破紀錄與成就解鎖的慶祝分兩層，各自獨立，互不重複。
+
+### 兩層慶祝
+
+1. **即時微慶祝（set 行內）**：`ExerciseSetList` 偵測破 PR 時，set 行顯示 `🎉 新紀錄` + `animate-confetti` CSS 動畫（1.5s 非阻斷，自動消失）。純 UI 事件，不經 settleAll。
+2. **總結慶祝（WorkoutSummary）**：`finishSession` 後 `WorkoutSummary` 顯示「新紀錄」卡（old → new 對比）。
+
+### telemetry 統一 log
+
+- `pr_celebrated` 事件在 `settleAll` 第 5 節統一 log（finishSession 後；非 UI 層）。
+- `achievement_unlocked` 事件在 `settleAll` 第 4 節統一 log。
+
+### 規則
+
+1. 即時微慶祝僅觸發動畫，不呼叫 telemetry；telemetry 一律走 settleAll。
+2. 一次 `finishSession` 只產生一組 settleAll 慶祝批次（L3 不破）。
+3. `silent: true`（load/migrate/import）時不觸發任何慶祝 telemetry。
+4. 週報為獨立慶祝通道（T5），不與 PR/成就慶祝重疊。
 
 ## 決策記錄（D1–D6）
 
@@ -255,6 +277,8 @@ settleAll 內每日有氧結算 20 XP，每日上限 1 次；Partner 形態解�
 - 在元件內新增衍生計算
 - 更換 persist key
 - 改休息計時行為或成就目錄既有 67（58 力量基礎 + 9 有氧）數值（僅追加新 metric/成就）
+- 改 T3 計時器架構行為（dock card + mini bar + restTimerStore；auto-start/±15s/暫停/音效/震動/最後 3 秒預熱零變化）
+- persist 週報衍生數據（computeWeeklyReport 全派生；僅 weeklyReportSeenWeek 為「是否顯示過」事實可 persist）
 - 在 C1–C8 之外新增功能或重構
 - 讓 mobile-app 繼續長功能
 - `as any`、非空斷言 `!`（改安全 guard）

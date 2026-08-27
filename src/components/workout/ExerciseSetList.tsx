@@ -1,6 +1,8 @@
+import { useState, useMemo } from 'react';
 import { Check, Minus, Plus, Trash2, History, Repeat } from 'lucide-react';
 import type { ExerciseLog, SetLog } from '@/types';
 import { useWorkoutStore } from '@/store/workoutStore';
+import { estimate1RM } from '@/utils/workout';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
 
@@ -13,6 +15,36 @@ interface SetRowProps {
 export function ExerciseSetList({ exercise, onSetCompleted, onSubstitute }: SetRowProps) {
   const { updateSet, addSet, removeSet, toggleSetCompleted, removeExercise, getLastSetsForExercise } =
     useWorkoutStore();
+  // T4：PR 即時微慶祝（L5；對比 store 中已完成的 personalRecords）
+  const personalRecords = useWorkoutStore((s) => s.personalRecords);
+  const [recentPRSetIds, setRecentPRSetIds] = useState<string[]>([]);
+
+  const prForExercise = useMemo(
+    () => personalRecords.find((p) => p.exerciseId === exercise.exerciseId),
+    [personalRecords, exercise.exerciseId],
+  );
+  const bwPRForExercise = useMemo(
+    () => personalRecords.find((p) => p.exerciseId === exercise.exerciseId + '-bw'),
+    [personalRecords, exercise.exerciseId],
+  );
+
+  const checkPRBreakthrough = (set: SetLog): boolean => {
+    if (set.weight > 0) {
+      // Weighted：比對 1RM
+      if (!prForExercise) return false;
+      return estimate1RM(set.weight, set.reps) > prForExercise.estimated1RM;
+    }
+    // Bodyweight：比對 reps
+    if (!bwPRForExercise) return false;
+    return set.reps > (bwPRForExercise.repPR ?? 0);
+  };
+
+  const flashPRCelebration = (setId: string) => {
+    setRecentPRSetIds((prev) => [...prev, setId]);
+    setTimeout(() => {
+      setRecentPRSetIds((prev) => prev.filter((id) => id !== setId));
+    }, 1500);
+  };
 
   const lastSets = getLastSetsForExercise(exercise.exerciseId);
   const completedCount = exercise.sets.filter((s) => s.completed).length;
@@ -98,10 +130,18 @@ export function ExerciseSetList({ exercise, onSetCompleted, onSubstitute }: SetR
           <div
             key={set.id}
             className={cn(
-              'grid grid-cols-[2rem_1fr_1fr_2.5rem] gap-2 items-center transition-colors',
+              'grid grid-cols-[2rem_1fr_1fr_2.5rem] gap-2 items-center transition-colors relative',
               set.completed && 'opacity-60'
             )}
           >
+            {/* T4：破 PR 即時微慶祝 overlay（L5；1.5s 非阻斷） */}
+            {recentPRSetIds.includes(set.id) && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 animate-confetti">
+                <span className="text-xs font-bold text-accent bg-bg-card px-2 py-1 rounded-button border border-accent/40 shadow-card">
+                  🎉 新紀錄
+                </span>
+              </div>
+            )}
             <div className="font-mono text-sm text-text-secondary text-center">
               {set.setNumber}
             </div>
@@ -139,6 +179,10 @@ export function ExerciseSetList({ exercise, onSetCompleted, onSubstitute }: SetR
             {/* 完成按鈕 */}
             <button
               onClick={() => {
+                // T4：完成前檢查是否破 PR（L5；純 UI 微慶祝，telemetry 走 settleAll）
+                if (!set.completed && checkPRBreakthrough(set)) {
+                  flashPRCelebration(set.id);
+                }
                 toggleSetCompleted(exercise.id, set.id);
                 if (!set.completed) onSetCompleted?.();
               }}

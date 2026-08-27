@@ -1,483 +1,235 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+/**
+ * Docked Rest Timer（T3 / P-2）
+ *
+ * 原為全屏 overlay；現重構為 Workout 頁底部 sticky 內嵌卡片（dock）。
+ * 行為保留：auto-start（由 ExerciseSetList 呼叫 store.start）、±15s、暫停/繼續、
+ *           音效、震動、最後 3 秒預熱。
+ * 狀態來源：restTimerStore（不 persist，timestamp-based）。
+ * 離開 Workout 頁時由全局 MiniTimerBar 接手顯示。
+ */
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, Pause, RotateCcw, X, Plus, Minus } from 'lucide-react';
+import { Play, Pause, X, Plus, Minus, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useThemeStore } from '@/store/themeStore';
+import { useRestTimerStore } from '@/store/restTimerStore';
 import { REST_TIMER_THEME as THEME_COLORS } from '@/data/theme';
 
-interface RestTimerProps {
-  initialSeconds?: number;
-  onClose: () => void;
-}
+const PRESETS = [30, 60, 90, 120, 180];
 
-// ============ 音效：兩套主題共用 ============
-function playCompletionFeedback(theme: 'light' | 'dark') {
-  // 震動（Android 支援，iOS PWA 會被忽略但不會報錯）
-  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-    if (theme === 'dark') {
-      // Dark：兩段遞進短震
-      navigator.vibrate([60, 80, 120]);
-    } else {
-      // Light：單次長震
-      navigator.vibrate([180]);
-    }
-  }
-  // 音效
-  try {
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    const ctx = new AudioCtx();
-    const playBeep = (freq: number, start: number, duration: number, volume = 0.15, type: OscillatorType = 'sine') => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.frequency.value = freq;
-      osc.type = type;
-      gain.gain.setValueAtTime(0.0001, ctx.currentTime + start);
-      gain.gain.exponentialRampToValueAtTime(volume, ctx.currentTime + start + 0.03);
-      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + start + duration);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(ctx.currentTime + start);
-      osc.stop(ctx.currentTime + start + duration);
-    };
-    if (theme === 'light') {
-      // Light：溫柔三連音（C5-E5-G5 鐘聲感）
-      playBeep(523.25, 0, 0.4, 0.12);
-      playBeep(659.25, 0.25, 0.4, 0.12);
-      playBeep(783.99, 0.5, 0.6, 0.12);
-    } else {
-      // Dark：低頻雙音（440Hz-220Hz 工業感）
-      playBeep(440, 0, 0.15, 0.12, 'triangle');
-      playBeep(220, 0.2, 0.35, 0.15, 'triangle');
-    }
-  } catch {
-    // 忽略音效播放失敗
-  }
-}
-
-// ============ 主題色值（C7：搬移至 data/theme.ts，此處 alias 保持原變數名） ============
-// THEME_COLORS 已自頂部 import
-
-// ============ 主元件 ============
-export function RestTimer({ initialSeconds = 90, onClose }: RestTimerProps) {
+export function RestTimer() {
   const { theme } = useThemeStore();
   const colors = THEME_COLORS[theme];
 
-  const [remaining, setRemaining] = useState(initialSeconds);
-  const [running, setRunning] = useState(true);
-  const [finished, setFinished] = useState(false);
-  const [overTime, setOverTime] = useState(false); // 超時滯留狀態
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const endTimeRef = useRef<number>(Date.now() + initialSeconds * 1000);
-  const pausedRemainingRef = useRef<number>(initialSeconds);
-  const finishedAtRef = useRef<number>(0);
+  const active = useRestTimerStore((s) => s.active);
+  const finished = useRestTimerStore((s) => s.finished);
+  const overTime = useRestTimerStore((s) => s.overTime);
+  const totalSeconds = useRestTimerStore((s) => s.totalSeconds);
+  const pausedAt = useRestTimerStore((s) => s.pausedAt);
+  const pause = useRestTimerStore((s) => s.pause);
+  const resume = useRestTimerStore((s) => s.resume);
+  const cancel = useRestTimerStore((s) => s.cancel);
+  const adjust = useRestTimerStore((s) => s.adjust);
+  const reset = useRestTimerStore((s) => s.reset);
+  const setPreset = useRestTimerStore((s) => s.setPreset);
+  const getRemaining = useRestTimerStore((s) => s.getRemaining);
 
-  // 階段判斷：最後3秒預熱
-  const isPreheating = running && !finished && remaining > 0 && remaining <= 3;
-  // 階段判斷：超時（完成後 2.5s 之後仍在計時畫面）
-  const isOverTime = overTime;
+  // 本地顯示剩餘秒數（元件自行 poll，避免 store 每 tick re-render）
+  const [displayRemaining, setDisplayRemaining] = useState(0);
 
-  const computeRemaining = useCallback(() => {
-    if (!running) return pausedRemainingRef.current;
-    const ms = endTimeRef.current - Date.now();
-    if (ms <= 0) return 0;
-    return Math.ceil(ms / 1000);
-  }, [running]);
+  const sync = useCallback(() => {
+    setDisplayRemaining(getRemaining());
+  }, [getRemaining]);
 
-  // 主計時
+  // 250ms 更新顯示（與原節奏一致）
   useEffect(() => {
-    if (!running) {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-      return;
-    }
-
-    const sync = () => {
-      const r = computeRemaining();
-      setRemaining(r);
-      if (r <= 0 && !finished) {
-        setRunning(false);
-        setFinished(true);
-        finishedAtRef.current = Date.now();
-        playCompletionFeedback(theme);
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
-      }
-    };
-
     sync();
-    intervalRef.current = setInterval(sync, 250);
+    if (!active && !finished) return;
+    const id = setInterval(sync, 250);
+    return () => clearInterval(id);
+  }, [active, finished, sync]);
 
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-      }
-    };
-  }, [running, computeRemaining, finished, theme]);
-
-  // 完成後 2.5s 自動切換到超時滯留狀態
+  // 可見性變化時同步（背景返回前台）
   useEffect(() => {
-    if (!finished) {
-      setOverTime(false);
-      return;
-    }
-    const t = setTimeout(() => setOverTime(true), 2500);
-    return () => clearTimeout(t);
-  }, [finished]);
-
-  // 可見性變化監聽
-  useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && running && !finished) {
-        const r = computeRemaining();
-        setRemaining(r);
-        if (r <= 0) {
-          setRunning(false);
-          setFinished(true);
-          finishedAtRef.current = Date.now();
-          playCompletionFeedback(theme);
-        }
-      }
+    const handler = () => {
+      if (document.visibilityState === 'visible') sync();
     };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleVisibilityChange);
+    document.addEventListener('visibilitychange', handler);
+    window.addEventListener('focus', handler);
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleVisibilityChange);
+      document.removeEventListener('visibilitychange', handler);
+      window.removeEventListener('focus', handler);
     };
-  }, [running, finished, computeRemaining, theme]);
+  }, [sync]);
 
-  const adjust = (delta: number) => {
-    if (running) {
-      endTimeRef.current += delta * 1000;
-      if (endTimeRef.current < Date.now()) {
-        endTimeRef.current = Date.now();
-      }
-    } else {
-      pausedRemainingRef.current = Math.max(0, pausedRemainingRef.current + delta);
-    }
-    setRemaining((r) => Math.max(0, r + delta));
-    setFinished(false);
-    setOverTime(false);
-  };
+  const show = active || finished || overTime;
 
-  const reset = () => {
-    endTimeRef.current = Date.now() + initialSeconds * 1000;
-    pausedRemainingRef.current = initialSeconds;
-    setRemaining(initialSeconds);
-    setRunning(true);
-    setFinished(false);
-    setOverTime(false);
-  };
+  // 最後 3 秒預熱
+  const isPreheating = active && !finished && displayRemaining > 0 && displayRemaining <= 3;
 
-  const toggleRunning = () => {
-    if (running) {
-      pausedRemainingRef.current = computeRemaining();
-      setRunning(false);
-    } else {
-      endTimeRef.current = Date.now() + pausedRemainingRef.current * 1000;
-      setRunning(true);
-      setFinished(false);
-      setOverTime(false);
-    }
-  };
-
-  const setPreset = (s: number) => {
-    endTimeRef.current = Date.now() + s * 1000;
-    pausedRemainingRef.current = s;
-    setRemaining(s);
-    setRunning(true);
-    setFinished(false);
-    setOverTime(false);
-  };
-
-  const progress = ((initialSeconds - remaining) / initialSeconds) * 100;
-  const minutes = Math.floor(remaining / 60);
-  const seconds = remaining % 60;
-  const circumference = 2 * Math.PI * 120;
-  const dashOffset = circumference - (progress / 100) * circumference;
-
-  // 決定當前圓環顏色
   const ringColor = finished
     ? colors.ringComplete
     : isPreheating
-    ? colors.ringPreheat
-    : colors.ringActive;
+      ? colors.ringPreheat
+      : colors.ringActive;
+  const numColor = finished ? colors.textComplete : colors.textPrimary;
 
-  // 背景光暈：完成時用呼吸光暈，超時用警告色
-  const glowColor = isOverTime
-    ? (theme === 'dark' ? 'rgba(90, 60, 30, 0.15)' : 'rgba(255, 200, 150, 0.12)')
-    : colors.breathGlow;
+  const progress = totalSeconds > 0
+    ? ((totalSeconds - displayRemaining) / totalSeconds) * 100
+    : 0;
+  const circumference = 2 * Math.PI * 120;
+  const dashOffset = circumference - (progress / 100) * circumference;
 
-  // 文字顏色
-  const numColor = finished
-    ? colors.textComplete
-    : colors.textPrimary;
+  const minutes = Math.floor(displayRemaining / 60);
+  const seconds = displayRemaining % 60;
+  const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+  const toggleRunning = () => {
+    if (finished) {
+      reset();
+    } else if (active) {
+      pause();
+    } else if (pausedAt !== null) {
+      resume();
+    }
+  };
+
+  const label = finished
+    ? (overTime ? '已超時' : theme === 'light' ? '休息完成' : '就緒')
+    : pausedAt !== null
+      ? '已暫停'
+      : '組間休息';
 
   return (
     <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.3 }}
-        className="fixed inset-0 z-50 backdrop-blur-xl flex flex-col items-center justify-center"
-        style={{ backgroundColor: colors.bgBase }}
-      >
-        {/* 背景呼吸光暈層 */}
+      {show && (
         <motion.div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background: finished
-              ? `radial-gradient(circle at 50% 45%, ${glowColor} 0%, transparent 65%)`
-              : 'transparent',
-          }}
-          animate={finished ? {
-            opacity: isOverTime ? [0.2, 0.45, 0.2] : [0.3, 0.7, 0.3],
-          } : { opacity: 0 }}
-          transition={finished ? {
-            duration: isOverTime ? 3.5 : 2.2,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          } : { duration: 0.5 }}
-        />
-
-        {/* Dark 主題專屬：完成時邊框流光燈帶 */}
-        {theme === 'dark' && finished && (
-          <BorderFlowLight key="border-flow" />
-        )}
-
-        {/* Light 主題專屬：完成時環形漫開 */}
-        {theme === 'light' && finished && (
-          <RadialSpread key="radial-spread" color={colors.ringComplete} />
-        )}
-
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 w-10 h-10 flex items-center justify-center z-20"
-          style={{ color: colors.textSecondary }}
-          aria-label="關閉"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 20 }}
+          transition={{ duration: 0.25 }}
+          className={cn(
+            'mb-2 rounded-card border p-3 shadow-card transition-colors',
+            finished ? 'border-accent/40 bg-accent/5' : 'border-border bg-bg-card',
+          )}
         >
-          <X size={24} />
-        </button>
-
-        <div
-          className="text-[10px] uppercase tracking-widest mb-8 relative z-10 transition-colors duration-500"
-          style={{ color: finished ? colors.textComplete : colors.textSecondary }}
-        >
-          {finished ? (isOverTime ? '已超時' : colors.label) : '組間休息'}
-        </div>
-
-        {/* 圓環 */}
-        <div className="relative w-72 h-72 flex items-center justify-center mb-12 z-10">
-          <svg className="absolute inset-0 -rotate-90" viewBox="0 0 256 256">
-            <circle
-              cx="128"
-              cy="128"
-              r="120"
-              fill="none"
-              stroke={colors.ringTrack}
-              strokeWidth="3"
-            />
-            <motion.circle
-              cx="128"
-              cy="128"
-              r="120"
-              fill="none"
-              stroke={ringColor}
-              strokeWidth={isPreheating || finished ? 5 : 4}
-              strokeLinecap="round"
-              strokeDasharray={circumference}
-              animate={{ strokeDashoffset: dashOffset }}
-              transition={{ duration: 0.3, ease: 'linear' }}
-              style={{
-                filter: finished ? colors.progressFilter : 'none',
-                transition: 'stroke 0.5s ease, stroke-width 0.3s ease',
-              }}
-            />
-          </svg>
-          {/* 數字與標籤 */}
-          <motion.div
-            className="text-center"
-            animate={finished ? {
-              scale: isOverTime ? [1, 1.02, 1] : [1, 1.04, 1],
-            } : { scale: 1 }}
-            transition={finished ? {
-              duration: isOverTime ? 3.5 : 2.2,
-              repeat: Infinity,
-              ease: 'easeInOut',
-            } : { duration: 0.2 }}
-          >
-            <div
-              className="font-mono text-7xl font-bold tabular-nums transition-colors duration-700"
-              style={{ color: numColor }}
-            >
-              {minutes}:{seconds.toString().padStart(2, '0')}
-            </div>
-            {finished && (
-              <motion.div
-                className="font-bold uppercase tracking-widest text-sm mt-2"
-                style={{ color: colors.textComplete }}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 1, ease: 'easeOut' }}
+          <div className="flex items-center gap-3">
+            {/* 圓環倒數 */}
+            <div className="relative w-14 h-14 flex-shrink-0">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 256 256">
+                <circle
+                  cx="128"
+                  cy="128"
+                  r="120"
+                  fill="none"
+                  stroke={colors.ringTrack}
+                  strokeWidth="3"
+                />
+                <motion.circle
+                  cx="128"
+                  cy="128"
+                  r="120"
+                  fill="none"
+                  stroke={ringColor}
+                  strokeWidth={isPreheating || finished ? 5 : 4}
+                  strokeLinecap="round"
+                  strokeDasharray={circumference}
+                  animate={{ strokeDashoffset: dashOffset }}
+                  transition={{ duration: 0.25, ease: 'linear' }}
+                  style={{
+                    filter: finished ? colors.progressFilter : 'none',
+                    transition: 'stroke 0.5s ease, stroke-width 0.3s ease',
+                  }}
+                />
+              </svg>
+              <div
+                className="absolute inset-0 flex items-center justify-center font-mono text-sm font-bold tabular-nums transition-colors duration-500"
+                style={{ color: numColor }}
               >
-                {isOverTime ? '休息過長' : (theme === 'light' ? '休息完成' : '就緒')}
-              </motion.div>
-            )}
-          </motion.div>
-        </div>
+                {displayRemaining}s
+              </div>
+            </div>
 
-        {/* 控制按鈕 */}
-        <div className="flex items-center gap-6 mb-8 relative z-10">
-          <button
-            onClick={() => adjust(-15)}
-            className="w-12 h-12 rounded-button border flex items-center justify-center transition-colors"
-            style={{
-              borderColor: colors.ringTrack,
-              color: colors.textPrimary,
-            }}
-          >
-            <Minus size={20} />
-            <span className="text-[9px] absolute mt-9">15s</span>
-          </button>
-          <button
-            onClick={toggleRunning}
-            className="w-16 h-16 rounded-button flex items-center justify-center shadow-button transition-all"
-            style={{
-              backgroundColor: colors.ringActive,
-              color: colors.buttonFg,
-            }}
-          >
-            {running ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" />}
-          </button>
-          <button
-            onClick={() => adjust(15)}
-            className="w-12 h-12 rounded-button border flex items-center justify-center transition-colors"
-            style={{
-              borderColor: colors.ringTrack,
-              color: colors.textPrimary,
-            }}
-          >
-            <Plus size={20} />
-          </button>
-        </div>
+            {/* 標籤＋時間 */}
+            <div className="flex-1 min-w-0">
+              <div
+                className="text-[10px] uppercase tracking-widest transition-colors duration-500"
+                style={{ color: finished ? colors.textComplete : colors.textSecondary }}
+              >
+                {label}
+              </div>
+              <div
+                className="font-mono text-xl font-bold tabular-nums transition-colors duration-500"
+                style={{ color: numColor }}
+              >
+                {timeStr}
+              </div>
+            </div>
 
-        <div className="flex gap-3 relative z-10">
-          <button
-            onClick={reset}
-            className="flex items-center gap-2 text-xs uppercase tracking-wider transition-colors"
-            style={{ color: colors.textSecondary }}
-          >
-            <RotateCcw size={14} /> 重置
-          </button>
-        </div>
+            {/* 暫停/繼續＋關閉 */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={toggleRunning}
+                className="w-10 h-10 rounded-button flex items-center justify-center shadow-button transition-all flex-shrink-0"
+                style={{
+                  backgroundColor: colors.ringActive,
+                  color: colors.buttonFg,
+                }}
+                aria-label={active ? '暫停' : '繼續'}
+              >
+                {active ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
+              </button>
+              <button
+                onClick={cancel}
+                className="w-9 h-9 flex items-center justify-center text-text-secondary hover:text-auxiliary transition-colors flex-shrink-0"
+                aria-label="關閉計時器"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
 
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-2 z-10">
-          {[30, 60, 90, 120, 180].map((s) => (
+          {/* 控制列 */}
+          <div className="flex items-center gap-1.5 mt-2.5">
             <button
-              key={s}
-              onClick={() => setPreset(s)}
-              className={cn(
-                'px-3 py-1.5 text-xs font-mono rounded-button border transition-colors'
-              )}
-              style={{
-                borderColor: initialSeconds === s ? colors.ringActive : colors.ringTrack,
-                color: initialSeconds === s ? colors.ringActive : colors.textSecondary,
-              }}
+              onClick={() => adjust(-15)}
+              className="h-8 px-2 rounded-button border border-border flex items-center gap-0.5 text-[10px] font-mono text-text-secondary hover:text-accent hover:border-accent/50 transition-colors flex-shrink-0"
             >
-              {s}s
+              <Minus size={12} />15
             </button>
-          ))}
-        </div>
-      </motion.div>
+            <div className="flex gap-1 flex-1 overflow-x-auto scrollbar-hide">
+              {PRESETS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setPreset(s)}
+                  className={cn(
+                    'h-8 px-2.5 text-[10px] font-mono rounded-button border transition-colors whitespace-nowrap',
+                  )}
+                  style={{
+                    borderColor: totalSeconds === s ? colors.ringActive : 'var(--color-border)',
+                    color: totalSeconds === s ? colors.ringActive : 'var(--color-text-secondary)',
+                  }}
+                >
+                  {s}s
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={reset}
+              className="w-8 h-8 flex items-center justify-center text-text-secondary hover:text-accent transition-colors flex-shrink-0"
+              aria-label="重置"
+            >
+              <RotateCcw size={14} />
+            </button>
+            <button
+              onClick={() => adjust(15)}
+              className="h-8 px-2 rounded-button border border-border flex items-center gap-0.5 text-[10px] font-mono text-text-secondary hover:text-accent hover:border-accent/50 transition-colors flex-shrink-0"
+            >
+              <Plus size={12} />15
+            </button>
+          </div>
+        </motion.div>
+      )}
     </AnimatePresence>
-  );
-}
-
-// ============ Dark 主題：邊框單向流光燈帶 ============
-function BorderFlowLight() {
-  return (
-    <motion.div
-      className="absolute inset-0 pointer-events-none z-0"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.4 }}
-    >
-      <svg className="w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
-        <defs>
-          <linearGradient id="flow-grad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="rgba(35,85,63,0)" />
-            <stop offset="50%" stopColor="rgba(35,85,63,0.8)" />
-            <stop offset="100%" stopColor="rgba(35,85,63,0)" />
-          </linearGradient>
-          <mask id="border-mask">
-            <rect x="2" y="2" width="96" height="96" rx="3" ry="3" fill="none" stroke="white" strokeWidth="0.8" />
-          </mask>
-        </defs>
-        {/* 邊框路徑 */}
-        <rect
-          x="2" y="2" width="96" height="96" rx="3" ry="3"
-          fill="none"
-          stroke="rgba(35,85,63,0.15)"
-          strokeWidth="0.4"
-        />
-        {/* 流光：從左上角順時針繞一圈 */}
-        <motion.rect
-          x="2" y="2" width="96" height="96" rx="3" ry="3"
-          fill="none"
-          stroke="url(#flow-grad)"
-          strokeWidth="1.2"
-          strokeLinecap="round"
-          mask="url(#border-mask)"
-          initial={{ pathLength: 0, opacity: 0 }}
-          animate={{ pathLength: 1, opacity: [0, 1, 1, 0] }}
-          transition={{
-            pathLength: { duration: 1.5, ease: 'easeInOut' },
-            opacity: { duration: 1.5, times: [0, 0.2, 0.8, 1] },
-          }}
-        />
-      </svg>
-    </motion.div>
-  );
-}
-
-// ============ Light 主題：環形漫開光 ============
-function RadialSpread({ color }: { color: string }) {
-  return (
-    <motion.div
-      className="absolute inset-0 pointer-events-none z-0 flex items-center justify-center"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.3 }}
-    >
-      <motion.div
-        style={{
-          width: 280,
-          height: 280,
-          borderRadius: '50%',
-          border: `2px solid ${color}`,
-        }}
-        initial={{ scale: 0.6, opacity: 0 }}
-        animate={{ scale: [0.6, 1.4, 1.8], opacity: [0, 0.5, 0] }}
-        transition={{ duration: 1.2, ease: 'easeOut' }}
-      />
-      <motion.div
-        style={{
-          position: 'absolute',
-          width: 280,
-          height: 280,
-          borderRadius: '50%',
-          border: `1px solid ${color}`,
-        }}
-        initial={{ scale: 0.6, opacity: 0 }}
-        animate={{ scale: [0.6, 1.6, 2.2], opacity: [0, 0.3, 0] }}
-        transition={{ duration: 1.4, ease: 'easeOut', delay: 0.15 }}
-      />
-    </motion.div>
   );
 }

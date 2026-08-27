@@ -187,7 +187,12 @@ function computePRsFromSessions(
         name: pr.exerciseName,
       });
       const existing = map.get(pr.exerciseId);
-      if (!existing || pr.estimated1RM > existing.estimated1RM) {
+      // P-4：bodyweight PR（repPR）用 reps 比較；weighted PR 用 estimated1RM
+      const isBetter = !existing
+        || (pr.repPR !== undefined
+          ? (existing.repPR ?? 0) < pr.repPR
+          : pr.estimated1RM > existing.estimated1RM);
+      if (isBetter) {
         map.set(pr.exerciseId, {
           ...pr,
           muscleGroup: cur.muscleGroup,
@@ -279,6 +284,8 @@ export const useWorkoutStore = create<WorkoutState>()(
           exercises,
           startedAt: new Date().toISOString(),
           finishedAt: null,
+          // P-5：計畫快照（T6 月曆用）
+          planSnapshot: { planId, dayId: day.id, dayName: day.dayName },
         };
         set({ activeSession: session });
       },
@@ -731,7 +738,7 @@ export const useWorkoutStore = create<WorkoutState>()(
     }),
     {
       name: 'ironpulse-workouts',
-      version: 8,
+      version: 9,
       partialize: (state) => ({
         sessions: state.sessions,
         customExercises: state.customExercises,
@@ -755,11 +762,13 @@ export const useWorkoutStore = create<WorkoutState>()(
         const raw = (persistedState ?? {}) as Record<string, unknown>;
         const sessionsIn: unknown = Array.isArray(raw.sessions) ? raw.sessions : [];
         // C4：忽略舊 persist 的 personalRecords（v6 之前有寫），改由 sessions 派生
-        // E-01 v8：為舊 session 補 startedAt/finishedAt = null（體重為 null 時熱量會 fallback 到 set 數公式）
+        // E-01 v8：為舊 session 補 startedAt/finishedAt = null
+        // P-5 v9：為舊 session 補 planSnapshot = null（T6 月曆顯示「自由訓練」）
         const safeSessions: WorkoutSession[] = (sessionsIn as WorkoutSession[]).map((s) => ({
           ...s,
           startedAt: typeof s.startedAt === 'string' ? s.startedAt : null,
           finishedAt: typeof s.finishedAt === 'string' ? s.finishedAt : null,
+          planSnapshot: s.planSnapshot ?? null,
         }));
 
         // v5：CustomExercise 升級為強制分類結構

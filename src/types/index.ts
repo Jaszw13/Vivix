@@ -364,6 +364,12 @@ export interface WorkoutSession {
   imported?: boolean;
   /** I-2：非結構化附註（來源：matrix Feedback 或用戶手動），原始事實 persist */
   notes?: string;
+  /** P-5：計畫快照（T6 月曆用）；由 startSession 寫入，舊/imported session → null */
+  planSnapshot?: {
+    planId: string;
+    dayId: string;
+    dayName: string;
+  } | null;
 }
 
 // ============ 用戶資料 ============
@@ -393,6 +399,8 @@ export interface PersonalRecord {
   reps: number;
   date: string;
   estimated1RM: number;
+  /** P-4：weight=0 時的最大次數（bodyweight PR）；weighted PR 不填 */
+  repPR?: number;
 }
 
 // ============ 小工具：中文器械名 → EquipmentType（migrate 用）============

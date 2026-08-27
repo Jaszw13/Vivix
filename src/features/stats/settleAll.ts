@@ -29,6 +29,7 @@ import { useFeatureFlags } from '@/features/partner/stores/featureFlags';
 import { handleWorkoutCompleted } from '@/features/partner/engine/rewardEngine';
 import type { RewardContext, RewardResult } from '@/features/partner/types';
 import { getStreakDays as getStreakDaysSelector } from '@/features/stats/selectors';
+import { getSessionPRs } from '@/utils/workout';
 
 export interface SettleResult {
   partnerReward: RewardResult | null;
@@ -168,6 +169,32 @@ export function settleAll(
       const def = useAchievementsStore.getState().progress[id];
       if (def?.unlocked) {
         telemetry.log('achievement_unlocked', { id });
+      }
+    }
+  }
+
+  // 5. T4：PR 破紀錄 telemetry（L5 慶祝律；finishSession 後統一 log，不經 UI）
+  if (!silent && rewardCtx) {
+    const workoutState = useWorkoutStore.getState();
+    const todaySessions = workoutState.sessions.filter((s) => s.date === rewardCtx.date);
+    const lastSession = todaySessions[todaySessions.length - 1];
+    if (lastSession) {
+      const sessionPRs = getSessionPRs(lastSession);
+      const prevPRs = workoutState.personalRecords.filter(
+        (pr) => pr.date !== rewardCtx.date,
+      );
+      for (const pr of sessionPRs) {
+        const prev = prevPRs.find((p) => p.exerciseId === pr.exerciseId);
+        const isBreakthrough = !prev
+          || (pr.repPR !== undefined
+            ? (prev.repPR ?? 0) < pr.repPR
+            : pr.estimated1RM > prev.estimated1RM);
+        if (isBreakthrough) {
+          telemetry.log('pr_celebrated', {
+            exerciseId: pr.exerciseId,
+            isBodyweight: pr.repPR !== undefined,
+          });
+        }
       }
     }
   }
