@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -31,7 +31,6 @@ import {
   exerciseCategories,
 } from '@/types';
 import { cn } from '@/lib/utils';
-import { TRAFFIC_LIGHTS } from '@/data/theme';
 
 const WARMUP_TYPE_LABELS: Record<WarmupItem['type'], { label: string; color: string }> = {
   dynamic: { label: '動態伸展', color: 'accent' },
@@ -53,6 +52,8 @@ export default function Workout() {
 
   const [elapsed, setElapsed] = useState(0);
   const [showAddExercise, setShowAddExercise] = useState(false);
+  // T7-fix：放棄守衛 — 防止 auto-start effect 在 clearActiveSession 後競態重建 session
+  const isAbandoningRef = useRef(false);
   // T-04：替換彈窗
   const [substituteTarget, setSubstituteTarget] = useState<{
     exerciseLogId: string;
@@ -66,8 +67,9 @@ export default function Workout() {
   // T3：rest timer 由 store 持有（dock + mini bar 共享）
   const startRestTimer = useRestTimerStore((s) => s.start);
 
+  // T7-fix：放棄守衛 — 防止 clearActiveSession 後元件未卸載時 auto-start effect 競態重建 session
   useEffect(() => {
-    if (!activeSession) {
+    if (!activeSession && !isAbandoningRef.current) {
       startEmptySession();
     }
   }, [activeSession, startEmptySession]);
@@ -115,9 +117,11 @@ export default function Workout() {
     navigate('/');
   };
 
-  // T7：關閉 — 觸發放棄確認；確認 → 清空 session + 取消計時 + 回主控台
+  // T7：關閉 — 觸發放棄確認；確認 → 守衛旗標 + 清空 session + 取消計時 + 回主控台
+  //   守衛旗標防止 clearActiveSession 後 auto-start effect 競態重建 session
   const handleAbandon = () => {
     if (window.confirm('放棄這次訓練？記錄將不會儲存。')) {
+      isAbandoningRef.current = true;
       clearActiveSession();
       useRestTimerStore.getState().cancel();
       navigate('/');
@@ -158,28 +162,24 @@ export default function Workout() {
       showNav={false}
       noPadding
       rightAction={
-        <div className="flex items-center gap-3 pr-1">
+        <div className="flex items-center gap-2 pr-1">
           <div className="font-mono text-sm text-accent tabular-nums">
             {formatDuration(elapsed)}
           </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={handleMinimize}
-              className="w-7 h-7 flex items-center justify-center rounded-full transition-transform active:scale-90"
-              style={{ backgroundColor: TRAFFIC_LIGHTS.minimize }}
-              aria-label="最小化訓練"
-            >
-              <Minus size={14} className="text-white" />
-            </button>
-            <button
-              onClick={handleAbandon}
-              className="w-7 h-7 flex items-center justify-center rounded-full transition-transform active:scale-90"
-              style={{ backgroundColor: TRAFFIC_LIGHTS.close }}
-              aria-label="放棄訓練"
-            >
-              <X size={14} className="text-white" />
-            </button>
-          </div>
+          <button
+            onClick={handleMinimize}
+            aria-label="最小化"
+            className="p-3 -m-1 flex items-center justify-center text-accent active:opacity-50 transition-opacity"
+          >
+            <Minus size={20} strokeWidth={2.5} />
+          </button>
+          <button
+            onClick={handleAbandon}
+            aria-label="放棄訓練"
+            className="p-3 -m-1 flex items-center justify-center text-auxiliary active:opacity-50 transition-opacity"
+          >
+            <X size={20} strokeWidth={2.5} />
+          </button>
         </div>
       }
     >
