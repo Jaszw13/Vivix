@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -52,8 +52,6 @@ export default function Workout() {
 
   const [elapsed, setElapsed] = useState(0);
   const [showAddExercise, setShowAddExercise] = useState(false);
-  // T7-fix：放棄守衛 — 防止 auto-start effect 在 clearActiveSession 後競態重建 session
-  const isAbandoningRef = useRef(false);
   // T-04：替換彈窗
   const [substituteTarget, setSubstituteTarget] = useState<{
     exerciseLogId: string;
@@ -67,12 +65,13 @@ export default function Workout() {
   // T3：rest timer 由 store 持有（dock + mini bar 共享）
   const startRestTimer = useRestTimerStore((s) => s.start);
 
-  // T7-fix：放棄守衛 — 防止 clearActiveSession 後元件未卸載時 auto-start effect 競態重建 session
+  // mount-only：僅掛載時判斷是否需建立空 session（deps 不含 activeSession）
+  // 消滅整類競態 — finish/abandon 清除 activeSession 後元件未卸載時 effect 不再重建
   useEffect(() => {
-    if (!activeSession && !isAbandoningRef.current) {
+    if (!useWorkoutStore.getState().activeSession) {
       startEmptySession();
     }
-  }, [activeSession, startEmptySession]);
+  }, [startEmptySession]);
 
   useEffect(() => {
     if (!activeSession) return;
@@ -117,11 +116,9 @@ export default function Workout() {
     navigate('/');
   };
 
-  // T7：關閉 — 觸發放棄確認；確認 → 守衛旗標 + 清空 session + 取消計時 + 回主控台
-  //   守衛旗標防止 clearActiveSession 後 auto-start effect 競態重建 session
+  // T7：關閉 — 觸發放棄確認；確認 → 清空 session + 取消計時 + 回主控台
   const handleAbandon = () => {
     if (window.confirm('放棄這次訓練？記錄將不會儲存。')) {
-      isAbandoningRef.current = true;
       clearActiveSession();
       useRestTimerStore.getState().cancel();
       navigate('/');
