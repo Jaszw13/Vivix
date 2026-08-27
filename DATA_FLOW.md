@@ -445,6 +445,20 @@ TrainingCalendar（Progress 頁）
        └─ 統計：總噸數（calculateTotalVolume）+ PR 數（getSessionPRs）
 ```
 
+### T7：MiniTimerBar 放棄流
+
+```
+用戶離開 Workout 頁（activeSession 存在或 timerActive）
+  │
+  └─ MiniTimerBar 顯示（bottom-20 fixed）
+       ├─ bar 本體 click → navigate('/workout')（返回訓練；行為不變）
+       └─ 右上角 X click（stopPropagation）
+            ├─ confirm('放棄這次訓練？記錄將不會儲存。')
+            │    確認 → clearActiveSession() + restTimerStore.cancel() → bar 消失
+            │    取消 → 不動
+            └─ 與 Workout 頁 handleAbandon 同一邏輯（不彈 dialog 的最小化走 amber 按鈕）
+```
+
 ## 14. 禁止的資料流
 
 - 直接在元件內 inline 計算統計（應走 selectors）

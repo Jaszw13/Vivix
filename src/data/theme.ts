@@ -73,3 +73,9 @@ export const OVERLAY_SCRIM = {
   // Tailwind 等效 class（供 className 使用）
   tailwindClass: 'bg-black/70',
 } as const;
+
+// ============ T7 交通燈（Workout 頁右上角最小化／關閉；兩主題共用） ============
+export const TRAFFIC_LIGHTS = {
+  minimize: '#F5A623', // amber：最小化
+  close: '#E5484D',     // red：放棄確認
+} as const;

@@ -396,3 +396,50 @@ npx vite build
 - [ ] AC-BUILD: tsc 0 errors；vite build 成功；precache ≥ 16
 - [ ] AC-NOREG: 休息計時行為（auto-start/±15s/暫停/音效）零變化
 - [ ] AC-GREP: `grep "as any" src` = 0；`grep "#[0-9a-f]{6}" src/components` = 0；非空斷言 = 0
+
+## 16. 訓練最小化/放棄分流＋日曆計畫日顯示（T7）
+
+### 16.1 交通燈（Workout 頁右上角）
+
+- [ ] 右上角有兩個圓形小按鈕：amber「–」最小化 + red「×」關閉
+- [ ] 按「–」→ 回主控台，**無 dialog**；activeSession 保留；計時繼續
+- [ ] 按「–」後 mini bar 顯示「訓練進行中」
+- [ ] 按「×」→ 彈放棄確認「放棄這次訓練？記錄將不會儲存。」
+- [ ] 確認放棄 → session 清空 + restTimerStore.cancel() + 回主控台
+- [ ] 取消防棄 → 不動
+- [ ] hex 色在 `data/theme.ts` `TRAFFIC_LIGHTS`（兩主題共用）
+
+### 16.2 MiniTimerBar 放棄入口
+
+- [ ] bar 右上角有小 X 按鈕（auxiliary 色）
+- [ ] 按 bar 本體 → 回訓練頁（行為不變）
+- [ ] 按小 X → 彈同一放棄確認；確認 → clearActiveSession + cancelTimer + bar 消失
+
+### 16.3 日曆 date key 修復
+
+- [ ] 今天完成訓練 → 今天格子立即亮起（root cause: session.date 為 ISO timestamp，格子 key 為純日期；改用 dayKey 歸一化）
+- [ ] sessionMap key = `dayKey(new Date(s.date))`
+- [ ] 格子 key = `dayKey(new Date(year, month, day))`
+- [ ] 同天多 session → 取最後一筆
+
+### 16.4 日曆計畫日縮寫
+
+- [ ] 訓練日格子在日期數字下方顯示 9px 縮寫
+- [ ] planSnapshot dayName 首字為「推/拉/腿」→ 顯示該單字
+- [ ] 其他 dayName → 前兩字
+- [ ] 無 planSnapshot 且非 imported → 「自由」
+- [ ] imported → 「歷史」
+- [ ] 保留 accent 底色 + 今天外框
+
+### 16.5 日曆 tap sheet
+
+- [ ] 點訓練日 → sheet 顯示 plan day 全名（或自由訓練/歷史記錄）
+- [ ] sheet 含動作 chips + 總噸數 + PR 數
+
+### 16.6 全局守門
+
+- [ ] AC-T7: TRAFFIC_LIGHTS 在 theme.ts；Workout 有兩按鈕；MiniTimerBar 有 X
+- [ ] AC-T7-CALENDAR: sessionMap 用 dayKey；格子用 dayKey；有縮寫
+- [ ] AC-BUILD: tsc 0；vite build 成功
+- [ ] AC-GREP: `grep "#[0-9a-f]{6}" src/components` = 0
+- [ ] AC-NOREG: auto-start 休息計時不破壞

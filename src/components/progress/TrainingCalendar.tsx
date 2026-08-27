@@ -1,11 +1,15 @@
 /**
- * T6 月曆（Training Calendar）
+ * T6 / T7 月曆（Training Calendar）
  *
  * Progress 頁月曆網格；點某天彈出訓練詳情。
  * 顯示規則：
  *   - planSnapshot 存在 → 顯示 dayName（如「PPL · 拉日 B」）
  *   - imported=true → 顯示「歷史記錄」
  *   - 兩者皆無 → 顯示「自由訓練」
+ *
+ * T7 修復：
+ *   - date key 歸一化（sessionMap 與格子 key 皆用 dayKey）
+ *   - 格子內顯示計畫日縮寫（9px）
  */
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -24,15 +28,29 @@ interface TrainingCalendarProps {
 
 const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
 
+/** 取計畫日縮寫（格子內 9px 顯示） */
+function getDayAbbrev(session: WorkoutSession): string {
+  if (session.imported) return '歷史';
+  if (session.planSnapshot?.dayName) {
+    const name = session.planSnapshot.dayName;
+    // 「推 PUSH」→「推」；「拉 PULL」→「拉」；「腿 LEGS」→「腿」；其他→前两字
+    const firstChar = name.charAt(0);
+    if (firstChar === '推' || firstChar === '拉' || firstChar === '腿') return firstChar;
+    return name.slice(0, 2);
+  }
+  return '自由';
+}
+
 export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
   const sessions = useWorkoutStore((s) => s.sessions);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  // 日期 → session 映射
+  // 日期 → session 映射（T7：dayKey 歸一化；同天多 session 取最後一筆）
   const sessionMap = useMemo(() => {
     const m = new Map<string, WorkoutSession>();
     for (const s of sessions) {
-      m.set(s.date, s);
+      const key = dayKey(new Date(s.date));
+      m.set(key, s); // 後寫覆蓋前寫 → 取最後一筆
     }
     return m;
   }, [sessions]);
@@ -64,22 +82,29 @@ export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
         {/* 月內日期 */}
         {Array.from({ length: daysInMonth }).map((_, i) => {
           const day = i + 1;
-          const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          // T7：格子 key 用 dayKey 歸一化
+          const dateStr = dayKey(new Date(year, month, day));
           const session = sessionMap.get(dateStr);
           const isToday = dateStr === todayKey;
+          const abbrev = session ? getDayAbbrev(session) : '';
 
           return (
             <button
               key={day}
               onClick={() => session && setSelectedDate(dateStr)}
               className={`
-                aspect-square flex items-center justify-center rounded text-xs font-mono transition-all
+                aspect-square flex flex-col items-center justify-center rounded text-xs font-mono transition-all gap-0.5
                 ${session ? 'bg-accent/20 text-text-primary font-bold hover:bg-accent/30' : 'text-text-secondary'}
                 ${isToday ? 'ring-1 ring-accent' : ''}
                 ${session ? 'cursor-pointer' : 'cursor-default'}
               `}
             >
-              {day}
+              <span>{day}</span>
+              {abbrev && (
+                <span className="text-[9px] leading-none opacity-70 truncate max-w-full">
+                  {abbrev}
+                </span>
+              )}
             </button>
           );
         })}

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Check, Plus, Timer, X, Play, Flame, RefreshCw, Edit3,
+  Check, Plus, Timer, X, Play, Flame, RefreshCw, Edit3, Minus,
 } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { Button } from '@/components/ui/Button';
@@ -31,6 +31,7 @@ import {
   exerciseCategories,
 } from '@/types';
 import { cn } from '@/lib/utils';
+import { TRAFFIC_LIGHTS } from '@/data/theme';
 
 const WARMUP_TYPE_LABELS: Record<WarmupItem['type'], { label: string; color: string }> = {
   dynamic: { label: '動態伸展', color: 'accent' },
@@ -109,9 +110,16 @@ export default function Workout() {
     }
   };
 
-  const handleExit = () => {
+  // T7：最小化 — 回主控台，不彈 dialog；activeSession 保留；計時繼續
+  const handleMinimize = () => {
+    navigate('/');
+  };
+
+  // T7：關閉 — 觸發放棄確認；確認 → 清空 session + 取消計時 + 回主控台
+  const handleAbandon = () => {
     if (window.confirm('放棄這次訓練？記錄將不會儲存。')) {
       clearActiveSession();
+      useRestTimerStore.getState().cancel();
       navigate('/');
     }
   };
@@ -154,13 +162,24 @@ export default function Workout() {
           <div className="font-mono text-sm text-accent tabular-nums">
             {formatDuration(elapsed)}
           </div>
-          <button
-            onClick={handleExit}
-            className="w-9 h-9 flex items-center justify-center text-text-secondary hover:text-auxiliary"
-            aria-label="放棄訓練"
-          >
-            <X size={22} />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={handleMinimize}
+              className="w-7 h-7 flex items-center justify-center rounded-full transition-transform active:scale-90"
+              style={{ backgroundColor: TRAFFIC_LIGHTS.minimize }}
+              aria-label="最小化訓練"
+            >
+              <Minus size={14} className="text-white" />
+            </button>
+            <button
+              onClick={handleAbandon}
+              className="w-7 h-7 flex items-center justify-center rounded-full transition-transform active:scale-90"
+              style={{ backgroundColor: TRAFFIC_LIGHTS.close }}
+              aria-label="放棄訓練"
+            >
+              <X size={14} className="text-white" />
+            </button>
+          </div>
         </div>
       }
     >
