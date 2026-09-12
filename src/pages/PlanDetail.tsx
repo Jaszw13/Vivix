@@ -7,7 +7,9 @@ import { Button } from '@/components/ui/Button';
 import { Card, Badge, SectionHeader } from '@/components/ui/Card';
 import { usePlansStore } from '@/store/plansStore';
 import { useWorkoutStore } from '@/store/workoutStore';
+import { useProfileStore } from '@/store/profileStore';
 import { exercises as builtinExercisesList } from '@/data/exercises';
+import { getEquipmentTypesForIds } from '@/data/equipment';
 import { DIFFICULTY_LABELS, MUSCLE_GROUP_LABELS, EQUIPMENT_TYPE_LABELS } from '@/types';
 import type { MuscleGroup, EquipmentType } from '@/types';
 import { cn } from '@/lib/utils';
@@ -33,6 +35,9 @@ export default function PlanDetail() {
   const startSession = useWorkoutStore((s) => s.startSession);
   const setActivePlan = useWorkoutStore((s) => s.setActivePlan);
 
+  // T7-4：我的健身房器材過濾
+  const gymEquipmentIds = useProfileStore((s) => s.gymEquipmentIds);
+
   const plan = planId ? getPlanById(planId) : undefined;
   const isCustom = plan?.isCustom ?? false;
   const canEdit = isCustom;
@@ -45,13 +50,46 @@ export default function PlanDetail() {
   const [pickerFilter, setPickerFilter] = useState<MuscleGroup | 'all'>('all');
   const [pickerQuery, setPickerQuery] = useState('');
   const [pickerEquip, setPickerEquip] = useState<EquipmentType | 'all'>('all');
+  // T7-4：預設只顯示我的器材（有設檔時）
+  const [pickerGymOnly, setPickerGymOnly] = useState(true);
   const [toast, setToast] = useState<string | null>(null);
+
+  // T7-1：local draft state — onChange 只寫 draft，onBlur commit 到 store，消滅逐字刷新
+  const [dayNameDrafts, setDayNameDrafts] = useState<Record<string, string>>({});
+  const [setsDrafts, setSetsDrafts] = useState<Record<string, string>>({});
+  const [repsDrafts, setRepsDrafts] = useState<Record<string, string>>({});
+
+  // editMode 切換為 true 時初始化 drafts（故意不依賴 plan，避免打字期間重初始化）
+  useEffect(() => {
+    if (editMode && plan) {
+      const dn: Record<string, string> = {};
+      const s: Record<string, string> = {};
+      const r: Record<string, string> = {};
+      for (const day of plan.days) {
+        dn[day.id] = day.dayName;
+        for (const ex of day.exercises) {
+          s[ex.id] = String(ex.targetSets);
+          r[ex.id] = ex.targetReps;
+        }
+      }
+      setDayNameDrafts(dn);
+      setSetsDrafts(s);
+      setRepsDrafts(r);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editMode]);
 
   // Task 1：打通自訂動作資料流（L2 派生）
   const customExercises = useWorkoutStore((s) => s.customExercises);
   const allExercises = useMemo(
     () => [...builtinExercisesList, ...customExercises],
     [customExercises],
+  );
+
+  // T7-4：我的器材對應的 EquipmentType 集合
+  const gymEquipmentTypes = useMemo(
+    () => new Set(getEquipmentTypesForIds(gymEquipmentIds)),
+    [gymEquipmentIds],
   );
 
   // Toast 自動消失
@@ -98,12 +136,14 @@ export default function PlanDetail() {
   const filteredExercises = useMemo(() => {
     const q = pickerQuery.trim().toLowerCase();
     return allExercises.filter((e) => {
+      // T7-4：開啟「只顯示我的器材」時，過濾掉不在我的器材類型中的動作
+      if (pickerGymOnly && gymEquipmentIds.length > 0 && !gymEquipmentTypes.has(e.equipmentType)) return false;
       if (pickerFilter !== 'all' && e.muscleGroup !== pickerFilter) return false;
       if (pickerEquip !== 'all' && e.equipmentType !== pickerEquip) return false;
       if (q && !e.name.toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [allExercises, pickerFilter, pickerEquip, pickerQuery]);
+  }, [allExercises, pickerFilter, pickerEquip, pickerQuery, pickerGymOnly, gymEquipmentIds, gymEquipmentTypes]);
 
   if (!plan) {
     return (
@@ -251,8 +291,12 @@ export default function PlanDetail() {
                     </div>
                     {editMode ? (
                       <input
-                        value={day.dayName}
-                        onChange={(e) => updateDay(plan.id, day.id, { dayName: e.target.value })}
+                        value={dayNameDrafts[day.id] ?? day.dayName}
+                        onChange={(e) => setDayNameDrafts((prev) => ({ ...prev, [day.id]: e.target.value }))}
+                        onBlur={() => {
+                          const v = dayNameDrafts[day.id];
+                          if (v !== undefined) updateDay(plan.id, day.id, { dayName: v });
+                        }}
                         className="font-display text-2xl tracking-wide uppercase text-text-primary bg-transparent border-b border-accent/40"
                       />
                     ) : (
@@ -301,14 +345,22 @@ export default function PlanDetail() {
                           <div className="flex items-center gap-1">
                             <input
                               type="number"
-                              value={ex.targetSets}
-                              onChange={(e) => updateExerciseInDay(plan.id, day.id, ex.exerciseId, { targetSets: parseInt(e.target.value) || 0 })}
+                              value={setsDrafts[ex.id] ?? String(ex.targetSets)}
+                              onChange={(e) => setSetsDrafts((prev) => ({ ...prev, [ex.id]: e.target.value }))}
+                              onBlur={() => {
+                                const v = setsDrafts[ex.id];
+                                if (v !== undefined) updateExerciseInDay(plan.id, day.id, ex.exerciseId, { targetSets: parseInt(v) || 0 });
+                              }}
                               className="w-12 bg-bg-secondary border border-border/40 rounded px-1 py-0.5 font-mono text-xs text-center"
                             />
                             <span className="text-text-secondary text-xs">×</span>
                             <input
-                              value={ex.targetReps}
-                              onChange={(e) => updateExerciseInDay(plan.id, day.id, ex.exerciseId, { targetReps: e.target.value })}
+                              value={repsDrafts[ex.id] ?? ex.targetReps}
+                              onChange={(e) => setRepsDrafts((prev) => ({ ...prev, [ex.id]: e.target.value }))}
+                              onBlur={() => {
+                                const v = repsDrafts[ex.id];
+                                if (v !== undefined) updateExerciseInDay(plan.id, day.id, ex.exerciseId, { targetReps: v });
+                              }}
                               className="w-16 bg-bg-secondary border border-border/40 rounded px-1 py-0.5 font-mono text-xs text-center"
                             />
                             <button
@@ -343,6 +395,7 @@ export default function PlanDetail() {
                           setPickerQuery('');
                           setPickerEquip('all');
                           setPickerFilter('all');
+                          setPickerGymOnly(gymEquipmentIds.length > 0);
                         }
                         setPickerDayId(pickerDayId === day.id ? null : day.id);
                       }}
@@ -366,6 +419,28 @@ export default function PlanDetail() {
                           className="w-full h-9 pl-8 pr-3 bg-bg-card rounded-button border border-border text-xs text-text-primary placeholder:text-text-secondary focus:border-accent transition-colors"
                         />
                       </div>
+                      {/* T7-4：我的器材 toggle */}
+                      {gymEquipmentIds.length > 0 && (
+                        <div className="flex items-center justify-between mb-2 px-1">
+                          <span className="text-[10px] uppercase tracking-widest text-text-secondary">
+                            只顯示我的器材
+                          </span>
+                          <button
+                            onClick={() => setPickerGymOnly(!pickerGymOnly)}
+                            className={cn(
+                              'h-5 w-9 rounded-full relative transition-colors',
+                              pickerGymOnly ? 'bg-accent' : 'bg-border',
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                'absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-bg-card transition-transform',
+                                pickerGymOnly && 'translate-x-4',
+                              )}
+                            />
+                          </button>
+                        </div>
+                      )}
                       {/* 部位 filter */}
                       <div className="flex gap-1.5 mb-1.5 overflow-x-auto scrollbar-hide">
                         <button
@@ -441,6 +516,11 @@ export default function PlanDetail() {
                               {ex.isCustom && (
                                 <Badge variant="auxiliary" className="flex-shrink-0 !text-[8px] !px-1.5 !py-0">
                                   自訂
+                                </Badge>
+                              )}
+                              {gymEquipmentTypes.has(ex.equipmentType) && (
+                                <Badge variant="accent" className="flex-shrink-0 !text-[8px] !px-1.5 !py-0">
+                                  我的
                                 </Badge>
                               )}
                             </div>

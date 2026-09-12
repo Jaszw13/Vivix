@@ -28,7 +28,7 @@ interface PlansState {
   // CRUD
   createPlan: (name: string, description?: string) => string;
   duplicatePlan: (sourceId: string, newName?: string) => string;
-  updatePlan: (id: string, patch: Partial<Pick<TrainingPlan, 'name' | 'description' | 'difficulty' | 'cover'>>) => void;
+  updatePlan: (id: string, patch: Partial<Pick<TrainingPlan, 'name' | 'description' | 'difficulty' | 'cover' | 'days'>>) => void;
   deletePlan: (id: string) => void;
   resetToPreset: (id: string) => boolean;
 

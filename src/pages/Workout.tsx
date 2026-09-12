@@ -17,6 +17,8 @@ import {
 } from '@/store/workoutStore';
 import { useRestTimerStore } from '@/store/restTimerStore';
 import { useEquipmentMemoryStore } from '@/store/equipmentMemoryStore';
+import { useProfileStore } from '@/store/profileStore';
+import { getEquipmentTypesForIds } from '@/data/equipment';
 import {
   exercises as builtinExercises,
 } from '@/data/exercises';
@@ -661,6 +663,12 @@ function SubstituteSheet({ target, onClose, onConfirm }: SubstituteSheetProps) {
   const customExercises = useWorkoutStore((s) => s.customExercises);
   // T-06：依器械記憶排序候選
   const sortByMemory = useEquipmentMemoryStore((s) => s.sortCandidatesByMemory);
+  // T7-4：我的健身房器材
+  const gymEquipmentIds = useProfileStore((s) => s.gymEquipmentIds);
+  const gymEquipmentTypes = useMemo(
+    () => new Set(getEquipmentTypesForIds(gymEquipmentIds)),
+    [gymEquipmentIds],
+  );
   const candidates = useMemo<Exercise[]>(() => {
     const all: Exercise[] = [
       ...builtinExercises.map((e) => e as Exercise),
@@ -669,8 +677,14 @@ function SubstituteSheet({ target, onClose, onConfirm }: SubstituteSheetProps) {
     const filtered = all
       .filter((e) => e.muscleGroup === target.muscleGroup && e.id !== target.currentExerciseId);
     // T-06：排序 - 最近用過的器械記憶優先 → 同器械類型優先 → 名稱
-    return sortByMemory(filtered, target.currentEquipmentType);
-  }, [customExercises, target.muscleGroup, target.currentExerciseId, target.currentEquipmentType, sortByMemory]);
+    const sorted = sortByMemory(filtered, target.currentEquipmentType);
+    // T7-4：我的器材優先（stable sort，不破壞原有相對順序）
+    return [...sorted].sort((a, b) => {
+      const aGym = gymEquipmentTypes.has(a.equipmentType) ? 0 : 1;
+      const bGym = gymEquipmentTypes.has(b.equipmentType) ? 0 : 1;
+      return aGym - bGym;
+    });
+  }, [customExercises, target.muscleGroup, target.currentExerciseId, target.currentEquipmentType, sortByMemory, gymEquipmentTypes]);
 
   return (
     <motion.div
@@ -723,6 +737,9 @@ function SubstituteSheet({ target, onClose, onConfirm }: SubstituteSheetProps) {
                       <div className="text-sm font-bold text-text-primary">{ex.name}</div>
                       {(ex as CustomExercise).isCustom && (
                         <Badge variant="auxiliary">自訂</Badge>
+                      )}
+                      {gymEquipmentTypes.has(ex.equipmentType) && (
+                        <Badge variant="accent">我的健身房</Badge>
                       )}
                     </div>
                     <div className="text-[10px] text-text-secondary mt-0.5">

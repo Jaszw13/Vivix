@@ -57,9 +57,10 @@ L0_positioning:
 | questStore v2 | claimed、completedAt | current |
 | partnerStore v2 | species、name、unlockedFormIds、cosmetics | level、totalWorkouts、totalTrainingDays |
 | equipmentMemoryStore v2 | （改讀取時派生） | memories |
-| profileStore v4 | profile（含 experienceLevel 原始事實）、onboardingCompleted、goal、weeklyReportSeenWeek | — |
+| profileStore v5 | profile（含 experienceLevel 原始事實）、onboardingCompleted、goal、weeklyReportSeenWeek、gymEquipmentIds（T7-3） | — |
 | plansStore v1 | customPlans | — |
 | cardioStore v1 | sessions（id/date/machine/durationMin/kcal/avgHr/distanceKm/createdAt） | —（皆原始事實） |
+| bodyMetricsStore v1 | metrics（id/date/weightKg/muscleMassKg/bodyFatPercent/fatMassKg/createdAt）（T8-1） | —（皆原始事實） |
 | themeStore | theme | — |
 | trialStore v6 | stage、usedCodes、... | — |
 | featureFlags v2 | partnerEnabled | （已刪 4 個無消費端 flag） |

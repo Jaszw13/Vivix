@@ -11,15 +11,17 @@
  *   - date key 歸一化（sessionMap 與格子 key 皆用 dayKey）
  *   - 格子內顯示計畫日縮寫（9px）
  */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Dumbbell } from 'lucide-react';
+import { X, Dumbbell, Pencil, Trash2 } from 'lucide-react';
 import { Card, Badge, StatTile } from '@/components/ui/Card';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { calculateTotalVolume, getSessionPRs, formatDateFull } from '@/utils/workout';
 import { dayKey } from '@/utils/time';
 import { OVERLAY_SCRIM } from '@/data/theme';
+import { settleAll } from '@/features/stats/settleAll';
 import type { WorkoutSession } from '@/types';
+import { DaySessionEditor } from './DaySessionEditor';
 
 interface TrainingCalendarProps {
   year: number;
@@ -43,7 +45,21 @@ function getDayAbbrev(session: WorkoutSession): string {
 
 export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
   const sessions = useWorkoutStore((s) => s.sessions);
+  const deletePastSession = useWorkoutStore((s) => s.deletePastSession);
+  const getStreakDays = useWorkoutStore((s) => s.getStreakDays);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  // T9-1：DaySessionEditor 狀態
+  const [editorDate, setEditorDate] = useState<string | null>(null);
+  const [editorSession, setEditorSession] = useState<WorkoutSession | null>(null);
+  // T9-3：同步 toast
+  const [toast, setToast] = useState<string | null>(null);
+
+  // T9-3：toast 自動消失
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   // 日期 → session 映射（T7：dayKey 歸一化；同天多 session 取最後一筆）
   const sessionMap = useMemo(() => {
@@ -61,6 +77,38 @@ export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
   const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0=Sunday
 
   const selectedSession = selectedDate ? sessionMap.get(selectedDate) ?? null : null;
+
+  // T9-1：開啟 DaySessionEditor（補錄模式）
+  const openEditorForEmpty = (dateStr: string) => {
+    setEditorDate(dateStr);
+    setEditorSession(null);
+  };
+
+  // T9-1：開啟 DaySessionEditor（跨輯模式）
+  const openEditorForEdit = (session: WorkoutSession) => {
+    setSelectedDate(null); // 關閉詳情 sheet
+    setEditorSession(session);
+    setEditorDate(dayKey(new Date(session.date)));
+  };
+
+  // T9-3：儲存後由呼叫端執行 settleAll（silent，無慶祝）+ toast 顯示 streak 同步
+  const handleEditorSaved = () => {
+    setEditorDate(null);
+    setEditorSession(null);
+    // L3：store actions 不 settle；此處（呼叫端）執行統一結算
+    settleAll(undefined, { silent: true });
+    const streak = getStreakDays();
+    setToast(`已同步：連續 ${streak} 天`);
+  };
+
+  // T9-3：刪除後同樣執行 settleAll + toast
+  const handleDelete = (sessionId: string) => {
+    deletePastSession(sessionId);
+    setSelectedDate(null);
+    settleAll(undefined, { silent: true });
+    const streak = getStreakDays();
+    setToast(`已刪除，連續 ${streak} 天`);
+  };
 
   return (
     <div>
@@ -87,16 +135,25 @@ export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
           const session = sessionMap.get(dateStr);
           const isToday = dateStr === todayKey;
           const abbrev = session ? getDayAbbrev(session) : '';
+          // T9-1：過去日或今天（含未記錄日）允許點擊補錄；未來日不可補錄
+          const isPastOrToday = dateStr <= todayKey;
 
           return (
             <button
               key={day}
-              onClick={() => session && setSelectedDate(dateStr)}
+              onClick={() => {
+                if (session) {
+                  setSelectedDate(dateStr);
+                } else if (isPastOrToday) {
+                  openEditorForEmpty(dateStr);
+                }
+              }}
               className={`
                 aspect-square flex flex-col items-center justify-center rounded text-xs font-mono transition-all gap-0.5
                 ${session ? 'bg-accent/20 text-text-primary font-bold hover:bg-accent/30' : 'text-text-secondary'}
+                ${!session && isPastOrToday ? 'hover:bg-bg-card cursor-pointer' : ''}
                 ${isToday ? 'ring-1 ring-accent' : ''}
-                ${session ? 'cursor-pointer' : 'cursor-default'}
+                ${session || isPastOrToday ? 'cursor-pointer' : 'cursor-default'}
               `}
             >
               <span>{day}</span>
@@ -104,6 +161,10 @@ export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
                 <span className="text-[9px] leading-none opacity-70 truncate max-w-full">
                   {abbrev}
                 </span>
+              )}
+              {/* T9-1：未記錄過去日顯示淡 + 號提示 */}
+              {!session && isPastOrToday && (
+                <span className="text-[8px] leading-none opacity-30">+</span>
               )}
             </button>
           );
@@ -210,8 +271,59 @@ export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
                     })}
                   </div>
                 )}
+
+                {/* T9-1/T9-2：跨輯入口 */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => openEditorForEdit(selectedSession)}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 text-xs uppercase tracking-wider text-accent font-bold border border-accent/40 rounded-button hover:bg-accent/10 transition-colors"
+                  >
+                    <Pencil size={14} /> 編輯這天訓練
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm('確認刪除這天的訓練記錄？刪除後進度會回退，但已解鎖的成就仍保留。')) {
+                        handleDelete(selectedSession.id);
+                      }
+                    }}
+                    className="flex items-center justify-center gap-2 px-3 py-2.5 text-xs uppercase tracking-wider text-auxiliary font-bold border border-auxiliary/40 rounded-button hover:bg-auxiliary/10 transition-colors"
+                    aria-label="刪除這天訓練"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* T9-1：DaySessionEditor（補錄／跨輯） */}
+      <AnimatePresence>
+        {editorDate && (
+          <DaySessionEditor
+            key={editorSession?.id ?? editorDate}
+            date={editorDate}
+            existingSession={editorSession}
+            onClose={() => {
+              setEditorDate(null);
+              setEditorSession(null);
+            }}
+            onSaved={handleEditorSaved}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* T9-3：同步 toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-20 left-1/2 -translate-x-1/2 z-[70] px-4 py-2 bg-bg-card border border-border rounded-button shadow-card max-w-[90vw]"
+          >
+            <span className="text-xs text-text-primary font-medium">{toast}</span>
           </motion.div>
         )}
       </AnimatePresence>

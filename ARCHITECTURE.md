@@ -79,7 +79,8 @@ RecognitionModal 每匯入批次一次（E8，非 ever-once）
 ┌───────────────▼──────────────────────────────────────────┐
 │  Components（src/components, src/features/*/components）  │
 │  Card / Badge / RestTimer / MiniTimerBar /             │
-│  WeeklyReportModal / TrainingCalendar / ...            │
+│  WeeklyReportModal / TrainingCalendar / DaySessionEditor│
+│  / BodyMetricAddForm / ...                              │
 └───────────────┬──────────────────────────────────────────┘
                 │
 ┌───────────────▼──────────────────────────────────────────┐
@@ -99,15 +100,17 @@ RecognitionModal 每匯入批次一次（E8，非 ever-once）
 │  Store 層（Zustand + persist + migrate）                  │
 │  workoutStore / achievementsStore / questStore /         │
 │  partnerStore / profileStore / equipmentMemoryStore /   │
-│  cardioStore / plansStore / themeStore / trialStore /   │
-│  featureFlags / restTimerStore（不 persist）             │
+│  cardioStore / bodyMetricsStore / plansStore /          │
+│  themeStore / trialStore / featureFlags /               │
+│  restTimerStore（不 persist）                           │
 └───────────────┬──────────────────────────────────────────┘
                 │ persist (localStorage)
 ┌───────────────▼──────────────────────────────────────────┐
 │  事實層（只存原始事實＋永久決定）                          │
 │  sessions（含 startedAt/finishedAt）、customExercises、  │
-│  plans、profile、cardioSessions、                        │
-│  unlockedAt/seen/pending/claimed、theme、trial          │
+│  plans、profile（含 gymEquipmentIds）、cardioSessions、  │
+│  bodyMetrics、unlockedAt/seen/pending/claimed、        │
+│  theme、trial                                          │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -153,10 +156,11 @@ RecognitionModal 每匯入批次一次（E8，非 ever-once）
 4. `quests` settlement：達標 → completed（ctx streak 取 **力量日 ∪ 有氧日 union**，E-D3）
 5. `telemetry`：新解鎖統一在此 log；另 cardio add/delete 與 EE 事件在 action 內觸發
 
-**觸發點僅三處**：
+**觸發點僅四處**：
 
 - `finishSession` 後（WorkoutSummary mount）
 - `addCardio` / `deleteCardio` / `editCustomExercise` / `deleteCustomExercise` 後（走 `settleTaxonomyChange`）
+- `addPastSession` / `updatePastSession` / `deletePastSession` 後（T9-3；由 TrainingCalendar 呼叫端執行 `settleAll(undefined, { silent: true })`，store 內不 settle）
 - load / migrate 後一次（`settleOnLoad`，`silent: true` 不彈慶祝）
 
 註：頁面進入（Dashboard／AchievementsPage mount）呼叫 `settleTaxonomyChange` 為冪等安全網 — `unlockedAt` 永久，不會重複慶祝／重複 telemetry。
@@ -311,3 +315,26 @@ metric 擴充：`cardioMinutesTotal` / `cardioSessionsTotal` / `cardioWeeklyRhyt
 - 點擊某天 → bottom sheet 顯示：planSnapshot.dayName / 「歷史記錄」（imported）/ 「自由訓練」（null）+ 動作 chips + 總噸數 + PR 數
 - `WorkoutSession.planSnapshot`：startSession 時寫入 `{ planId, dayId, dayName }`；舊 session migrate 補 null
 - Progress 頁月份切換（‹ ›）；不 persist calendar state（每次進頁預設當月）
+
+## 17. 回饋整合 v2（T7–T9）
+
+### 17.1 計畫編輯器重構＋器械檔案（T7）
+
+- **PlanDetail local draft**（T7-1）：受控輸入改 local draft state（`dayNameDrafts`/`setsDrafts`/`repsDrafts`），onChange 只寫 draft → onBlur／儲存鈕／切換日時 commit 到 plansStore，消除逐字刷新。
+- **器械庫擴展**（T7-2）：`data/equipment.ts` 擴至 30 項（固定器械／自由重量／纜繩／壺鈴／彈力帶／徒手／其他）；查詢函式 `getEquipmentByCategory` / `getEquipmentTypesForIds`。
+- **我的健身房器材**（T7-3）：`profileStore` v4→v5 加 `gymEquipmentIds: string[]`（partialize＋migrate 預設 `[]`）；Settings 多選 chips 按 category 分組。
+- **器械過濾＋替換優先**（T7-4）：PlanDetail「新增動作」sheet 預設只顯示我的器材（toggle 可顯示全部）；替換 sheet 排序：同肌群＋我的器材優先；「我的健身房」badge。
+- **一鍵產生計畫**（T7-5）：Plans 頁按鈕依匹配率選 preset → deep copy → 不在我的器材的動作：唯一同肌群候選自動替換，否則標 ⚠ 待手動。
+
+### 17.2 身體組成追蹤（T8）
+
+- **bodyMetricsStore v1**（T8-1）：persist key `vivix-body-metrics-v1`；`BodyMetric{id, date, weightKg?, muscleMassKg?, bodyFatPercent?, fatMassKg?, createdAt}`；add/update/delete + `getLatest`/`getSorted` selectors；migrate unknown + guard。
+- **Progress 身體組成 section**（T8-2）：表單 modal（日期預設今天、4 欄選填 ≥1）；Recharts LineChart 雙 Y 軸（左 kg：體重/肌肉/脂肪量；右 %：體脂）；delta tile（最新 vs 最早）；Progress 頂部入口卡。
+- T8-3（Dashboard chip）SKIP。
+
+### 17.3 歷史追蹤直接補錄（T9）
+
+- **DaySessionEditor**（T9-1）：`components/progress/DaySessionEditor.tsx`；本地 draft（`ExerciseLog[]`）；動作選擇 picker（allExercises 含自訂、預設我的器材過濾）；每動作組數行 weight/reps 增減 + 增減組；儲存時所有組 `completed=true`；取消零寫入。TrainingCalendar 空過去日格子可點擊開 editor（補錄模式）；日 sheet 加「編輯這天訓練」按鈕（跨輯模式預填）。
+- **past-session store actions**（T9-2）：`addPastSession(date, exerciseLogs)` / `updatePastSession(sessionId, patch)` / `deletePastSession(sessionId)`。`planSnapshot = null`（月曆顯示「自由訓練」）；`imported = false`（手動補錄非匯入）；sessions 保持日期排序；personalRecords 由底部 subscribe 自動重算。**L3：store 內不 settle，由呼叫端走 settleAll**。
+- **結算同步**（T9-3）：TrainingCalendar 於儲存／刪除後執行 `settleAll(undefined, { silent: true })` + toast「已同步：連續 X 天」。`getStreakDays`／週報／成就皆反映；刪除 → 派生視圖回退但已 unlocked 成就仍在（D2）。
+- T9-4（ImportHistoryModal 統一寫入路徑）SKIP。

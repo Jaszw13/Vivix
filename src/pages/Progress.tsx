@@ -16,7 +16,7 @@ import {
   Cell,
   Legend,
 } from 'recharts';
-import { Trophy, TrendingUp, BarChart3, AlertCircle, Dumbbell, Activity, Plus, X, Zap, Info, Trash2 } from 'lucide-react';
+import { Trophy, TrendingUp, BarChart3, AlertCircle, Dumbbell, Activity, Plus, X, Zap, Info, Trash2, Scale } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { Card, SectionHeader, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -25,13 +25,14 @@ import { TrainingCalendar } from '@/components/progress/TrainingCalendar';
 import { useWorkoutStore, getAllExercises } from '@/store/workoutStore';
 import { useProfileStore } from '@/store/profileStore';
 import { useCardioStore } from '@/store/cardioStore';
+import { useBodyMetricsStore } from '@/store/bodyMetricsStore';
 import { formatDate, formatDateFull } from '@/utils/workout';
 import {
   MUSCLE_GROUP_LABELS,
   EQUIPMENT_TYPE_LABELS,
   MUSCLE_GROUP_OPTIONS,
 } from '@/types';
-import type { MuscleGroup, PersonalRecord, CardioSession, CardioMachine } from '@/types';
+import type { MuscleGroup, PersonalRecord, CardioSession, CardioMachine, BodyMetric } from '@/types';
 import { cn } from '@/lib/utils';
 import { CHART_WEEK_COLORS } from '@/data/theme';
 import { estimateStrengthKcal, estimateCardioKcal } from '@/features/stats/energy';
@@ -57,6 +58,11 @@ export default function Progress() {
   const addCardio = useCardioStore((s) => s.addCardio);
   const deleteCardio = useCardioStore((s) => s.deleteCardio);
   const [cardioAddOpen, setCardioAddOpen] = useState(false);
+  // T8：身體組成
+  const bodyMetrics = useBodyMetricsStore((s) => s.metrics);
+  const addBodyMetric = useBodyMetricsStore((s) => s.addMetric);
+  const deleteBodyMetric = useBodyMetricsStore((s) => s.deleteMetric);
+  const [bodyModalOpen, setBodyModalOpen] = useState(false);
   const WEEK_COLORS = CHART_WEEK_COLORS;
   // T5：歷週報告
   const [showReport, setShowReport] = useState(false);
@@ -202,6 +208,38 @@ export default function Progress() {
     [cardioSessions],
   );
 
+  // ----- T8：身體組成衍生數據（L2：全衍生） -----
+  const bodySorted = useMemo(
+    () => [...bodyMetrics].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    [bodyMetrics],
+  );
+  const bodyLatest = bodySorted.length > 0 ? bodySorted[bodySorted.length - 1] : null;
+  const bodyEarliest = bodySorted.length > 0 ? bodySorted[0] : null;
+  const bodyChartData = useMemo(
+    () =>
+      bodySorted.map((m) => ({
+        date: formatDate(m.date),
+        weightKg: m.weightKg ?? null,
+        muscleMassKg: m.muscleMassKg ?? null,
+        fatMassKg: m.fatMassKg ?? null,
+        bodyFatPercent: m.bodyFatPercent ?? null,
+      })),
+    [bodySorted],
+  );
+  const bodyDelta = useMemo(() => {
+    if (!bodyLatest || !bodyEarliest || bodyLatest.id === bodyEarliest.id) return null;
+    return {
+      weightKg: bodyLatest.weightKg != null && bodyEarliest.weightKg != null
+        ? bodyLatest.weightKg - bodyEarliest.weightKg : null,
+      muscleMassKg: bodyLatest.muscleMassKg != null && bodyEarliest.muscleMassKg != null
+        ? bodyLatest.muscleMassKg - bodyEarliest.muscleMassKg : null,
+      bodyFatPercent: bodyLatest.bodyFatPercent != null && bodyEarliest.bodyFatPercent != null
+        ? bodyLatest.bodyFatPercent - bodyEarliest.bodyFatPercent : null,
+      fatMassKg: bodyLatest.fatMassKg != null && bodyEarliest.fatMassKg != null
+        ? bodyLatest.fatMassKg - bodyEarliest.fatMassKg : null,
+    };
+  }, [bodyLatest, bodyEarliest]);
+
   return (
     <PageShell title="進度追蹤">
       {/* ===== T5 歷週報告入口 ===== */}
@@ -222,6 +260,119 @@ export default function Progress() {
           </span>
         </button>
       </motion.div>
+
+      {/* ===== T8 身體組成追蹤 ===== */}
+      <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="mb-5">
+        <SectionHeader
+          title="身體組成"
+          subtitle="體重、肌肉量、體脂率追蹤"
+          action={
+            <button
+              onClick={() => setBodyModalOpen(true)}
+              className="text-xs uppercase tracking-wider text-accent font-bold flex items-center gap-1"
+            >
+              <Plus size={14} /> 新增
+            </button>
+          }
+        />
+        <Card className="p-4">
+          {bodyLatest ? (
+            <>
+              {/* 最新數值摘要 */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-11 h-11 rounded-xl bg-accent/15 flex items-center justify-center">
+                  <Scale size={20} className="text-accent" />
+                </div>
+                <div>
+                  <div className="font-mono text-lg font-bold text-text-primary">
+                    {bodyLatest.weightKg != null ? `${bodyLatest.weightKg} kg` : '—'}
+                  </div>
+                  <div className="text-[10px] uppercase tracking-widest text-text-secondary">
+                    {formatDate(bodyLatest.date)} 最新
+                  </div>
+                </div>
+              </div>
+
+              {/* Delta tiles（≥2 筆時顯示） */}
+              {bodyDelta && (
+                <div className="grid grid-cols-4 gap-2 mb-4">
+                  <BodyDeltaTile label="體重" delta={bodyDelta.weightKg} unit="kg" />
+                  <BodyDeltaTile label="肌肉" delta={bodyDelta.muscleMassKg} unit="kg" />
+                  <BodyDeltaTile label="體脂" delta={bodyDelta.bodyFatPercent} unit="%" />
+                  <BodyDeltaTile label="脂肪" delta={bodyDelta.fatMassKg} unit="kg" />
+                </div>
+              )}
+
+              {/* LineChart 雙 Y 軸（≥2 筆時顯示） */}
+              {bodyChartData.length >= 2 && (
+                <div className="h-56 mb-4">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={bodyChartData} margin={{ top: 10, right: 10, bottom: 0, left: -16 }}>
+                      <CartesianGrid stroke="var(--border-color)" strokeDasharray="2 4" vertical={false} />
+                      <XAxis dataKey="date" stroke="var(--text-secondary)" tick={{ fontSize: 9, fontFamily: 'JetBrains Mono' }} tickLine={false} axisLine={false} />
+                      <YAxis yAxisId="kg" stroke="var(--text-secondary)" tick={{ fontSize: 10, fontFamily: 'JetBrains Mono' }} tickLine={false} axisLine={false} width={36} />
+                      <YAxis yAxisId="pct" orientation="right" stroke="var(--text-secondary)" tick={{ fontSize: 10, fontFamily: 'JetBrains Mono' }} tickLine={false} axisLine={false} width={32} />
+                      <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: 'var(--text-secondary)' }} />
+                      <Line yAxisId="kg" type="monotone" dataKey="weightKg" name="體重" stroke="var(--accent)" strokeWidth={2} dot={{ fill: 'var(--accent)', r: 2 }} connectNulls />
+                      <Line yAxisId="kg" type="monotone" dataKey="muscleMassKg" name="肌肉量" stroke="var(--auxiliary)" strokeWidth={2} dot={{ fill: 'var(--auxiliary)', r: 2 }} connectNulls />
+                      <Line yAxisId="kg" type="monotone" dataKey="fatMassKg" name="脂肪量" stroke="var(--text-secondary)" strokeWidth={1.5} dot={{ fill: 'var(--text-secondary)', r: 2 }} connectNulls />
+                      <Line yAxisId="pct" type="monotone" dataKey="bodyFatPercent" name="體脂率" stroke="var(--auxiliary)" strokeWidth={2} strokeDasharray="4 2" dot={{ fill: 'var(--auxiliary)', r: 2 }} connectNulls />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+
+              {/* 記錄列表（可刪除） */}
+              <div className="border-t border-border/40 pt-3">
+                <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-2">
+                  記錄（{bodySorted.length} 筆）
+                </div>
+                <div className="max-h-40 overflow-y-auto -mx-1">
+                  {[...bodySorted].reverse().map((m) => (
+                    <div key={m.id} className="flex items-center gap-2 px-1 py-1.5">
+                      <div className="text-[10px] text-text-secondary font-mono w-20 flex-shrink-0">
+                        {formatDate(m.date)}
+                      </div>
+                      <div className="flex-1 flex items-center gap-2 text-[11px] font-mono text-text-primary">
+                        {m.weightKg != null && <span>{m.weightKg}kg</span>}
+                        {m.muscleMassKg != null && <span className="text-auxiliary">{m.muscleMassKg}kg肌</span>}
+                        {m.bodyFatPercent != null && <span>{m.bodyFatPercent}%</span>}
+                        {m.fatMassKg != null && <span className="text-text-secondary">{m.fatMassKg}kg脂</span>}
+                      </div>
+                      <button
+                        onClick={() => { if (confirm('確認刪除這筆記錄？')) deleteBodyMetric(m.id); }}
+                        className="text-text-secondary hover:text-auxiliary transition-colors"
+                        aria-label="刪除"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            /* 空狀態 */
+            <div className="py-8 text-center">
+              <Scale size={28} className="mx-auto mb-2 text-text-secondary opacity-50" />
+              <p className="text-sm text-text-secondary">尚未記錄身體組成</p>
+              <p className="text-[11px] text-text-secondary/70 mt-1">
+                記錄體重、肌肉量、體脂率，追蹤你的身體變化
+              </p>
+              <Button size="sm" className="mt-3" onClick={() => setBodyModalOpen(true)}>
+                <Plus size={14} /> 新增第一筆
+              </Button>
+            </div>
+          )}
+        </Card>
+      </motion.div>
+
+      {/* T8：身體組成新增表單 */}
+      <BodyMetricAddForm
+        open={bodyModalOpen}
+        onClose={() => setBodyModalOpen(false)}
+        onSubmit={(payload) => { addBodyMetric(payload); setBodyModalOpen(false); }}
+      />
 
       {/* ===== T6 月曆 ===== */}
       <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="mb-5">
@@ -1105,6 +1256,132 @@ function GroupStatTile({
       </div>
       <div className="text-[9px] uppercase tracking-widest text-text-secondary mt-0.5">
         {label}
+      </div>
+    </div>
+  );
+}
+
+// ===== T8：身體組成 delta tile =====
+function BodyDeltaTile({ label, delta, unit }: { label: string; delta: number | null; unit: string }) {
+  if (delta === null) {
+    return (
+      <div className="py-1.5 text-center">
+        <div className="font-mono text-sm text-text-secondary">—</div>
+        <div className="text-[9px] uppercase tracking-widest text-text-secondary mt-0.5">{label}</div>
+      </div>
+    );
+  }
+  const isUp = delta > 0;
+  const isFlat = delta === 0;
+  const arrow = isFlat ? '→' : isUp ? '↑' : '↓';
+  const colorClass = isFlat ? 'text-text-secondary' : isUp ? 'text-accent' : 'text-text-secondary';
+  return (
+    <div className="py-1.5 text-center">
+      <div className={cn('font-mono text-sm font-bold', colorClass)}>
+        {arrow} {Math.abs(delta).toFixed(1)}{unit}
+      </div>
+      <div className="text-[9px] uppercase tracking-widest text-text-secondary mt-0.5">{label}</div>
+    </div>
+  );
+}
+
+// ===== T8：身體組成新增表單 =====
+interface BodyMetricFormPayload {
+  date?: string;
+  weightKg?: number | null;
+  muscleMassKg?: number | null;
+  bodyFatPercent?: number | null;
+  fatMassKg?: number | null;
+}
+interface BodyMetricFormProps {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (p: BodyMetricFormPayload) => void;
+}
+function BodyMetricAddForm({ open, onClose, onSubmit }: BodyMetricFormProps) {
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [date, setDate] = useState(todayStr);
+  const [weightKg, setWeightKg] = useState('');
+  const [muscleMassKg, setMuscleMassKg] = useState('');
+  const [bodyFatPercent, setBodyFatPercent] = useState('');
+  const [fatMassKg, setFatMassKg] = useState('');
+  const [err, setErr] = useState('');
+
+  const reset = () => {
+    setDate(todayStr);
+    setWeightKg('');
+    setMuscleMassKg('');
+    setBodyFatPercent('');
+    setFatMassKg('');
+    setErr('');
+  };
+  const close = () => { reset(); onClose(); };
+  const submit = () => {
+    const w = weightKg.trim();
+    const m = muscleMassKg.trim();
+    const bf = bodyFatPercent.trim();
+    const fm = fatMassKg.trim();
+    if (!w && !m && !bf && !fm) { setErr('至少填寫一項數值'); return; }
+    onSubmit({
+      date: date || undefined,
+      weightKg: w ? parseFloat(w) : null,
+      muscleMassKg: m ? parseFloat(m) : null,
+      bodyFatPercent: bf ? parseFloat(bf) : null,
+      fatMassKg: fm ? parseFloat(fm) : null,
+    });
+    reset();
+  };
+
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4">
+      <div className="w-full max-w-md bg-bg-primary rounded-t-2xl sm:rounded-2xl p-5 shadow-2xl border border-border/40">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-display text-2xl tracking-wide uppercase text-text-primary">
+              記錄身體組成
+            </h3>
+            <p className="text-xs text-text-secondary mt-0.5">至少填寫一項</p>
+          </div>
+          <button onClick={close} className="text-text-secondary hover:text-text-primary" aria-label="關閉">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="space-y-3">
+          <label className="block">
+            <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-1">日期</div>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+              className="w-full bg-bg-secondary rounded-button px-3 py-2 text-text-primary font-mono border border-border/40 focus:border-accent focus:outline-none" />
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-1">體重（kg）</div>
+              <input type="number" min={0} step={0.1} inputMode="decimal" value={weightKg} onChange={(e) => setWeightKg(e.target.value)} placeholder="70.5"
+                className="w-full bg-bg-secondary rounded-button px-3 py-2 text-text-primary font-mono border border-border/40 focus:border-accent focus:outline-none" />
+            </label>
+            <label className="block">
+              <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-1">肌肉量（kg）</div>
+              <input type="number" min={0} step={0.1} inputMode="decimal" value={muscleMassKg} onChange={(e) => setMuscleMassKg(e.target.value)} placeholder="32.0"
+                className="w-full bg-bg-secondary rounded-button px-3 py-2 text-text-primary font-mono border border-border/40 focus:border-accent focus:outline-none" />
+            </label>
+            <label className="block">
+              <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-1">體脂率（%）</div>
+              <input type="number" min={0} max={100} step={0.1} inputMode="decimal" value={bodyFatPercent} onChange={(e) => setBodyFatPercent(e.target.value)} placeholder="18.5"
+                className="w-full bg-bg-secondary rounded-button px-3 py-2 text-text-primary font-mono border border-border/40 focus:border-accent focus:outline-none" />
+            </label>
+            <label className="block">
+              <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-1">脂肪量（kg）</div>
+              <input type="number" min={0} step={0.1} inputMode="decimal" value={fatMassKg} onChange={(e) => setFatMassKg(e.target.value)} placeholder="13.0"
+                className="w-full bg-bg-secondary rounded-button px-3 py-2 text-text-primary font-mono border border-border/40 focus:border-accent focus:outline-none" />
+            </label>
+          </div>
+          {err && <p className="text-[11px] text-auxiliary">{err}</p>}
+        </div>
+        <div className="grid grid-cols-2 gap-3 mt-5">
+          <Button variant="ghost" onClick={close}>取消</Button>
+          <Button onClick={submit}>記錄</Button>
+        </div>
       </div>
     </div>
   );

@@ -151,6 +151,16 @@ interface WorkoutState {
   /** 刪除指定 session（匯入 session 刪除後進度 live 下降；成就永久保留 D2） */
   deleteSession: (sessionId: string) => void;
 
+  // T9：歷史補錄 store actions（L1 純事實寫入；L3 不 settle，由呼叫端走 settleAll）
+  /** T9-1/T9-2：補錄過去日訓練。date 為 dayKey "YYYY-MM-DD"；logs 由 DaySessionEditor 構建。
+   *  planSnapshot = null（月曆顯示「自由訓練」）；imported = false（手動補錄非匯入）。
+   *  sessions 保持日期排序；personalRecords 由底部 subscribe 自動重算。 */
+  addPastSession: (date: string, exerciseLogs: ExerciseLog[]) => WorkoutSession;
+  /** T9-2：更新既有過去 session（跨輯模式儲存）。保留 id/date/imported；覆寫 exercises/duration/totalVolume。 */
+  updatePastSession: (sessionId: string, patch: Partial<Pick<WorkoutSession, 'exercises' | 'duration' | 'totalVolume' | 'notes'>>) => void;
+  /** T9-2：刪除過去 session（補錄刪除；confirm 由呼叫端 UI 處理）。L3：不 settle。 */
+  deletePastSession: (sessionId: string) => void;
+
   // 統計
   getTotalSessions: () => number;
   getTotalVolume: () => number;
@@ -523,6 +533,59 @@ export const useWorkoutStore = create<WorkoutState>()(
       },
 
       deleteSession: (sessionId) => {
+        set((s) => ({
+          sessions: s.sessions.filter((sess) => sess.id !== sessionId),
+        }));
+      },
+
+      // T9-1/T9-2：歷史補錄（L1 純事實；L3 不 settle — 由呼叫端 Progress/Calendar 走 settleAll）
+      addPastSession: (date, exerciseLogs) => {
+        // date 為 dayKey "YYYY-MM-DD"；轉成該日本地中午 ISO，避免跨時區跨日
+        const sessionDate = new Date(`${date}T12:00:00`).toISOString();
+        const session: WorkoutSession = {
+          id: generateId('session'),
+          date: sessionDate,
+          warmupCompletedIds: [],
+          duration: 0,
+          totalVolume: exerciseLogs.reduce(
+            (sum, ex) => sum + ex.sets.filter((s) => s.completed).reduce((s2, s) => s2 + s.weight * s.reps, 0),
+            0,
+          ),
+          exercises: exerciseLogs,
+          startedAt: null,
+          finishedAt: null,
+          imported: false,
+          planSnapshot: null,
+        };
+        const next = [...get().sessions, session].sort(
+          (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+        );
+        set({ sessions: next });
+        return session;
+      },
+
+      // T9-2：跨輯模式更新既有過去 session（保留 id/date/imported）
+      updatePastSession: (sessionId, patch) => {
+        set((s) => ({
+          sessions: s.sessions
+            .map((sess) => {
+              if (sess.id !== sessionId) return sess;
+              const merged: WorkoutSession = { ...sess, ...patch };
+              // 重算 totalVolume（若 exercises 變更）
+              if (patch.exercises) {
+                merged.totalVolume = patch.exercises.reduce(
+                  (sum, ex) => sum + ex.sets.filter((set) => set.completed).reduce((s2, set) => s2 + set.weight * set.reps, 0),
+                  0,
+                );
+              }
+              return merged;
+            })
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+        }));
+      },
+
+      // T9-2：刪除過去 session（L3：不 settle — 由呼叫端走 settleAll；confirm 由 UI 處理）
+      deletePastSession: (sessionId) => {
         set((s) => ({
           sessions: s.sessions.filter((sess) => sess.id !== sessionId),
         }));

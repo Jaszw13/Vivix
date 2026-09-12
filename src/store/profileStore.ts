@@ -27,12 +27,18 @@ interface ProfileState {
   goal: TrainingGoalValue | null;
   /** T5：本週已顯示過週報的 ISO 週序號（防重複彈窗）；null=從未顯示 */
   weeklyReportSeenWeek: string | null;
+  /** T7-3：我的健身房器材 ID 列表（equipmentLibrary 中的 eq-* id） */
+  gymEquipmentIds: string[];
   updateProfile: (patch: Partial<UserProfile>) => void;
   completeOnboarding: (goal: TrainingGoalValue) => void;
   resetOnboarding: () => void;
   resetAllData: () => void;
   /** T5：標記某週的週報已顯示 */
   markWeeklyReportSeen: (weekKey: string) => void;
+  /** T7-3：切換某器材的選取狀態 */
+  toggleGymEquipment: (equipmentId: string) => void;
+  /** T7-3：批量設定我的器材 */
+  setGymEquipmentIds: (ids: string[]) => void;
 }
 
 const defaultProfile: UserProfile = {
@@ -51,9 +57,20 @@ export const useProfileStore = create<ProfileState>()(
       onboardingCompleted: false,
       goal: null,
       weeklyReportSeenWeek: null,
+      gymEquipmentIds: [],
       updateProfile: (patch) =>
         set((state) => ({ profile: { ...state.profile, ...patch } })),
       markWeeklyReportSeen: (weekKey) => set({ weeklyReportSeenWeek: weekKey }),
+      toggleGymEquipment: (equipmentId) =>
+        set((state) => {
+          const has = state.gymEquipmentIds.includes(equipmentId);
+          return {
+            gymEquipmentIds: has
+              ? state.gymEquipmentIds.filter((id) => id !== equipmentId)
+              : [...state.gymEquipmentIds, equipmentId],
+          };
+        }),
+      setGymEquipmentIds: (ids) => set({ gymEquipmentIds: ids }),
       completeOnboarding: (goal) => {
         // onboarding 完成後，順便把名字更新得更個人化
         const stored = localStorage.getItem('ironpulse-profile');
@@ -78,6 +95,7 @@ export const useProfileStore = create<ProfileState>()(
           onboardingCompleted: false,
           goal: null,
           weeklyReportSeenWeek: null,
+          gymEquipmentIds: [],
         });
         // 重新載入以重置所有 store
         window.location.reload();
@@ -85,12 +103,13 @@ export const useProfileStore = create<ProfileState>()(
     }),
     {
       name: 'ironpulse-profile',
-      version: 4,
+      version: 5,
       partialize: (state) => ({
         profile: state.profile,
         onboardingCompleted: state.onboardingCompleted,
         goal: state.goal,
         weeklyReportSeenWeek: state.weeklyReportSeenWeek,
+        gymEquipmentIds: state.gymEquipmentIds,
       }),
       // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
       onRehydrateStorage: () => {
@@ -142,11 +161,16 @@ export const useProfileStore = create<ProfileState>()(
           typeof raw.weeklyReportSeenWeek === 'string'
             ? raw.weeklyReportSeenWeek
             : null;
+        // T7-3 v4→v5：補 gymEquipmentIds（空陣列 = 未設定）
+        const gymEquipmentIds: string[] = Array.isArray(raw.gymEquipmentIds)
+          ? raw.gymEquipmentIds.filter((id): id is string => typeof id === 'string')
+          : [];
         return {
           profile: migratedProfile,
           onboardingCompleted,
           goal,
           weeklyReportSeenWeek,
+          gymEquipmentIds,
         };
       },
     }

@@ -1,12 +1,16 @@
 import { useNavigate } from 'react-router-dom';
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { ChevronRight, Clock, Plus, Copy, Trash2 } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronRight, Clock, Plus, Copy, Trash2, Wand2 } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { Card, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { usePlansStore } from '@/store/plansStore';
+import { useProfileStore } from '@/store/profileStore';
+import { useWorkoutStore } from '@/store/workoutStore';
 import { trainingPlans } from '@/data/plans';
+import { exercises as builtinExercises } from '@/data/exercises';
+import { getEquipmentTypesForIds } from '@/data/equipment';
 import { DIFFICULTY_LABELS } from '@/types';
 import { cn } from '@/lib/utils';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
@@ -16,16 +20,115 @@ type Tab = 'preset' | 'custom';
 export default function Plans() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>('preset');
+  const [toast, setToast] = useState<string | null>(null);
   const customPlans = usePlansStore((s) => s.customPlans);
   const createPlan = usePlansStore((s) => s.createPlan);
   const duplicatePlan = usePlansStore((s) => s.duplicatePlan);
   const deletePlan = usePlansStore((s) => s.deletePlan);
+  const getPlanById = usePlansStore((s) => s.getPlanById);
+  const updatePlan = usePlansStore((s) => s.updatePlan);
+  const gymEquipmentIds = useProfileStore((s) => s.gymEquipmentIds);
+  const customExercises = useWorkoutStore((s) => s.customExercises);
   const log = useTelemetryStore((s) => s.log);
+
+  const allExercises = useMemo(
+    () => [...builtinExercises, ...customExercises],
+    [customExercises],
+  );
+  const gymEquipmentTypes = useMemo(
+    () => new Set(getEquipmentTypesForIds(gymEquipmentIds)),
+    [gymEquipmentIds],
+  );
+
+  // Toast 自動消失
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const handleCreate = () => {
     const id = createPlan('我的計畫', '自訂訓練計畫');
     log('plan_created', { id });
     navigate(`/plans/${id}`);
+  };
+
+  // T7-5：依我的器材一鍵產生計畫
+  const handleGenerateFromEquipment = () => {
+    if (gymEquipmentIds.length === 0) {
+      setToast('請先到「設定 → 我的健身房器材」選擇你的器材');
+      return;
+    }
+
+    // 依匹配率選最佳 preset
+    let bestPreset = trainingPlans[0];
+    let bestRate = -1;
+    for (const preset of trainingPlans) {
+      const total = preset.days.reduce((s, d) => s + d.exercises.length, 0);
+      const matched = preset.days.reduce(
+        (s, d) => s + d.exercises.filter((ex) => gymEquipmentTypes.has(ex.snapshot.equipmentType)).length,
+        0,
+      );
+      const rate = total > 0 ? matched / total : 0;
+      if (rate > bestRate) {
+        bestRate = rate;
+        bestPreset = preset;
+      }
+    }
+
+    // 複製 preset 為自訂計畫（含新 ID）
+    const newId = duplicatePlan(bestPreset.id, '我的器材計畫');
+    const newPlan = getPlanById(newId);
+    if (!newPlan) return;
+
+    // 逐動作檢查：我的器材可匹配則保留，否則嘗試自動替換或標 ⚠
+    const modifiedDays = newPlan.days.map((day) => ({
+      ...day,
+      exercises: day.exercises.map((ex) => {
+        // 已在我的器材中 → 保留
+        if (gymEquipmentTypes.has(ex.snapshot.equipmentType)) return ex;
+
+        // 尋找同肌群 + 我的器材的候選
+        const candidates = allExercises.filter(
+          (e) =>
+            e.muscleGroup === ex.snapshot.muscleGroup &&
+            gymEquipmentTypes.has(e.equipmentType) &&
+            e.id !== ex.exerciseId,
+        );
+
+        if (candidates.length === 1) {
+          // 唯一候選 → 自動替換
+          const rep = candidates[0];
+          return {
+            ...ex,
+            exerciseId: rep.id,
+            name: rep.name,
+            snapshot: {
+              name: rep.name,
+              muscleGroup: ex.snapshot.muscleGroup,
+              equipmentType: rep.equipmentType,
+            },
+          };
+        }
+
+        // 多候選或無候選 → 標 ⚠ 待手動替換
+        const warnName = `⚠ ${ex.snapshot.name}`;
+        return {
+          ...ex,
+          name: warnName,
+          snapshot: { ...ex.snapshot, name: warnName },
+        };
+      }),
+    }));
+
+    updatePlan(newId, {
+      days: modifiedDays,
+      name: '我的器材計畫',
+      description: '依你的健身房器材自動產生，標有 ⚠ 的動作請手動替換',
+    });
+
+    log('plan_generated_from_equipment', { presetId: bestPreset.id, id: newId });
+    navigate(`/plans/${newId}`);
   };
 
   const handleDuplicate = (presetId: string) => {
@@ -66,6 +169,13 @@ export default function Plans() {
           我的 {customPlans.length > 0 && `(${customPlans.length})`}
         </button>
       </div>
+
+      {/* T7-5：依我的器材一鍵產生計畫 */}
+      {tab === 'preset' && gymEquipmentIds.length > 0 && (
+        <Button fullWidth size="md" className="mb-4" onClick={handleGenerateFromEquipment}>
+          <Wand2 size={16} /> 依我的器材產生計畫
+        </Button>
+      )}
 
       {tab === 'custom' && (
         <Button fullWidth size="md" className="mb-4" onClick={handleCreate}>
@@ -179,6 +289,20 @@ export default function Plans() {
           ))}
         </div>
       )}
+
+      {/* Toast */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 24 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-bg-primary border border-accent/40 rounded-button shadow-xl"
+          >
+            <span className="text-xs text-text-primary font-medium">{toast}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </PageShell>
   );
 }

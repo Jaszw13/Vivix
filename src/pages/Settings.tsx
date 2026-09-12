@@ -11,6 +11,8 @@ import { useWorkoutStore } from '@/store/workoutStore';
 import { useTrialStore, STANDARD_STAGES, DEV_STAGES } from '@/store/trialStore';
 import { DAY_MS } from '@/utils/time';
 import { THEME_DEFINITIONS } from '@/data/theme';
+import { getEquipmentByCategory } from '@/data/equipment';
+import { EQUIPMENT_TYPE_LABELS } from '@/types';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { usePartnerStore } from '@/features/partner/stores/partnerStore';
 import ImportHistoryModal from '@/components/ImportHistoryModal';
@@ -19,7 +21,7 @@ import { cn } from '@/lib/utils';
 export default function Settings() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useThemeStore();
-  const { profile, updateProfile, resetAllData } = useProfileStore();
+  const { profile, updateProfile, resetAllData, gymEquipmentIds, toggleGymEquipment } = useProfileStore();
   const { getTotalSessions, getTotalVolume, personalRecords } = useWorkoutStore();
   const [importOpen, setImportOpen] = useState(false);
   const {
@@ -231,6 +233,49 @@ export default function Settings() {
               </div>
             )}
           </div>
+        </Card>
+      </motion.div>
+
+      {/* 我的健身房器材（T7-3） */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.08 }}
+        className="mt-6"
+      >
+        <SectionHeader title="我的健身房器材" subtitle="計畫編輯器預設只顯示你的器材" />
+        <Card className="p-4">
+          {gymEquipmentIds.length === 0 && (
+            <p className="text-[11px] text-text-secondary leading-relaxed mb-3">
+              尚未選擇任何器材。勾選你健身房可用的器材後，計畫編輯器的「新增動作」會預設只顯示這些器材，替換動作時也會優先推薦。
+            </p>
+          )}
+          {Object.entries(getEquipmentByCategory()).map(([category, items]) => (
+            <div key={category} className="mb-3 last:mb-0">
+              <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-1.5">
+                {EQUIPMENT_TYPE_LABELS[category as keyof typeof EQUIPMENT_TYPE_LABELS] ?? category}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {items.map((eq) => {
+                  const selected = gymEquipmentIds.includes(eq.id);
+                  return (
+                    <button
+                      key={eq.id}
+                      onClick={() => toggleGymEquipment(eq.id)}
+                      className={cn(
+                        'rounded-full px-3 py-1.5 text-xs font-medium border transition-colors',
+                        selected
+                          ? 'bg-accent text-bg-primary border-accent'
+                          : 'border-border text-text-secondary hover:border-accent/50'
+                      )}
+                    >
+                      {eq.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </Card>
       </motion.div>
 

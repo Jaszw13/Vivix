@@ -117,6 +117,50 @@ RecognitionModal 每匯入批次一次 show（E8，非 ever-once）
 
 ---
 
+## 2b. 歷史補錄流（T9 Past-Session Flow）
+
+```
+用戶（TrainingCalendar 空過去日格子點擊 或 日 sheet「編輯這天訓練」按鈕）
+  │
+  ▼
+DaySessionEditor（components/progress/DaySessionEditor.tsx）
+  ├─ 補錄模式（無 existingSession）：空 draft
+  ├─ 跨輯模式（有 existingSession）：cloneDraftLog 預填
+  ├─ 本地 draft state（ExerciseLog[]）；onChange 只改 draft，不寫 store
+  ├─ 動作選擇：allExercises（含自訂）+ 預設「只顯示我的器材」過濾
+  ├─ 每動作組數行：weight/reps 增減 + 增減組 + 刪除動作
+  └─ 取消 → onClose（零寫入）
+        │ 儲存
+        ▼
+workoutStore.addPastSession(date, exerciseLogs) 或 updatePastSession(sessionId, patch)
+  ├─ date = dayKey "YYYY-MM-DD" → 該日本地中午 ISO（避免跨時區跨日）
+  ├─ planSnapshot = null（月曆顯示「自由訓練」）
+  ├─ imported = false（手動補錄非匯入）
+  ├─ 所有組 completed = true
+  ├─ sessions 保持日期排序
+  └─ **L3：store 內不 settle**
+        │
+        ▼
+TrainingCalendar handleEditorSaved（呼叫端）
+  ├─ settleAll(undefined, { silent: true })
+  │   ├─ achievements recompute（補錄日參與 metric；達標即 unlocked）
+  │   ├─ streak union 重算（補錄力量日計入 D1 streak）
+  │   └─ silent = true：不彈慶祝（補錄為靜默同步）
+  └─ toast「已同步：連續 X 天」（X = getStreakDays()）
+
+刪除流：
+  日 sheet「刪除」按鈕 → window.confirm → deletePastSession(sessionId)
+  → handleDelete → settleAll(undefined, { silent: true }) + toast「已刪除，連續 X 天」
+```
+
+**補錄流附加保證**：
+- streak union：補錄力量日計入 D1 streak（補填斷層日 → streak +N）。
+- PR：personalRecords 由底部 subscribe（sessions 變化 → `computePRsFromSessions`）自動重算；補錄破 PR 的組數會即時反映。
+- D2 守則：刪除補錄 session 後，PR/metric 派生視圖回退，但已解鎖的 unlockedAt 永久存在。
+- 週報／月曆：皆從 sessions 派生，補錄後即時反映。
+
+---
+
 ## 3. PR 派生與分類回寫（P-01 / C2）
 
 ### 3.1 讀取時派生

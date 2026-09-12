@@ -443,3 +443,71 @@ npx vite build
 - [ ] AC-BUILD: tsc 0；vite build 成功
 - [ ] AC-GREP: `grep "#[0-9a-f]{6}" src/components` = 0
 - [ ] AC-NOREG: auto-start 休息計時不破壞
+
+## 17. 回饋整合 v2（T7–T9）
+
+### 17.1 計畫編輯器重構＋器械檔案（T7）
+
+- [ ] PlanDetail 連續打 20 字不閃爍不刷新（local draft state）
+- [ ] blur 後重載顯示已存值
+- [ ] 打字期間 localStorage 寫入次數不增加
+- [ ] data/equipment.ts ≥24 項，每項含 category + muscleGroups
+- [ ] getEquipmentByCategory / getEquipmentTypesForIds 有消費端（dead-export grep = 0）
+- [ ] Settings「我的健身房器材」多選 chips 按category 分組
+- [ ] 選擇後重載仍在；空狀態有引導文案
+- [ ] profileStore v5 migrate v4→v5 補 gymEquipmentIds=[]
+- [ ] PlanDetail「新增動作」sheet 預設只顯示我的器材
+- [ ] toggle 可顯示全部
+- [ ] 替換 sheet 排序：同肌群＋我的器材優先
+- [ ] 「我的健身房」badge 正確顯示
+- [ ] 依我的器材一鍵產生計畫：產出只含我的器材或 ⚠ 標記
+- [ ] ⚠ 標記的動作可手動替換
+- [ ] 不影響 planSnapshot 機制
+
+### 17.2 身體組成追蹤（T8）
+
+- [ ] bodyMetricsStore persist key = vivix-body-metrics-v1
+- [ ] migrate unknown + guard（壞 localStorage fallback 預設）
+- [ ] addMetric / updateMetric / deleteMetric / getLatest / getSorted
+- [ ] Progress 身體組成 section：表單 modal 日期預設今天、4 欄選填 ≥1
+- [ ] Recharts LineChart 雙 Y 軸（左 kg：體重/肌肉/脂肪量；右 %：體脂）
+- [ ] delta tile（最新 vs 最早，↑↓ 用 accent/secondary，無羞辱文案）
+- [ ] 新增 → 圖表與 delta 即時更新
+- [ ] 重載仍在；刪除同步
+- [ ] 空狀態友好
+- [ ] T8-3 Dashboard chip SKIP（已註明）
+
+### 17.3 歷史追蹤直接補錄（T9）
+
+- [ ] TrainingCalendar 空過去日格子可點擊 → 開 DaySessionEditor（補錄模式）
+- [ ] 空過去日建立 → 月曆該格亮起（accent bg + 「自由」縮寫）
+- [ ] 日 sheet「編輯這天訓練」按鈕 → 開 DaySessionEditor（跨輯模式）
+- [ ] 跨輯模式預填正確（existingSession.exercises 深拷貝）
+- [ ] 動作選擇 allExercises 含自訂、預設我的器材過濾
+- [ ] 每動作組數行 weight/reps 增減 + 增減組 + 刪除動作
+- [ ] 取消零寫入（不呼叫 store action）
+- [ ] 儲存時所有組 completed=true
+- [ ] addPastSession / updatePastSession / deletePastSession 存在
+- [ ] sessions 保持日期排序
+- [ ] planSnapshot = null（月曆顯示「自由訓練」）
+- [ ] imported = false（手動補錄非匯入）
+- [ ] store 內不 settle（L3：settleAll 僅出現在註解）
+- [ ] personalRecords 由 subscribe 自動重算
+- [ ] 刪除帶 confirm（window.confirm）
+- [ ] 儲存後 settleAll(undefined, { silent: true })
+- [ ] toast「已同步：連續 X 天」
+- [ ] 補錄填補斷層日 → streak 正確 +N
+- [ ] 補錄破 PR 級組數 → PR 列表包含
+- [ ] 刪除 → 派生視圖回退但已 unlocked 成就仍在（D2）
+- [ ] T9-4 ImportHistoryModal 統一寫入路徑 SKIP（已註明）
+
+### 17.4 全局守門（T10）
+
+- [ ] AC-T10-TSC: tsc 0
+- [ ] AC-T10-BUILD: vite build precache ≥16
+- [ ] AC-T10-ASANY: grep "as any" src = 0
+- [ ] AC-T10-HEX: grep "#[0-9a-f]{6}" src/components src/pages = 0
+- [ ] AC-T10-NONNULL: grep "!\." src（非空斷言） = 0
+- [ ] AC-T10-DEADEXPORT: dead-export grep = 0
+- [ ] AC-T10-DOCS: DEV_RULES / ARCHITECTURE / DATA_FLOW / REGRESSION_CHECKLIST 四文件已更新
+- [ ] AC-T10-COMMIT: commit + push（排除 .docx）

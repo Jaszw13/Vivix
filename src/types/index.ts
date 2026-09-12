@@ -50,6 +50,23 @@ export interface CardioSession {
   createdAt: string;
 }
 
+/** T8：身體組成記錄（原始事實，bodyMetricsStore persist；L1） */
+export interface BodyMetric {
+  id: string;
+  /** ISO date string（記錄日期） */
+  date: string;
+  /** 體重 kg（選填） */
+  weightKg?: number | null;
+  /** 肌肉量 kg（選填） */
+  muscleMassKg?: number | null;
+  /** 體脂率 %（選填） */
+  bodyFatPercent?: number | null;
+  /** 脂肪量 kg（選填） */
+  fatMassKg?: number | null;
+  /** 記錄建立時間 */
+  createdAt: string;
+}
+
 export const MUSCLE_GROUP_LABELS: Record<MuscleGroup, string> = {
   chest: '胸部',
   back: '背部',
@@ -94,6 +111,7 @@ export type EquipmentType =
   | 'cable'
   | 'bodyweight'
   | 'kettlebell'
+  | 'band'
   | 'other';
 
 export const EQUIPMENT_TYPE_LABELS: Record<EquipmentType, string> = {
@@ -103,6 +121,7 @@ export const EQUIPMENT_TYPE_LABELS: Record<EquipmentType, string> = {
   cable: '纜繩',
   bodyweight: '徒手',
   kettlebell: '壺鈴',
+  band: '彈力帶',
   other: '其他',
 };
 
@@ -116,6 +135,7 @@ export const EQUIPMENT_TYPE_OPTIONS: {
   { value: 'cable', label: '纜繩' },
   { value: 'bodyweight', label: '徒手' },
   { value: 'kettlebell', label: '壺鈴' },
+  { value: 'band', label: '彈力帶' },
   { value: 'other', label: '其他' },
 ];
 

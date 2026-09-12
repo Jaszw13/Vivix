@@ -1,4 +1,4 @@
-import type { Equipment, EquipmentType, MuscleGroup, MediaRef } from '@/types';
+import type { Equipment, EquipmentType, MediaRef } from '@/types';
 import { DEFAULT_MEDIA } from '@/types';
 
 /**
@@ -185,4 +185,84 @@ export const equipmentLibrary: Equipment[] = [
     typicalMuscleGroups: ['legs', 'back', 'core', 'shoulders'],
     media: { ...DEFAULT_MEDIA } as MediaRef,
   },
+
+  // ============ band 彈力帶 ============
+  {
+    id: 'eq-resistance-band',
+    name: '彈力帶',
+    category: 'band',
+    typicalMuscleGroups: ['shoulders', 'arms', 'back', 'legs'],
+    media: { ...DEFAULT_MEDIA } as MediaRef,
+  },
+  {
+    id: 'eq-loop-band',
+    name: '環狀彈力帶',
+    category: 'band',
+    typicalMuscleGroups: ['legs', 'core'],
+    media: { ...DEFAULT_MEDIA } as MediaRef,
+  },
+
+  // ============ other 其他 ============
+  {
+    id: 'eq-flat-bench',
+    name: '平凳（通用）',
+    category: 'other',
+    typicalMuscleGroups: ['chest', 'back', 'arms', 'core'],
+    media: { ...DEFAULT_MEDIA } as MediaRef,
+  },
+  {
+    id: 'eq-roman-chair',
+    name: '羅馬椅',
+    category: 'other',
+    typicalMuscleGroups: ['back', 'core'],
+    media: { ...DEFAULT_MEDIA } as MediaRef,
+  },
+  {
+    id: 'eq-cable-seated-row',
+    name: '低位滑輪站',
+    category: 'cable',
+    typicalMuscleGroups: ['back', 'arms'],
+    media: { ...DEFAULT_MEDIA } as MediaRef,
+  },
+  {
+    id: 'eq-cable-high-pulley',
+    name: '高位滑輪站',
+    category: 'cable',
+    typicalMuscleGroups: ['back', 'arms', 'chest'],
+    media: { ...DEFAULT_MEDIA } as MediaRef,
+  },
+  {
+    id: 'eq-machine-hip-thrust',
+    name: '髖推機',
+    category: 'machine',
+    typicalMuscleGroups: ['legs', 'core'],
+    media: { ...DEFAULT_MEDIA } as MediaRef,
+  },
+  {
+    id: 'eq-machine-abductor',
+    name: '髖外展機',
+    category: 'machine',
+    typicalMuscleGroups: ['legs'],
+    media: { ...DEFAULT_MEDIA } as MediaRef,
+  },
 ];
+
+/** 按 category 分組的器材列表（供 Settings「我的健身房器材」分組顯示） */
+export function getEquipmentByCategory(): Record<string, Equipment[]> {
+  const map: Record<string, Equipment[]> = {};
+  for (const eq of equipmentLibrary) {
+    if (!map[eq.category]) map[eq.category] = [];
+    map[eq.category].push(eq);
+  }
+  return map;
+}
+
+/** 取一組器材 ID 對應的 EquipmentType 集合（供 T7-4 器械過濾用） */
+export function getEquipmentTypesForIds(ids: string[]): EquipmentType[] {
+  const types = new Set<EquipmentType>();
+  for (const id of ids) {
+    const eq = equipmentLibrary.find((e) => e.id === id);
+    if (eq) types.add(eq.category);
+  }
+  return Array.from(types);
+}
