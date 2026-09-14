@@ -223,7 +223,22 @@ settleAll 內每日有氧結算 20 XP，每日上限 1 次；Partner 形態解�
 
 報告總熱量卡合併兩項，附免責小字：「機器讀數與代謝估算皆約 ±15–20% 誤差，僅供參考」。
 
-## 工程慣例
+### 工程慣例
+
+## 排版律（Layout Law，v3.0）
+
+行動優先 480px、浮動底部 nav、sticky header。所有頁面必須遵守：
+
+1. **Header 不透明**：`PageShell` header 一律 `bg-bg-primary`（opacity 100%），禁用半透明 + backdrop-blur 組合；`z-30`；`border-b border-border/40`。內容滾動不得在 header 產生糊影。
+2. **底部留白 pb-32**：所有使用 `PageShell`（`showNav=true`）的頁面，`main` 必須 `pb-32`（含 safe-area），確保滾動到底時最後一張卡完整可見於浮動 BottomNav 之上。
+3. **Chart 三條**（所有 Recharts 實例）：
+   - `<YAxis>`：`width={36}`、`tick={{ fontSize: 10 }}`、`tickMargin={4}`。
+   - chart `margin`：`{ left: 4, right: 8, top: 8, bottom: 0 }`。
+   - `ResponsiveContainer` 固定高度：bar 220px / line 220px / donut 200px；外層 Card `py-4 px-3`，禁止負 margin。
+   - donut `outerRadius` ≤ 容器短邊 / 2 − 8，確保環不被 card 邊界切。
+4. **統一節奏**：section 間 `space-y-6`；SectionHeader `mb-3`；Card `p-4`。
+5. **顏色 token**：一律 `data/theme.ts`；`grep "#[0-9A-Fa-f]{3,8}" src/components src/pages` = 0。
+6. **Progress IA**：單頁頂層 section ≤ 5；用子分頁（總覽／力量／有氧／身體）分組；donut / 有氧紀錄 list / 累積總熱量各只出現一次。
 
 ### 狀態管理
 

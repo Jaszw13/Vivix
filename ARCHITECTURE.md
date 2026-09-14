@@ -338,3 +338,48 @@ metric 擴充：`cardioMinutesTotal` / `cardioSessionsTotal` / `cardioWeeklyRhyt
 - **past-session store actions**（T9-2）：`addPastSession(date, exerciseLogs)` / `updatePastSession(sessionId, patch)` / `deletePastSession(sessionId)`。`planSnapshot = null`（月曆顯示「自由訓練」）；`imported = false`（手動補錄非匯入）；sessions 保持日期排序；personalRecords 由底部 subscribe 自動重算。**L3：store 內不 settle，由呼叫端走 settleAll**。
 - **結算同步**（T9-3）：TrainingCalendar 於儲存／刪除後執行 `settleAll(undefined, { silent: true })` + toast「已同步：連續 X 天」。`getStreakDays`／週報／成就皆反映；刪除 → 派生視圖回退但已 unlocked 成就仍在（D2）。
 - T9-4（ImportHistoryModal 統一寫入路徑）SKIP。
+
+## 18. Progress 頁 IA（子分頁結構，v3.0）
+
+Progress 頁面單一滾動過長，改為 4 個子分頁（segmented control），每頁頂層 section ≤ 5。
+
+```
+Progress（PageShell title = 進度追蹤）
+└─ segmented control（sticky top-0 z-20，bg-bg-primary border-b）
+   ├─ 總覽 overview
+   │   1. TrainingCalendar（月曆，月份 ‹ › 切換）
+   │   2. 歷週訓練報告入口
+   │   3. 累積數據 StatTile（3 欄：訓練次數 / 總噸數 / 連續天數）
+   │   4. 累積總熱量卡（力量推估 + 有氧，±15–20% 免責小字）
+   │   5. 有氧 vs 力量 時間占比 donut
+   ├─ 力量 strength
+   │   1. 檢視範圍 chips（全局 / 各肌群）
+   │   2. 部位摘要卡片（選定部位時）
+   │   3. 個人紀錄 PR 列表
+   │   4. 重量曲線 LineChart（全局：選動作；部位：平均 1RM）
+   │   5. 訓練量 BarChart（8 週）+ 部位體積比較（全局）
+   ├─ 有氧 cardio
+   │   1. 每週有氧分鐘 BarChart（近 8 週，本週 bar = auxiliary，badge「本週累計 X 分」）
+   │   2. 有氧紀錄 list + 新增按鈕
+   └─ 身體 body
+       1. 身體組成（entry 摘要 + delta tiles + 雙 Y 軸 LineChart + 紀錄 list）
+```
+
+**去重規則**：
+- donut 只出現在總覽；有氧紀錄 list 只出現在有氧頁；累積總熱量只出現一次（總覽）。
+- 檢視範圍 chips 只影響力量頁的 PR / 曲線 / 訓練量。
+
+**Chart 統一參數**（src/pages/Progress.tsx 頂部常數）：
+
+```ts
+const CHART_MARGIN = { top: 8, right: 8, bottom: 0, left: 4 };
+const Y_AXIS_PROPS = { stroke: 'var(--text-secondary)', tick: { fontSize: 10 }, tickLine: false, axisLine: false, width: 36, tickMargin: 4 };
+// ResponsiveContainer 固定高度：bar 220px / line 220px / donut 200px
+```
+
+## 19. Global Shell 排版律（v3.0）
+
+- **PageShell header**：`sticky top-0 z-30 bg-bg-primary border-b border-border/40`；不透明，無 backdrop-blur。
+- **底部留白**：`main` 加 `pb-32`（含 safe-area），確保最後一卡完整可見於浮動 BottomNav 之上。
+- **統一節奏**：section 間 `space-y-6`；SectionHeader `mb-3`；Card `p-4`。
+- 頁面容器底部預留浮動 nav 空間，禁止內容被 BottomNav 遮擋。

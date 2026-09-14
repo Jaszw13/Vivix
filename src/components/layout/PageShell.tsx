@@ -25,7 +25,7 @@ export function PageShell({
   return (
     <div className="min-h-screen w-full max-w-[480px] mx-auto bg-bg-primary flex flex-col">
       {(title || showBack || rightAction) && (
-        <header className="sticky top-0 z-30 bg-bg-primary/95 backdrop-blur-xl border-b border-border">
+        <header className="sticky top-0 z-30 bg-bg-primary border-b border-border/40">
           <div className="flex items-center h-14 px-3 gap-2">
             {showBack && (
               <button
@@ -49,7 +49,7 @@ export function PageShell({
         className={cn(
           'flex-1 flex flex-col',
           !noPadding && 'px-4 py-4',
-          showNav ? 'pb-28' : ''
+          showNav ? 'pb-32' : ''
         )}
       >
         {children}

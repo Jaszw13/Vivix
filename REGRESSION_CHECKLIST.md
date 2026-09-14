@@ -511,3 +511,56 @@ npx vite build
 - [ ] AC-T10-DEADEXPORT: dead-export grep = 0
 - [ ] AC-T10-DOCS: DEV_RULES / ARCHITECTURE / DATA_FLOW / REGRESSION_CHECKLIST 四文件已更新
 - [ ] AC-T10-COMMIT: commit + push（排除 .docx）
+
+## 18. 排版矩陣（v3.0，Shell + Progress IA + Charts）
+
+### 18.1 Global Shell
+
+- [ ] PageShell header：`bg-bg-primary` 不透明、`z-30`、`border-b border-border/40`、無 backdrop-blur
+- [ ] 內容滾動至 header 下方：header 純色無糊影
+- [ ] 所有頁面 main：`pb-32`（showNav=true 時）
+- [ ] Progress / Dashboard 滾到底：最後一張卡完整可見於浮動 BottomNav 之上
+- [ ] 無頂部 gradient/glow 滲入 header 區域
+
+### 18.2 Progress IA（子分頁）
+
+- [ ] segmented control：總覽／力量／有氧／身體，預設總覽
+- [ ] 切換分頁時 scroll 回頂
+- [ ] 總覽：月曆 → 歷週報告入口 → 累積數據 StatTile → 總熱量卡 → 有氧 vs 力量 donut
+- [ ] 力量：檢視範圍 chips → 部位摘要 → PR 列表 → 重量曲線 → 訓練量 bar + 部位體積比較
+- [ ] 有氧：每週有氧分鐘 bar → 有氧紀錄 list + 新增按鈕
+- [ ] 身體：身體組成（entry + 雙 Y 軸圖 + delta tiles + 紀錄 list）
+- [ ] donut 只出現在總覽；有氧紀錄 list 只在有氧頁；累積總熱量只一次（總覽）
+- [ ] 檢視範圍 chips 只影響力量頁 PR/曲線/訓練量
+
+### 18.3 Chart 裁切（全部 Recharts 實例）
+
+- [ ] 所有 `<YAxis>`：`width={36}`、`tick fontSize 10`、`tickMargin={4}`
+- [ ] 所有 chart margin：`{ left: 4, right: 8, top: 8, bottom: 0 }`
+- [ ] ResponsiveContainer 高度：bar 220 / line 220 / donut 200
+- [ ] donut outerRadius ≤ 短邊/2 − 8，環不被 card 邊界切
+- [ ] 每週有氧分鐘 bar：過去週 = accent、本週 = auxiliary
+- [ ] 有氧 bar 右上 badge 含「本週」文字（「本週累計 X 分」）
+- [ ] X 軸 label fontSize 10；bar 圖 `interval={0}` 僅當 ≤8 label
+
+### 18.4 Dashboard
+
+- [ ] 同 shell 修復（header 不透明 / pb-32）
+- [ ] 累積數據 StatTile：3 欄 grid + divider、數字 font-mono text-2xl
+- [ ] 滾到底無 BottomNav 遮蔽
+
+### 18.5 雙主題 + 守門
+
+- [ ] Industrial Power / Elegant Beige 逐頁零差異
+- [ ] `tsc --noEmit` → 0 errors
+- [ ] `vite build` → 成功，precache ≥ 16
+- [ ] hex gate：`grep "#[0-9A-Fa-f]{3,8}" src/components src/pages` = 0
+- [ ] `as any` = 0；非空斷言 = 0
+
+### 18.6 既有功能零回歸
+
+- [ ] 月曆補錄（DaySessionEditor）正常
+- [ ] 歷週報告彈窗正常
+- [ ] 身體組成新增/刪除/圖表正常
+- [ ] PR 計算正確
+- [ ] 訓練中替換動作 ≤ 10 秒
