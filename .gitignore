@@ -67,3 +67,7 @@ coverage/
 # TRAE
 .trae/skills/
 .trae/cache/
+*.docx
+*.mov
+*.MP4
+vivix 宣傳片/
