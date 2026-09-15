@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Trophy, TrendingUp, Flame, Check, Sparkles, Star, Info, Zap } from 'lucide-react';
+import { Trophy, TrendingUp, Flame, Check, Sparkles, Star, Info, Zap, CalendarPlus } from 'lucide-react';
 import type { WorkoutSession } from '@/types';
 import { estimate1RM, formatDateFull, getSessionPRs } from '@/utils/workout';
 import { Card, SectionHeader } from '@/components/ui/Card';
@@ -18,6 +18,7 @@ import { COSMETIC_MAP } from '@/features/partner/data/cosmetics';
 import type { RewardResult } from '@/features/partner/types';
 import { PartnerLevelUpModal } from '@/features/partner/components/PartnerLevelUpModal';
 import { estimateStrengthKcal } from '@/features/stats/energy';
+import { buildSessionGCalUrl } from '@/utils/googleCalendar';
 
 interface SummaryLocationState {
   session: WorkoutSession;
@@ -465,7 +466,19 @@ export default function WorkoutSummary() {
         )}
       </div>
 
-      <div className="sticky bottom-0 px-4 pt-4 pb-4 bg-gradient-to-t from-bg-primary via-bg-primary to-transparent">
+      <div className="sticky bottom-0 px-4 pt-4 pb-4 bg-gradient-to-t from-bg-primary via-bg-primary to-transparent space-y-2">
+        <Button
+          fullWidth
+          variant="secondary"
+          onClick={() => {
+            const url = buildSessionGCalUrl(session, customExercises, profile.bodyWeight);
+            useTelemetryStore.getState().log('google_calendar_export', { sessionId: session.id });
+            window.open(url, '_blank', 'noopener');
+          }}
+        >
+          <CalendarPlus size={16} className="mr-1" />
+          同步到 Google Calendar
+        </Button>
         <Button fullWidth size="lg" onClick={() => navigate('/')}>
           返回主控台
         </Button>

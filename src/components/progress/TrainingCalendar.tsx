@@ -13,13 +13,16 @@
  */
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Dumbbell, Pencil, Trash2 } from 'lucide-react';
+import { X, Dumbbell, Pencil, Trash2, CalendarPlus } from 'lucide-react';
 import { Card, Badge, StatTile } from '@/components/ui/Card';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { calculateTotalVolume, getSessionPRs, formatDateFull } from '@/utils/workout';
 import { dayKey } from '@/utils/time';
 import { OVERLAY_SCRIM } from '@/data/theme';
 import { settleAll } from '@/features/stats/settleAll';
+import { buildSessionGCalUrl } from '@/utils/googleCalendar';
+import { useProfileStore } from '@/store/profileStore';
+import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import type { WorkoutSession } from '@/types';
 import { DaySessionEditor } from './DaySessionEditor';
 
@@ -47,6 +50,8 @@ export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
   const sessions = useWorkoutStore((s) => s.sessions);
   const deletePastSession = useWorkoutStore((s) => s.deletePastSession);
   const getStreakDays = useWorkoutStore((s) => s.getStreakDays);
+  const customExercises = useWorkoutStore((s) => s.customExercises);
+  const bodyWeight = useProfileStore((s) => s.profile.bodyWeight);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   // T9-1：DaySessionEditor 狀態
   const [editorDate, setEditorDate] = useState<string | null>(null);
@@ -279,6 +284,17 @@ export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
                     className="flex-1 flex items-center justify-center gap-2 py-2.5 text-xs uppercase tracking-wider text-accent font-bold border border-accent/40 rounded-button hover:bg-accent/10 transition-colors"
                   >
                     <Pencil size={14} /> 編輯這天訓練
+                  </button>
+                  <button
+                    onClick={() => {
+                      const url = buildSessionGCalUrl(selectedSession, customExercises, bodyWeight);
+                      useTelemetryStore.getState().log('google_calendar_export', { sessionId: selectedSession.id });
+                      window.open(url, '_blank', 'noopener');
+                    }}
+                    className="flex items-center justify-center gap-2 px-3 py-2.5 text-xs uppercase tracking-wider text-text-secondary font-bold border border-border/40 rounded-button hover:bg-bg-card transition-colors"
+                    aria-label="同步到 Google Calendar"
+                  >
+                    <CalendarPlus size={14} />
                   </button>
                   <button
                     onClick={() => {

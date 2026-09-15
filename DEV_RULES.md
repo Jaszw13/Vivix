@@ -223,6 +223,24 @@ settleAll 內每日有氧結算 20 XP，每日上限 1 次；Partner 形態解�
 
 報告總熱量卡合併兩項，附免責小字：「機器讀數與代謝估算皆約 ±15–20% 誤差，僅供參考」。
 
+### G-1：Google Calendar 單向 template-URL 匯出
+
+Google Calendar 匯出＝單向 template-URL 匯出（無 OAuth、無後端）。雙向同步留原生階段（Stage 2）。
+實作於 `src/utils/googleCalendar.ts`（純函數）；呼叫端 `window.open(url, '_blank', 'noopener')`。
+
+### J-1：他牌 JSON 匯入延後
+
+Hevy/Strong JSON 匯入延後；v1 僅 CSV＋矩陣貼上（見 ROADMAP.md Stage 1）。
+
+### D-10：session.date 一律存「本地正午 ISO」
+
+`session.date` 一律存「本地正午 ISO」＝`${dayKey}T12:00:00`（無 Z），確保跨日不偏移。
+`startedAt`/`finishedAt` 保留真實時間戳（可用於 GCal 區間匯出與熱量估算）。
+
+### B-01：統計邏輯搬遷至 stats/selectors.ts
+
+workoutStore 內統計方法改薄 delegate，實作集中於 `src/features/stats/selectors.ts`。
+
 ### 工程慣例
 
 ## 排版律（Layout Law，v3.0）
