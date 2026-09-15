@@ -4,6 +4,7 @@ import type { PartnerState, PartnerSpecies } from '../types';
 import { getFormForWorkouts, getNextForm } from '../data/forms';
 import { getLevelForXp, getXpProgress } from '../engine/level';
 import { useWorkoutStore } from '@/store/workoutStore';
+import { sessionDayKey } from '@/utils/time';
 
 interface PartnerStoreState extends PartnerState {
   // 初始化
@@ -161,7 +162,7 @@ export const usePartnerStore = create<PartnerStoreState>()(
       getTotalWorkouts: () => useWorkoutStore.getState().sessions.filter((s) => s.imported !== true).length,
       getTotalTrainingDays: () => {
         const sessions = useWorkoutStore.getState().sessions.filter((s) => s.imported !== true);
-        return new Set(sessions.map((s) => new Date(s.date).toDateString())).size;
+        return new Set(sessions.map((s) => sessionDayKey(s.date))).size;
       },
     }),
     {

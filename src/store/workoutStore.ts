@@ -21,7 +21,7 @@ import {
   createExerciseLog as _createExerciseLog,
   estimate1RM,
 } from '@/utils/workout';
-import { FOURTEEN_DAYS_MS } from '@/utils/time';
+import { FOURTEEN_DAYS_MS, dayKey, localNoonISO } from '@/utils/time';
 import { getStreakDays as getStreakDaysSelector } from '@/features/stats/selectors';
 import { useCardioStore } from '@/store/cardioStore';
 import { getPlanById } from '@/data/plans';
@@ -283,7 +283,7 @@ export const useWorkoutStore = create<WorkoutState>()(
         });
         const session: WorkoutSession = {
           id: generateId('session'),
-          date: new Date().toISOString(),
+          date: localNoonISO(new Date()),
           planId,
           planName,
           dayId: day.id,
@@ -303,7 +303,7 @@ export const useWorkoutStore = create<WorkoutState>()(
       startEmptySession: () => {
         const session: WorkoutSession = {
           id: generateId('session'),
-          date: new Date().toISOString(),
+          date: localNoonISO(new Date()),
           warmupCompletedIds: [],
           duration: 0,
           totalVolume: 0,
@@ -540,8 +540,8 @@ export const useWorkoutStore = create<WorkoutState>()(
 
       // T9-1/T9-2：歷史補錄（L1 純事實；L3 不 settle — 由呼叫端 Progress/Calendar 走 settleAll）
       addPastSession: (date, exerciseLogs) => {
-        // date 為 dayKey "YYYY-MM-DD"；轉成該日本地中午 ISO，避免跨時區跨日
-        const sessionDate = new Date(`${date}T12:00:00`).toISOString();
+        // T15 / D-10：本地正午 ISO（無 Z），避免跨時區跨日
+        const sessionDate = `${date}T12:00:00`;
         const session: WorkoutSession = {
           id: generateId('session'),
           date: sessionDate,
@@ -801,7 +801,7 @@ export const useWorkoutStore = create<WorkoutState>()(
     }),
     {
       name: 'ironpulse-workouts',
-      version: 9,
+      version: 10,
       partialize: (state) => ({
         sessions: state.sessions,
         customExercises: state.customExercises,
@@ -827,12 +827,23 @@ export const useWorkoutStore = create<WorkoutState>()(
         // C4：忽略舊 persist 的 personalRecords（v6 之前有寫），改由 sessions 派生
         // E-01 v8：為舊 session 補 startedAt/finishedAt = null
         // P-5 v9：為舊 session 補 planSnapshot = null（T6 月曆顯示「自由訓練」）
-        const safeSessions: WorkoutSession[] = (sessionsIn as WorkoutSession[]).map((s) => ({
-          ...s,
-          startedAt: typeof s.startedAt === 'string' ? s.startedAt : null,
-          finishedAt: typeof s.finishedAt === 'string' ? s.finishedAt : null,
-          planSnapshot: s.planSnapshot ?? null,
-        }));
+        // T15 v10：session.date 歸一化為本地正午 ISO（無 Z），避免跨日偏移
+        const safeSessions: WorkoutSession[] = (sessionsIn as WorkoutSession[]).map((s) => {
+          // v10：將舊 date（可能為 UTC ISO with Z）歸一化為本地正午
+          const oldDate = typeof s.date === 'string' ? s.date : new Date().toISOString();
+          const normalizedDate = /^\d{4}-\d{2}-\d{2}$/.test(oldDate)
+            ? oldDate // 純日期（不應出現但保留）
+            : version < 10
+              ? `${dayKey(new Date(oldDate))}T12:00:00`
+              : oldDate; // v10+ 已是正午格式
+          return {
+            ...s,
+            date: normalizedDate,
+            startedAt: typeof s.startedAt === 'string' ? s.startedAt : null,
+            finishedAt: typeof s.finishedAt === 'string' ? s.finishedAt : null,
+            planSnapshot: s.planSnapshot ?? null,
+          };
+        });
 
         // v5：CustomExercise 升級為強制分類結構
         let customExercises: CustomExercise[] = [];

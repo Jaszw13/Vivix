@@ -9,7 +9,7 @@
  *   - 無時間戳 → 全日事件（YYYYMMDD/YYYYMMDD，day+1）
  */
 import type { WorkoutSession } from '@/types';
-import { dayKey, addDays } from '@/utils/time';
+import { dayKey, addDays, sessionDayKey } from '@/utils/time';
 import { estimateStrengthKcal } from '@/features/stats/energy';
 import type { CustomExercise } from '@/store/workoutStore';
 
@@ -114,7 +114,7 @@ export function sessionToGCalPayload(
     end = new Date(session.finishedAt);
   } else {
     // 全日事件：用 dayKey(session.date) 作為日期
-    allDayDate = dayKey(new Date(session.date));
+    allDayDate = sessionDayKey(session.date);
   }
 
   return { title, start, end, allDayDate, details };

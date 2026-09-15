@@ -30,6 +30,7 @@ import { handleWorkoutCompleted } from '@/features/partner/engine/rewardEngine';
 import type { RewardContext, RewardResult } from '@/features/partner/types';
 import { getStreakDays as getStreakDaysSelector } from '@/features/stats/selectors';
 import { getSessionPRs } from '@/utils/workout';
+import { sessionDayKey, dayKey } from '@/utils/time';
 
 export interface SettleResult {
   partnerReward: RewardResult | null;
@@ -67,8 +68,8 @@ function settleCardioDailyXp(): RewardResult | null {
   if (!partner.name) return null;
   const cardioSessions: CardioSession[] = useCardioStore.getState().sessions;
   if (cardioSessions.length === 0) return null;
-  const todayKey = new Date().toDateString();
-  const hasToday = cardioSessions.some((c) => new Date(c.date).toDateString() === todayKey);
+  const todayKey = dayKey(new Date());
+  const hasToday = cardioSessions.some((c) => sessionDayKey(c.date) === todayKey);
   if (!hasToday) return null;
   if (inMemCardioGrantedDay === todayKey) return null;
 

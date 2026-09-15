@@ -10,6 +10,7 @@ import type { WorkoutSession } from '@/types';
 import { estimate1RM } from '@/utils/workout';
 import { resolveCurrentTaxonomy } from '@/features/exercises/taxonomy';
 import type { CustomExercise } from '@/store/workoutStore';
+import { sessionDayKey } from '@/utils/time';
 
 export interface RecognitionStats {
   sessions: number;
@@ -39,7 +40,7 @@ export function computeBatchRecognitionStats(
   const bestByExercise = new Map<string, { rm: number }>();
   let volume = 0;
   for (const s of imported) {
-    daySet.add(new Date(s.date).toDateString());
+    daySet.add(sessionDayKey(s.date));
     for (const ex of s.exercises) {
       // 分類權威：匯入的 exerciseId 若為 custom id 會正確命中；否則 fallback 不影響 PR 計數
       resolveCurrentTaxonomy(ex.exerciseId, customExercises, {

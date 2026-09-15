@@ -6,7 +6,7 @@
  * PR／groupStats／volume 現仍為 workoutStore 單一函數（computePRsFromSessions／getGroupStats），無重複實作；漸進移入為 backlog B-01。
  */
 import type { CardioSession, WorkoutSession } from '@/types';
-import { DAY_MS } from '@/utils/time';
+import { DAY_MS, sessionDayKey, dayKey } from '@/utils/time';
 
 /**
  * 計算連續訓練天數（D1 語義 + E-D3：streak = 力量日 ∪ 有氧日）
@@ -24,19 +24,19 @@ export function getStreakDays(
   if (strengthSessions.length === 0 && cardioSessions.length === 0) return 0;
 
   const seen = new Set<string>();
-  for (const s of strengthSessions) seen.add(new Date(s.date).toDateString());
-  for (const c of cardioSessions) seen.add(new Date(c.date).toDateString());
+  for (const s of strengthSessions) seen.add(sessionDayKey(s.date));
+  for (const c of cardioSessions) seen.add(sessionDayKey(c.date));
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
   let cursor: Date;
-  if (seen.has(today.toDateString())) {
+  if (seen.has(dayKey(today))) {
     cursor = today;
   } else {
     const yesterday = new Date(today);
     yesterday.setDate(today.getDate() - 1);
-    if (seen.has(yesterday.toDateString())) {
+    if (seen.has(dayKey(yesterday))) {
       cursor = yesterday;
     } else {
       return 0;
@@ -44,7 +44,7 @@ export function getStreakDays(
   }
 
   let streak = 0;
-  while (seen.has(cursor.toDateString())) {
+  while (seen.has(dayKey(cursor))) {
     streak++;
     cursor = new Date(cursor.getTime() - DAY_MS);
   }

@@ -17,7 +17,7 @@ import { X, Dumbbell, Pencil, Trash2, CalendarPlus } from 'lucide-react';
 import { Card, Badge, StatTile } from '@/components/ui/Card';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { calculateTotalVolume, getSessionPRs, formatDateFull } from '@/utils/workout';
-import { dayKey } from '@/utils/time';
+import { dayKey, sessionDayKey } from '@/utils/time';
 import { OVERLAY_SCRIM } from '@/data/theme';
 import { settleAll } from '@/features/stats/settleAll';
 import { buildSessionGCalUrl } from '@/utils/googleCalendar';
@@ -70,7 +70,7 @@ export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
   const sessionMap = useMemo(() => {
     const m = new Map<string, WorkoutSession>();
     for (const s of sessions) {
-      const key = dayKey(new Date(s.date));
+      const key = sessionDayKey(s.date);
       m.set(key, s); // 後寫覆蓋前寫 → 取最後一筆
     }
     return m;
@@ -93,7 +93,7 @@ export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
   const openEditorForEdit = (session: WorkoutSession) => {
     setSelectedDate(null); // 關閉詳情 sheet
     setEditorSession(session);
-    setEditorDate(dayKey(new Date(session.date)));
+    setEditorDate(sessionDayKey(session.date));
   };
 
   // T9-3：儲存後由呼叫端執行 settleAll（silent，無慶祝）+ toast 顯示 streak 同步

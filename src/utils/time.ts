@@ -16,6 +16,24 @@ export function dayKey(date: Date | string): string {
   return `${y}-${m}-${dd}`;
 }
 
+/**
+ * T15 / D-10：從 session.date 取得本地日 key
+ *
+ * - 若 date 為純日期格式 'YYYY-MM-DD'（cardio 類）→ 直接回傳
+ * - 否則（ISO timestamp / 本地正午）→ dayKey(new Date(date))
+ *
+ * 確保 23:50 或 00:30 本地訓練都落在當日，不跨日。
+ */
+export function sessionDayKey(date: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+  return dayKey(new Date(date));
+}
+
+/** T15 / D-10：將 dayKey 轉為本地正午 ISO（無 Z），確保跨日不偏移 */
+export function localNoonISO(date: Date | string): string {
+  return `${dayKey(date)}T12:00:00`;
+}
+
 /** 兩個日期相差整天數（a - b），以本地午夜為邊界 */
 export function diffDays(a: Date | string, b: Date | string): number {
   const da = typeof a === 'string' ? new Date(a) : a;

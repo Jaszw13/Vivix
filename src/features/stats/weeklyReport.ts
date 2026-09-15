@@ -7,7 +7,7 @@
 import type { WorkoutSession, PersonalRecord, CardioSession } from '@/types';
 import { calculateTotalVolume, getSessionPRs } from '@/utils/workout';
 import { getStreakDays } from '@/features/stats/selectors';
-import { getWeekStart, addDays } from '@/utils/time';
+import { getWeekStart, addDays, sessionDayKey } from '@/utils/time';
 
 export interface AchievementUnlockRecord {
   id: string;
@@ -122,7 +122,7 @@ export function computeWeeklyReport(
     weekStart,
     weekEnd,
     sessionCount: weekSessions.length,
-    trainingDays: new Set(weekSessions.map((s) => s.date)).size,
+    trainingDays: new Set(weekSessions.map((s) => sessionDayKey(s.date))).size,
     totalVolume,
     volumeDelta,
     prs,
