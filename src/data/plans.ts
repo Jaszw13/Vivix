@@ -89,6 +89,38 @@ const intermediateWarmup: WarmupItem[] = [
   dynamicWarmups[4],
 ];
 
+// T17：新手全身 3 日暖身（每天 ≥3 項，器械/啞鈴友善）
+const fullBody3WarmupA: WarmupItem[] = [
+  dynamicWarmups[0],
+  dynamicWarmups[1],
+  dynamicWarmups[4],
+  lightSet('腿推', '30–40 kg'),
+];
+const fullBody3WarmupB: WarmupItem[] = [
+  dynamicWarmups[0],
+  dynamicWarmups[3],
+  dynamicWarmups[1],
+  lightSet('臥推', '15–20 kg'),
+];
+const fullBody3WarmupC: WarmupItem[] = [
+  dynamicWarmups[0],
+  dynamicWarmups[2],
+  dynamicWarmups[1],
+  lightSet('划船', '15–20 kg'),
+];
+
+// T17：中階 4 日上下分裂暖身
+const upperLower4UpperWarmup: WarmupItem[] = [
+  ...intermediateWarmup,
+  lightSet('臥推', '25–30 kg'),
+];
+const upperLower4LowerWarmup: WarmupItem[] = [
+  dynamicWarmups[0],
+  dynamicWarmups[1],
+  dynamicWarmups[3],
+  lightSet('深蹲', '35–45 kg'),
+];
+
 /**
  * 建立 v2 PlannedExercise：
  *   - 自動從 exercises 庫讀取 muscleGroup / equipmentType 建立 snapshot
@@ -279,6 +311,114 @@ export const trainingPlans: TrainingPlan[] = [
           buildPlannedExercise('p3-e6', 'romanian-deadlift', '羅馬尼亞硬舉', 3, '8', { targetWeight: 70, restSeconds: DEFAULT_REST.compound }),
           buildPlannedExercise('p3-e7', 'leg-press', '腿推', 3, '12', { targetWeight: 140, restSeconds: DEFAULT_REST.accessory }),
           buildPlannedExercise('p3-e8', 'hanging-leg-raise', '懸垂抬腿', 3, '10-12', { restSeconds: DEFAULT_REST.core }),
+        ],
+      },
+    ],
+  },
+  {
+    id: 'full-body-3',
+    name: '全身 3 天',
+    difficulty: 'beginner',
+    description: '新手友善 3 天全身訓練，以器械與啞鈴為主，入門門檻低，每天暖身充足。',
+    cover: 'FB3',
+    isPreset: true,
+    isCustom: false,
+    editedByUser: false,
+    days: [
+      {
+        id: 'fb3-day-a',
+        dayName: '全身 A',
+        dayIndex: 0,
+        warmup: fullBody3WarmupA,
+        exercises: [
+          buildPlannedExercise('p4-e1', 'leg-press', '腿推', 3, '10-12', { targetWeight: 80, restSeconds: DEFAULT_REST.accessory }),
+          buildPlannedExercise('p4-e2', 'incline-dumbbell-press', '上斜啞鈴推舉', 3, '10-12', { targetWeight: 15, restSeconds: DEFAULT_REST.accessory }),
+          buildPlannedExercise('p4-e3', 'barbell-row', '槓鈴划船', 3, '10', { targetWeight: 30, restSeconds: DEFAULT_REST.compound }),
+          buildPlannedExercise('p4-e4', 'plank', '棒式', 3, '30-45s', { restSeconds: DEFAULT_REST.core }),
+        ],
+      },
+      {
+        id: 'fb3-day-b',
+        dayName: '全身 B',
+        dayIndex: 1,
+        warmup: fullBody3WarmupB,
+        exercises: [
+          buildPlannedExercise('p4-e5', 'squat', '深蹲', 3, '8-10', { targetWeight: 40, restSeconds: DEFAULT_REST.compound }),
+          buildPlannedExercise('p4-e6', 'overhead-press', '肩推', 3, '10', { targetWeight: 20, restSeconds: DEFAULT_REST.compound }),
+          buildPlannedExercise('p4-e7', 'cable-fly', '纜繩飛鳥', 3, '12', { targetWeight: 15, restSeconds: DEFAULT_REST.accessory }),
+          buildPlannedExercise('p4-e8', 'tricep-pushdown', '三頭下壓', 3, '12', { targetWeight: 20, restSeconds: DEFAULT_REST.accessory }),
+        ],
+      },
+      {
+        id: 'fb3-day-c',
+        dayName: '全身 C',
+        dayIndex: 2,
+        warmup: fullBody3WarmupC,
+        exercises: [
+          buildPlannedExercise('p4-e9', 'romanian-deadlift', '羅馬尼亞硬舉', 3, '10', { targetWeight: 40, restSeconds: DEFAULT_REST.compound }),
+          buildPlannedExercise('p4-e10', 'incline-dumbbell-press', '上斜啞鈴推舉', 3, '10-12', { targetWeight: 17, restSeconds: DEFAULT_REST.accessory }),
+          buildPlannedExercise('p4-e11', 'lateral-raise', '側平舉', 3, '12-15', { targetWeight: 8, restSeconds: DEFAULT_REST.accessory }),
+          buildPlannedExercise('p4-e12', 'hanging-leg-raise', '懸垂抬腿', 3, '8-10', { restSeconds: DEFAULT_REST.core }),
+        ],
+      },
+    ],
+  },
+  {
+    id: 'upper-lower-4',
+    name: '上下 4 天',
+    difficulty: 'intermediate',
+    description: '中階 4 天上下半身分化，較 2 天版更高頻率，每個肌群每週刺激兩次。',
+    cover: 'UL4',
+    isPreset: true,
+    isCustom: false,
+    editedByUser: false,
+    days: [
+      {
+        id: 'ul4-upper-a',
+        dayName: '上 A',
+        dayIndex: 0,
+        warmup: upperLower4UpperWarmup,
+        exercises: [
+          buildPlannedExercise('p5-e1', 'bench-press', '臥推', 4, '6', { targetWeight: 55, restSeconds: DEFAULT_REST.compound }),
+          buildPlannedExercise('p5-e2', 'barbell-row', '槓鈴划船', 4, '8', { targetWeight: 50, restSeconds: DEFAULT_REST.compound }),
+          buildPlannedExercise('p5-e3', 'overhead-press', '肩推', 3, '10', { targetWeight: 35, restSeconds: DEFAULT_REST.compound }),
+          buildPlannedExercise('p5-e4', 'barbell-curl', '槓鈴二頭彎舉', 3, '12', { targetWeight: 25, restSeconds: DEFAULT_REST.accessory }),
+        ],
+      },
+      {
+        id: 'ul4-lower-a',
+        dayName: '下 A',
+        dayIndex: 1,
+        warmup: upperLower4LowerWarmup,
+        exercises: [
+          buildPlannedExercise('p5-e5', 'squat', '深蹲', 4, '6', { targetWeight: 80, restSeconds: DEFAULT_REST.compound }),
+          buildPlannedExercise('p5-e6', 'romanian-deadlift', '羅馬尼亞硬舉', 3, '8', { targetWeight: 60, restSeconds: DEFAULT_REST.compound }),
+          buildPlannedExercise('p5-e7', 'leg-press', '腿推', 3, '12', { targetWeight: 120, restSeconds: DEFAULT_REST.accessory }),
+          buildPlannedExercise('p5-e8', 'plank', '棒式', 3, '45-60s', { restSeconds: DEFAULT_REST.core }),
+        ],
+      },
+      {
+        id: 'ul4-upper-b',
+        dayName: '上 B',
+        dayIndex: 2,
+        warmup: upperLower4UpperWarmup,
+        exercises: [
+          buildPlannedExercise('p5-e9', 'incline-dumbbell-press', '上斜啞鈴推舉', 4, '8-10', { targetWeight: 22, restSeconds: DEFAULT_REST.accessory }),
+          buildPlannedExercise('p5-e10', 'pull-up', '引體向上', 4, '6-8', { restSeconds: DEFAULT_REST.accessory }),
+          buildPlannedExercise('p5-e11', 'lateral-raise', '側平舉', 3, '12-15', { targetWeight: 10, restSeconds: DEFAULT_REST.accessory }),
+          buildPlannedExercise('p5-e12', 'tricep-pushdown', '三頭下壓', 3, '12', { targetWeight: 25, restSeconds: DEFAULT_REST.accessory }),
+        ],
+      },
+      {
+        id: 'ul4-lower-b',
+        dayName: '下 B',
+        dayIndex: 3,
+        warmup: upperLower4LowerWarmup,
+        exercises: [
+          buildPlannedExercise('p5-e13', 'deadlift', '硬舉', 3, '5', { targetWeight: 80, restSeconds: DEFAULT_REST.compound }),
+          buildPlannedExercise('p5-e14', 'leg-press', '腿推', 4, '10', { targetWeight: 130, restSeconds: DEFAULT_REST.accessory }),
+          buildPlannedExercise('p5-e15', 'cable-fly', '纜繩飛鳥', 3, '12', { targetWeight: 15, restSeconds: DEFAULT_REST.accessory }),
+          buildPlannedExercise('p5-e16', 'hanging-leg-raise', '懸垂抬腿', 3, '10-12', { restSeconds: DEFAULT_REST.core }),
         ],
       },
     ],
