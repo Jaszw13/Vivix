@@ -105,8 +105,30 @@ export default function Progress() {
   const allExercises = getAllExercises();
   const defaultEx = allExercises[0]?.id ?? 'bench-press';
   const [selectedExerciseId, setSelectedExerciseId] = useState(defaultEx);
+  // T12：曲線模式 auto/weight/reps
+  const [curveMode, setCurveMode] = useState<'auto' | 'weight' | 'reps'>('auto');
   const progress = getExerciseProgress(selectedExerciseId);
   const selectedExercise = allExercises.find((e) => e.id === selectedExerciseId);
+
+  // T12：auto → 該動作所有 PR set 皆 weight===0 → reps
+  const isBWExercise = progress.length > 0 && progress.every((p) => p.maxWeight === 0);
+  const effectiveMode: 'weight' | 'reps' =
+    curveMode === 'auto' ? (isBWExercise ? 'reps' : 'weight') : curveMode;
+
+  // T12：reps mode 數據＝每日期最大 reps
+  const repsProgress = useMemo(() => {
+    if (effectiveMode !== 'reps') return [];
+    const points: { date: string; maxReps: number }[] = [];
+    for (const s of sessions) {
+      const ex = s.exercises.find((e) => e.exerciseId === selectedExerciseId);
+      if (!ex) continue;
+      const completed = ex.sets.filter((set) => set.completed);
+      if (completed.length === 0) continue;
+      const maxReps = completed.reduce((m, set) => Math.max(m, set.reps), 0);
+      points.push({ date: s.date, maxReps });
+    }
+    return points;
+  }, [sessions, selectedExerciseId, effectiveMode]);
 
   // ----- 分部位數據 -----
   const groupStats = useMemo(() => getGroupStats(), [getGroupStats]);
@@ -596,26 +618,75 @@ export default function Progress() {
               }
             />
             {scope === 'all' && (
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4 mb-3 pb-1">
-                {allExercises.slice(0, 10).map((ex) => (
-                  <button
-                    key={ex.id}
-                    onClick={() => setSelectedExerciseId(ex.id)}
-                    className={cn(
-                      'px-3 py-1.5 text-xs uppercase tracking-wider rounded-button whitespace-nowrap border transition-colors',
-                      selectedExerciseId === ex.id
-                        ? 'bg-accent text-bg-primary border-accent'
-                        : 'bg-transparent text-text-secondary border-border hover:text-text-primary'
-                    )}
-                  >
-                    {ex.name}
-                  </button>
-                ))}
-              </div>
+              <>
+                <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4 mb-2 pb-1">
+                  {allExercises.slice(0, 10).map((ex) => {
+                    const isBW = ex.equipmentType === 'bodyweight';
+                    return (
+                      <button
+                        key={ex.id}
+                        onClick={() => setSelectedExerciseId(ex.id)}
+                        className={cn(
+                          'px-3 py-1.5 text-xs uppercase tracking-wider rounded-button whitespace-nowrap border transition-colors flex items-center gap-1',
+                          selectedExerciseId === ex.id
+                            ? 'bg-accent text-bg-primary border-accent'
+                            : 'bg-transparent text-text-secondary border-border hover:text-text-primary'
+                        )}
+                      >
+                        {ex.name}
+                        {isBW && (
+                          <span className={cn(
+                            'text-[8px] px-1 rounded',
+                            selectedExerciseId === ex.id ? 'bg-bg-primary/20' : 'bg-auxiliary/15 text-auxiliary'
+                          )}>BW</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* T12：mode toggle */}
+                <div className="flex gap-2 mb-3">
+                  {(['auto', 'weight', 'reps'] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setCurveMode(m)}
+                      className={cn(
+                        'px-2.5 py-1 text-[10px] uppercase tracking-wider rounded-button border transition-colors',
+                        curveMode === m
+                          ? 'bg-auxiliary text-bg-primary border-auxiliary'
+                          : 'bg-transparent text-text-secondary border-border hover:text-text-primary'
+                      )}
+                    >
+                      {m === 'auto' ? '自動' : m === 'weight' ? '重量' : '次數'}
+                    </button>
+                  ))}
+                </div>
+              </>
             )}
             <Card className="py-4 px-3">
               {scope === 'all' ? (
-                progress.length === 0 ? (
+                effectiveMode === 'reps' ? (
+                  repsProgress.length === 0 ? (
+                    <div className="h-[220px] flex items-center justify-center text-sm text-text-secondary">
+                      尚無此動作的訓練記錄
+                    </div>
+                  ) : (
+                    <div className="h-[220px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart
+                          data={repsProgress.map((p) => ({ date: formatDate(p.date), value: p.maxReps }))}
+                          margin={CHART_MARGIN}
+                        >
+                          <CartesianGrid stroke="var(--border-color)" strokeDasharray="2 4" vertical={false} />
+                          <XAxis dataKey="date" stroke="var(--text-secondary)" tick={{ fontSize: 10, fontFamily: 'JetBrains Mono' }} tickLine={false} axisLine={false} />
+                          <YAxis {...Y_AXIS_PROPS} label={{ value: 'Reps', angle: -90, position: 'insideLeft', style: { fontSize: 10, fill: 'var(--text-secondary)' } }} />
+                          <Tooltip contentStyle={tooltipStyle} labelStyle={{ color: 'var(--text-secondary)' }} formatter={(v: number) => [`${v} reps`, '最大次數']} />
+                          <Line type="monotone" dataKey="value" stroke="var(--auxiliary)" strokeWidth={2.5} dot={{ fill: 'var(--auxiliary)', r: 3 }} activeDot={{ r: 5, fill: 'var(--auxiliary)' }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  )
+                ) : progress.length === 0 ? (
                   <div className="h-[220px] flex items-center justify-center text-sm text-text-secondary">
                     尚無此動作的訓練記錄
                   </div>
