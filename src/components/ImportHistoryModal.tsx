@@ -198,20 +198,25 @@ export default function ImportHistoryModal({
     const next = new Map<string, ExerciseMapTarget>();
     for (const name of names) {
       // 1) exact 自訂
-      if (customNameToExercise.has(name)) {
-        next.set(name, { kind: 'custom', exercise: customNameToExercise.get(name)! });
+      const customMatch = customNameToExercise.get(name);
+      if (customMatch) {
+        next.set(name, { kind: 'custom', exercise: customMatch });
         continue;
       }
       // 2) exact 內建
-      if (builtinNameToExercise.has(name)) {
-        next.set(name, { kind: 'builtin', exercise: builtinNameToExercise.get(name)! });
+      const builtinMatch = builtinNameToExercise.get(name);
+      if (builtinMatch) {
+        next.set(name, { kind: 'builtin', exercise: builtinMatch });
         continue;
       }
       // 3) fuzzy 建議
       const suggestions = fuzzySuggest(name, builtinNames, 1);
-      if (suggestions.length > 0 && builtinNameToExercise.has(suggestions[0])) {
-        next.set(name, { kind: 'builtin', exercise: builtinNameToExercise.get(suggestions[0])! });
-        continue;
+      if (suggestions.length > 0) {
+        const fuzzyMatch = builtinNameToExercise.get(suggestions[0]);
+        if (fuzzyMatch) {
+          next.set(name, { kind: 'builtin', exercise: fuzzyMatch });
+          continue;
+        }
       }
       // 4) 未定義：待用戶選擇
       next.set(name, { kind: 'new', name, muscleGroup: 'chest', equipmentType: 'barbell', customId: generateId('custom-pending') });
@@ -249,7 +254,8 @@ export default function ImportHistoryModal({
       }
       const dateKeys = Array.from(byDate.keys()).sort();
       for (const iso of dateKeys) {
-        const dayMap = byDate.get(iso)!;
+        const dayMap = byDate.get(iso);
+        if (!dayMap) continue;
         const exercises: ExerciseLog[] = [];
         let vol = 0;
         for (const [exName, arr] of dayMap.entries()) {
@@ -707,7 +713,7 @@ function Step2(props: {
                   {suggestions.length > 0 && unresolved && (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {suggestions.map((s) => (
-                        <button key={s} onClick={() => setTarget(name, { kind: 'builtin', exercise: builtinNameToExercise.get(s)! })}
+                        <button key={s} onClick={() => { const ex = builtinNameToExercise.get(s); if (ex) setTarget(name, { kind: 'builtin', exercise: ex }); }}
                           className="text-[10px] px-2 py-1 rounded border border-accent/40 text-accent bg-accent/5 hover:bg-accent-soft uppercase tracking-wider">
                           建議：{s}
                         </button>
@@ -730,7 +736,7 @@ function Step2(props: {
                 <ExerciseMapRowButton
                   label="更換內建"
                   options={builtinNames.filter((n) => n !== name).slice(0, 120)}
-                  onPick={(n) => builtinNameToExercise.has(n) && setTarget(name, { kind: 'builtin', exercise: builtinNameToExercise.get(n)! })}
+                  onPick={(n) => { const ex = builtinNameToExercise.get(n); if (ex) setTarget(name, { kind: 'builtin', exercise: ex }); }}
                 />
               )}
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -859,7 +865,8 @@ function MappingDropdown(props: {
           <div className="text-[10px] uppercase tracking-widest text-text-secondary px-1 mb-1">內建動作</div>
           {filteredBuiltin.length === 0 && <div className="text-[11px] text-text-secondary/70 px-1 py-1">無結果</div>}
           {filteredBuiltin.map((n) => {
-            const e = builtinNameToExercise.get(n)!;
+            const e = builtinNameToExercise.get(n);
+            if (!e) return null;
             const sel = current?.kind === 'builtin' && current.exercise.name === n;
             return (
               <button key={n} onClick={() => { onPickBuiltin(e); setOpen(false); }} className={cn(

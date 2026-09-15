@@ -32,7 +32,7 @@ npx vite build
 | as any | `grep "as any" src` | 0 |
 | 死 export | `grep "STANDARDS_META\|TIER_STYLES\|groupAchievementsByCategory\|getNextAchievement" src` | 0 |
 | 無消費端 flag | `grep "partnerQuestsEnabled\|warmupEnabled\|telemetryEnabled\|debugPanelEnabled" src` | 0 |
-| 非空斷言 | `grep -rnE "(\w\|\)\|\])!(\.\|\)\|,\|;\|$)" src`（扣除純文字 false positive 如 `LEVEL UP!`） | 0 |
+| 非空斷言 | `grep -rnE "(^|[^!])!([.,;:)\]]|$)" src`（排除 `!=`、`!!`、`!important`） | 0 |
 
 ## 2. 功能回歸（手動）
 
@@ -230,7 +230,7 @@ npx vite build
   - hex 散落於 components/pages = 0
   - `as any` = 0
   - 死 export / 無消費端 flag = 0
-  - 非空斷言（扣除 LEVEL UP! 等純文字）= 0
+  - 非空斷言 `grep -rnE "(^|[^!])!([.,;:)\]]|$)" src`（排除 `!=`、`!!`、`!important`）= 0
 - [ ] **熱量 persist 衛生（L1 新守門）**：
   - `grep -rn "kcal\|Kcal\|KCAL" src/store` → 僅 cardioStore 內出現（作為 CardioSession.kcal 事實欄位；不含 energy 推估值）
   - 搜尋 `partialize`：無 store partialize 包含 strengthKcal / cardioKcal（非輸入）/ low / high / activeMin / restMin / isFallback
@@ -395,7 +395,7 @@ npx vite build
 - [ ] AC-T6: WorkoutSession.planSnapshot 可選；TrainingCalendar 元件存在
 - [ ] AC-BUILD: tsc 0 errors；vite build 成功；precache ≥ 16
 - [ ] AC-NOREG: 休息計時行為（auto-start/±15s/暫停/音效）零變化
-- [ ] AC-GREP: `grep "as any" src` = 0；`grep "#[0-9a-f]{6}" src/components` = 0；非空斷言 = 0
+- [ ] AC-GREP: `grep "as any" src` = 0；`grep "#[0-9a-f]{6}" src/components` = 0；`grep -rnE "(^|[^!])!([.,;:)\]]|$)" src` = 0
 
 ## 16. 訓練最小化/放棄分流＋日曆計畫日顯示（T7）
 
@@ -507,7 +507,7 @@ npx vite build
 - [ ] AC-T10-BUILD: vite build precache ≥16
 - [ ] AC-T10-ASANY: grep "as any" src = 0
 - [ ] AC-T10-HEX: grep "#[0-9a-f]{6}" src/components src/pages = 0
-- [ ] AC-T10-NONNULL: grep "!\." src（非空斷言） = 0
+- [ ] AC-T10-NONNULL: `grep -rnE "(^|[^!])!([.,;:)\]]|$)" src`（排除 != / !! / !important）= 0
 - [ ] AC-T10-DEADEXPORT: dead-export grep = 0
 - [ ] AC-T10-DOCS: DEV_RULES / ARCHITECTURE / DATA_FLOW / REGRESSION_CHECKLIST 四文件已更新
 - [ ] AC-T10-COMMIT: commit + push（排除 .docx）
@@ -555,7 +555,7 @@ npx vite build
 - [ ] `tsc --noEmit` → 0 errors
 - [ ] `vite build` → 成功，precache ≥ 16
 - [ ] hex gate：`grep "#[0-9A-Fa-f]{3,8}" src/components src/pages` = 0
-- [ ] `as any` = 0；非空斷言 = 0
+- [ ] `as any` = 0；`grep -rnE "(^|[^!])!([.,;:)\]]|$)" src` = 0
 
 ### 18.6 既有功能零回歸
 
