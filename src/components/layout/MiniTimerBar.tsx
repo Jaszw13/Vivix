@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronRight, X } from 'lucide-react';
 import { useRestTimerStore } from '@/store/restTimerStore';
 import { useWorkoutStore } from '@/store/workoutStore';
+import { cn } from '@/lib/utils';
 
 export function MiniTimerBar() {
   const navigate = useNavigate();
@@ -37,6 +38,10 @@ export function MiniTimerBar() {
   }, [timerActive, sync]);
 
   const onWorkout = location.pathname === '/workout';
+  // T13：noNav 路由（summary / onboarding）無 BottomNav → bar 貼底
+  const isNoNavRoute =
+    location.pathname === '/workout/summary' ||
+    location.pathname.startsWith('/onboarding');
   const show = (timerActive || activeSession) && !onWorkout;
 
   const minutes = Math.floor(remaining / 60);
@@ -60,7 +65,10 @@ export function MiniTimerBar() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 60 }}
           transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-          className="fixed bottom-20 left-1/2 -translate-x-1/2 w-[calc(100%-1.5rem)] max-w-[460px] z-40"
+          className={cn(
+                'fixed left-1/2 -translate-x-1/2 w-[calc(100%-1.5rem)] max-w-[460px] z-40',
+                isNoNavRoute ? 'bottom-4' : 'bottom-20'
+              )}
         >
           <button
             onClick={() => navigate('/workout')}
