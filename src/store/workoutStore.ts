@@ -17,12 +17,21 @@ import { DEFAULT_MEDIA, resolveEquipmentType } from '@/types';
 import {
   generateId,
   calculateTotalVolume,
-  getSessionPRs,
   createExerciseLog as _createExerciseLog,
-  estimate1RM,
 } from '@/utils/workout';
-import { FOURTEEN_DAYS_MS, dayKey, localNoonISO } from '@/utils/time';
-import { getStreakDays as getStreakDaysSelector } from '@/features/stats/selectors';
+import { dayKey, localNoonISO } from '@/utils/time';
+import {
+  getStreakDays as getStreakDaysSelector,
+  computePRsFromSessions,
+  getTotalSessions as getTotalSessionsSelector,
+  getTotalVolume as getTotalVolumeSelector,
+  getWeeklyVolume as getWeeklyVolumeSelector,
+  getGroupStats as getGroupStatsSelector,
+  getGroupWeeklyVolume as getGroupWeeklyVolumeSelector,
+  getExerciseProgress as getExerciseProgressSelector,
+  getGroupExerciseProgress as getGroupExerciseProgressSelector,
+  getUnderTrainedGroups as getUnderTrainedGroupsSelector,
+} from '@/features/stats/selectors';
 import { useCardioStore } from '@/store/cardioStore';
 import { getPlanById } from '@/data/plans';
 import {
@@ -181,55 +190,8 @@ interface WorkoutState {
   getUnderTrainedGroups: () => MuscleGroup[];
 }
 
-// ============ PR 從 sessions rebuild（P-01：優先讀取當前分類） ============
-function computePRsFromSessions(
-  sessions: WorkoutSession[],
-  customExercises: CustomExercise[] = [],
-): PersonalRecord[] {
-  const map = new Map<string, PersonalRecord>();
-  for (const session of sessions) {
-    const sessionPRs = getSessionPRs(session);
-    for (const pr of sessionPRs) {
-      // P-01：優先使用當前 exercise 定義的分類，snapshot 僅兜底
-      const cur = resolveCurrentTaxonomy(pr.exerciseId, customExercises, {
-        muscleGroup: pr.muscleGroup,
-        equipmentType: pr.equipmentType,
-        name: pr.exerciseName,
-      });
-      const existing = map.get(pr.exerciseId);
-      // P-4：bodyweight PR（repPR）用 reps 比較；weighted PR 用 estimated1RM
-      const isBetter = !existing
-        || (pr.repPR !== undefined
-          ? (existing.repPR ?? 0) < pr.repPR
-          : pr.estimated1RM > existing.estimated1RM);
-      if (isBetter) {
-        map.set(pr.exerciseId, {
-          ...pr,
-          muscleGroup: cur.muscleGroup,
-          equipmentType: cur.equipmentType,
-          liftFamily: cur.liftFamily,
-        });
-      }
-    }
-  }
-  return Array.from(map.values()).sort((a, b) => b.estimated1RM - a.estimated1RM);
-}
-
-// ============ 初始化空分部位統計骨架 ============
-function emptyGroupStatsMap(): Record<MuscleGroup, GroupStats> {
-  const groups: MuscleGroup[] = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
-  const out = {} as Record<MuscleGroup, GroupStats>;
-  for (const g of groups) {
-    out[g] = {
-      muscleGroup: g,
-      workoutCount: 0,
-      totalVolumeKg: 0,
-      prCount: 0,
-      exerciseVariety: 0,
-    };
-  }
-  return out;
-}
+// ============ PR / group stats：權威實作已遷至 @/features/stats/selectors（T16/B-01） ============
+// 此處僅保留 store 介面下的薄 delegate（見下方 method 實作）。
 
 // ============ Store 實作 ============
 export const useWorkoutStore = create<WorkoutState>()(
@@ -591,52 +553,18 @@ export const useWorkoutStore = create<WorkoutState>()(
         }));
       },
 
-      getTotalSessions: () => get().sessions.length,
+      // ============ 統計：薄 delegate 至 @/features/stats/selectors（T16/B-01） ============
+      getTotalSessions: () => getTotalSessionsSelector(get().sessions),
 
-      getTotalVolume: () =>
-        Math.round(
-          get().sessions.reduce((sum, s) => sum + s.totalVolume, 0) / 1000
-        ),
+      getTotalVolume: () => getTotalVolumeSelector(get().sessions),
 
       // C3：統一走 selectors 權威（避免 inline 重算）；E-D3：streak = 力量日 ∪ 有氧日
       getStreakDays: () => getStreakDaysSelector(get().sessions, useCardioStore.getState().sessions),
 
-      getExerciseProgress: (exerciseId) => {
-        const sessions = get().sessions;
-        const points: { date: string; maxWeight: number; estimated1RM: number }[] = [];
-        for (const s of sessions) {
-          const ex = s.exercises.find((e) => e.exerciseId === exerciseId);
-          if (!ex) continue;
-          const completed = ex.sets.filter((set) => set.completed);
-          if (completed.length === 0) continue;
-          const max = completed.reduce((m, set) =>
-            estimate1RM(set.weight, set.reps) > estimate1RM(m.weight, m.reps) ? set : m
-          );
-          points.push({
-            date: s.date,
-            maxWeight: max.weight,
-            estimated1RM: estimate1RM(max.weight, max.reps),
-          });
-        }
-        return points;
-      },
+      getExerciseProgress: (exerciseId) =>
+        getExerciseProgressSelector(get().sessions, exerciseId),
 
-      getWeeklyVolume: () => {
-        const sessions = get().sessions;
-        const weeklyMap = new Map<string, number>();
-        for (const s of sessions) {
-          const d = new Date(s.date);
-          const day = d.getDay();
-          const diff = day === 0 ? 6 : day - 1;
-          const monday = new Date(d);
-          monday.setDate(d.getDate() - diff);
-          const key = `${monday.getMonth() + 1}/${monday.getDate()}`;
-          weeklyMap.set(key, (weeklyMap.get(key) ?? 0) + s.totalVolume);
-        }
-        return Array.from(weeklyMap.entries())
-          .map(([week, volume]) => ({ week, volume: Math.round(volume / 1000) }))
-          .slice(-8);
-      },
+      getWeeklyVolume: () => getWeeklyVolumeSelector(get().sessions),
 
       getLastSetsForExercise: (exerciseId) => {
         const sessions = get().sessions;
@@ -654,150 +582,18 @@ export const useWorkoutStore = create<WorkoutState>()(
         return null;
       },
 
-      // ============ 分部位統計（T-02） ============
-      getGroupStats: () => {
-        const sessions = get().sessions;
-        const prs = get().personalRecords;
-        const customExs = get().customExercises;
-        const out = emptyGroupStatsMap();
+      // ============ 分部位統計（T-02）：薄 delegate 至 selectors ============
+      getGroupStats: () =>
+        getGroupStatsSelector(get().sessions, get().personalRecords, get().customExercises),
 
-        // 每個部位的 unique 訓練日期 set 與 unique 動作 set
-        const trainDatesByGroup: Record<MuscleGroup, Set<string>> = {
-          chest: new Set(), back: new Set(), legs: new Set(),
-          shoulders: new Set(), arms: new Set(), core: new Set(),
-        };
-        const varietyByGroup: Record<MuscleGroup, Set<string>> = {
-          chest: new Set(), back: new Set(), legs: new Set(),
-          shoulders: new Set(), arms: new Set(), core: new Set(),
-        };
-        const lastTrainedByGroup: Record<MuscleGroup, number> = {
-          chest: 0, back: 0, legs: 0, shoulders: 0, arms: 0, core: 0,
-        };
+      getGroupWeeklyVolume: (group) =>
+        getGroupWeeklyVolumeSelector(get().sessions, get().customExercises, group),
 
-        for (const session of sessions) {
-          const dateKey = new Date(session.date).toDateString();
-          const ts = new Date(session.date).getTime();
-          for (const ex of session.exercises) {
-            // P-01：優先讀取當前 exercise 定義的分類，snapshot 僅兜底
-            const cur = resolveCurrentTaxonomy(ex.exerciseId, customExs, {
-              muscleGroup: ex.muscleGroup as MuscleGroup | undefined,
-              equipmentType: ex.equipmentType,
-              name: ex.name,
-            });
-            const group = cur.muscleGroup;
-            if (!group) continue;
-            const completed = ex.sets.filter((s) => s.completed);
-            if (completed.length === 0) continue;
-            const vol = completed.reduce((s, x) => s + x.weight * x.reps, 0);
-            out[group].totalVolumeKg += vol;
-            trainDatesByGroup[group].add(dateKey);
-            varietyByGroup[group].add(ex.exerciseId);
-            if (ts > lastTrainedByGroup[group]) lastTrainedByGroup[group] = ts;
-          }
-        }
+      getGroupExerciseProgress: (group) =>
+        getGroupExerciseProgressSelector(get().sessions, get().customExercises, group),
 
-        // PR 按部位計數（PR 可能來自舊無快照紀錄，此處補齊）
-        const prCountByGroup: Record<MuscleGroup, number> = {
-          chest: 0, back: 0, legs: 0, shoulders: 0, arms: 0, core: 0,
-        };
-        for (const pr of prs) {
-          // P-01：PR 分類也跟隨當前 taxonomy
-          const cur = resolveCurrentTaxonomy(pr.exerciseId, customExs, {
-            muscleGroup: pr.muscleGroup as MuscleGroup | undefined,
-            equipmentType: pr.equipmentType,
-            name: pr.exerciseName,
-          });
-          if (cur.muscleGroup) prCountByGroup[cur.muscleGroup]++;
-        }
-
-        const groups: MuscleGroup[] = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
-        for (const g of groups) {
-          out[g].workoutCount = trainDatesByGroup[g].size;
-          out[g].exerciseVariety = varietyByGroup[g].size;
-          out[g].prCount = prCountByGroup[g];
-          out[g].lastTrainedAt = lastTrainedByGroup[g] > 0
-            ? new Date(lastTrainedByGroup[g]).toISOString()
-            : undefined;
-        }
-        return out;
-      },
-
-      getGroupWeeklyVolume: (group) => {
-        const sessions = get().sessions;
-        const customExs = get().customExercises;
-        const weeklyMap = new Map<string, number>();
-        for (const s of sessions) {
-          const d = new Date(s.date);
-          const day = d.getDay();
-          const diff = day === 0 ? 6 : day - 1;
-          const monday = new Date(d);
-          monday.setDate(d.getDate() - diff);
-          const key = `${monday.getMonth() + 1}/${monday.getDate()}`;
-          let weekVol = 0;
-          for (const ex of s.exercises) {
-            // P-01：使用當前分類
-            const cur = resolveCurrentTaxonomy(ex.exerciseId, customExs, {
-              muscleGroup: ex.muscleGroup as MuscleGroup | undefined,
-            });
-            if (cur.muscleGroup !== group) continue;
-            weekVol += ex.sets
-              .filter((x) => x.completed)
-              .reduce((sum, x) => sum + x.weight * x.reps, 0);
-          }
-          if (weekVol > 0) {
-            weeklyMap.set(key, (weeklyMap.get(key) ?? 0) + weekVol);
-          }
-        }
-        return Array.from(weeklyMap.entries())
-          .map(([week, volume]) => ({ week, volume: Math.round(volume / 1000) }))
-          .slice(-8);
-      },
-
-      getGroupExerciseProgress: (group) => {
-        const sessions = get().sessions;
-        const customExs = get().customExercises;
-        const points: { date: string; normalized1RM: number; exercises: number }[] = [];
-        for (const s of sessions) {
-          const exs = s.exercises.filter((ex) => {
-            // P-01：使用當前分類
-            const cur = resolveCurrentTaxonomy(ex.exerciseId, customExs, {
-              muscleGroup: ex.muscleGroup as MuscleGroup | undefined,
-            });
-            return cur.muscleGroup === group && ex.sets.some((set) => set.completed);
-          });
-          if (exs.length === 0) continue;
-          let total1RM = 0;
-          for (const ex of exs) {
-            const completed = ex.sets.filter((set) => set.completed);
-            const best = completed.reduce((m, set) =>
-              estimate1RM(set.weight, set.reps) > estimate1RM(m.weight, m.reps) ? set : m
-            );
-            total1RM += estimate1RM(best.weight, best.reps);
-          }
-          points.push({
-            date: s.date,
-            normalized1RM: Math.round(total1RM / exs.length),
-            exercises: exs.length,
-          });
-        }
-        return points;
-      },
-
-      getUnderTrainedGroups: () => {
-        const stats = get().getGroupStats();
-        const groups: MuscleGroup[] = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
-        // 至少有 1 次訓練的部位視為已接觸；否則偏低
-        // 另：最近 14 天沒碰且 volume 偏低者也標示
-        const now = Date.now();
-        return groups.filter((g) => {
-          const s = stats[g];
-          if (s.workoutCount === 0) return true;
-          if (s.lastTrainedAt && now - new Date(s.lastTrainedAt).getTime() > FOURTEEN_DAYS_MS) {
-            return true;
-          }
-          return false;
-        });
-      },
+      getUnderTrainedGroups: () =>
+        getUnderTrainedGroupsSelector(get().sessions, get().personalRecords, get().customExercises),
     }),
     {
       name: 'ironpulse-workouts',
