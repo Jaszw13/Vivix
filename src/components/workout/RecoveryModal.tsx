@@ -18,6 +18,7 @@ import { X, Play, Save, Trash2 } from 'lucide-react';
 import { OVERLAY_SCRIM } from '@/data/theme';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { useRestTimerStore } from '@/store/restTimerStore';
+import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { dayKey } from '@/utils/time';
 
 const STALE_MS = 30 * 60 * 1000;
@@ -46,10 +47,20 @@ export function RecoveryModal() {
     const staleByDay = dayKey(new Date(now)) !== dayKey(new Date(lastTime));
     if (!staleByTime && !staleByDay) return;
 
+    // telemetry：記錄「忘記按完成」發生率（Beta 問卷對照指標）
+    useTelemetryStore.getState().log('recovery_modal_shown', {
+      completedSets,
+      staleByTime,
+      staleByDay,
+      idleMs: now - lastTime,
+    });
     setOpen(true);
   }, []);
 
-  const handleContinue = () => setOpen(false);
+  const handleContinue = () => {
+    useTelemetryStore.getState().log('recovery_choice', { choice: 'continue' });
+    setOpen(false);
+  };
 
   const handleSaveAsFinished = () => {
     const { activeSession, finishSession } = useWorkoutStore.getState();
@@ -57,6 +68,7 @@ export function RecoveryModal() {
       setOpen(false);
       return;
     }
+    useTelemetryStore.getState().log('recovery_choice', { choice: 'save_finished' });
     const finishedAt = activeSession.lastActivityAt ?? activeSession.startedAt ?? undefined;
     const finished = finishSession(finishedAt);
     setOpen(false);
@@ -66,6 +78,7 @@ export function RecoveryModal() {
   };
 
   const handleDiscard = () => {
+    useTelemetryStore.getState().log('recovery_choice', { choice: 'discard' });
     const { clearActiveSession } = useWorkoutStore.getState();
     clearActiveSession();
     useRestTimerStore.getState().cancel();
