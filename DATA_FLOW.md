@@ -503,6 +503,48 @@ TrainingCalendar（Progress 頁）
             └─ 與 Workout 頁 handleAbandon 同一邏輯（不彈 dialog 的最小化走 amber 按鈕）
 ```
 
+### F3：完成訓練取消休息計時流
+
+```
+Workout.handleFinish
+  ├─ restTimerStore.cancel()        ← 前：清除可能在跑的倒數
+  ├─ finishSession()                 ← 寫入 sessions、clearActiveSession
+  ├─ restTimerStore.cancel()        ← 後：兜底（finishSession 不碰 timer）
+  └─ navigate('/workout/summary')
+
+MiniTimerBar 顯示條件（F3 改）：
+  show = activeSession !== null && pathname !== '/workout'
+  ├─ timerActive && activeSession === null → effect 內 cancel（清 stale）
+  └─ timerActive → label「休息中… {remaining}」；否則「訓練進行中」
+```
+
+### F4：未完成訓練回收流（Recovery）
+
+```
+persist（workoutStore v11）：
+  partialize 加入 activeSession（含 lastActivityAt raw fact）
+  migrate v10→v11：
+    舊無 activeSession → null
+    有但缺 lastActivityAt → 取 startedAt；startedAt 也缺 → null
+
+App mount（settleOnLoad 後）：
+  RecoveryModal effect 偵測 stale：
+    activeSession 存在 && completedSets ≥ 1
+    && (now − lastActivityAt > 30min || 跨日)
+  ├─ 非 stale → 不彈（reload 直接續練）
+  └─ stale → 彈 RecoveryModal
+       ├─ 繼續訓練（含 X／overlay）→ 關 modal，保留 activeSession
+       ├─ 存為完成 → finishSession(finishedAt = lastActivityAt)
+       │              → navigate('/workout/summary', { session })
+       │              → WorkoutSummary mount 走 settleAll（streak/PR/週報/月曆）
+       └─ 丟棄 → clearActiveSession() + restTimerStore.cancel()
+
+touch 點（lastActivityAt 更新）：
+  startSession / startEmptySession（初始化）
+  toggleWarmupCompleted / addExerciseToActive / substituteExerciseInActive
+  updateSet / addSet / removeSet / toggleSetCompleted / removeExercise
+```
+
 ## 14. 禁止的資料流
 
 - 直接在元件內 inline 計算統計（應走 selectors）

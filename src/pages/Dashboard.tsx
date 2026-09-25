@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
-import { Flame, Plus, TrendingUp, Trophy, Zap, Award, Cat, Dog, ChevronRight, Gift, Activity } from 'lucide-react';
+import { Flame, TrendingUp, Trophy, Zap, Award, Cat, Dog, ChevronRight, Gift, Activity } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { Button } from '@/components/ui/Button';
 import { Card, SectionHeader, StatTile, Badge } from '@/components/ui/Card';
@@ -518,51 +518,6 @@ export default function Dashboard() {
           {SORTED_ACHIEVEMENTS.slice(0, 4).map((a) => (
             <AchievementThumb key={a.id} def={a} />
           ))}
-        </div>
-      </motion.div>
-
-      {/* 快速開始 */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.32 }}
-        className="mt-6 mb-4"
-      >
-        <SectionHeader title="快速開始" />
-        <div className="grid grid-cols-3 gap-3">
-          <button
-            onClick={() => navigate('/plans')}
-            className={cn(
-              'bg-bg-card rounded-card border border-border/40 p-4 text-left',
-              'hover:border-accent/50 transition-colors'
-            )}
-          >
-            <Plus size={20} className="text-accent mb-2" />
-            <div className="font-bold text-sm text-text-primary">選擇計畫</div>
-            <div className="text-[10px] text-text-secondary mt-0.5">從模板開始</div>
-          </button>
-          <button
-            onClick={() => navigate('/workout')}
-            className={cn(
-              'bg-bg-card rounded-card border border-border/40 p-4 text-left',
-              'hover:border-accent/50 transition-colors'
-            )}
-          >
-            <Plus size={20} className="text-auxiliary mb-2" />
-            <div className="font-bold text-sm text-text-primary">自由訓練</div>
-            <div className="text-[10px] text-text-secondary mt-0.5">空白開始</div>
-          </button>
-          <button
-            onClick={() => setCardioModalOpen(true)}
-            className={cn(
-              'bg-bg-card rounded-card border border-border/40 p-4 text-left',
-              'hover:border-auxiliary/60 transition-colors'
-            )}
-          >
-            <Activity size={20} className="text-auxiliary mb-2" />
-            <div className="font-bold text-sm text-text-primary">記錄有氧</div>
-            <div className="text-[10px] text-text-secondary mt-0.5">機器讀數</div>
-          </button>
         </div>
       </motion.div>
 

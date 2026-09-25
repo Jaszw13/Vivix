@@ -41,6 +41,10 @@ L0_positioning:
 | **I-4** | imported session **不計入**：Partner XP、Partner 形態解鎖（即「Partner 用」totalWorkouts 語義）；防止 Lane B 匯入一次解鎖所有形態 | partnerStore.getTotalWorkouts + settleAll skipPartner |
 | **I-5** | 匯入完成：`settleAll(undefined, { silent:true, skipPartner:true })` 後一次性「**每匯入批次一次**」認可儀式 RecognitionModal；慶祝 queue 靜音（不重複彈 toast/celebration） | settleAll opts + RecognitionModal |
 | **I-6** | 熱量估算（strength EE、週報總熱量）**僅限非 imported session**；Progress 熱量卡附註「匯入記錄不計入熱量估算」（匯入記錄缺乏 startedAt/finishedAt/rest 細節，不應進入 EE 雙段 MET） | stats/energy.ts 首行 guard、Progress EE card chip |
+| **F-1** | 移除 Dashboard「快速開始」三卡；入口統一由今日訓練卡（開始訓練／記錄有氧）與 Progress 有氧 tab 提供，避免重複入口 | Dashboard.tsx |
+| **F-2** | 頂欄 elapsed 一律以 `activeSession.startedAt` 計算（`session.date` 為正午歸一值，不可用於 elapsed）；時間格式化統一走 `formatElapsed`（clamp ≥0，無負號） | Workout.tsx、utils/time.ts `formatElapsed` |
+| **F-3** | 完成訓練時 `finishSession` 前後呼叫 `restTimerStore.cancel()`；MiniTimerBar 顯示條件改為 `activeSession !== null && pathname !== '/workout'`，stale timer 由 effect 自動 cancel | Workout.tsx handleFinish、MiniTimerBar.tsx |
+| **F-4** | persist `activeSession`（workoutStore v10→v11）＋`lastActivityAt` raw fact；App mount 偵測 stale（>30min 或跨日）→ RecoveryModal 三選（繼續／存為完成／丟棄）；`finishSession(finishedAt?)` 支援以 lastActivityAt 結算，duration 不失真 | workoutStore v11、RecoveryModal.tsx、App.tsx |
 
 ---
 
@@ -52,7 +56,7 @@ L0_positioning:
 
 | Store | persist | 不 persist（衍生） |
 |-------|---------|------------------|
-| workoutStore v9 | sessions（含 startedAt/finishedAt/planSnapshot）、customExercises、activePlanId、nextDayIndex、taxonomyVersion | personalRecords |
+| workoutStore v11 | sessions（含 startedAt/finishedAt/lastActivityAt/planSnapshot）、customExercises、activePlanId、nextDayIndex、taxonomyVersion、activeSession（F4 persist，含 lastActivityAt） | personalRecords |
 | achievementsStore v4 | progress[id].unlockedAt（永久 D2）、seen、pending | lastMetrics、current |
 | questStore v2 | claimed、completedAt | current |
 | partnerStore v2 | species、name、unlockedFormIds、cosmetics | level、totalWorkouts、totalTrainingDays |

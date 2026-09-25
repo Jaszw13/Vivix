@@ -23,7 +23,7 @@ import {
   exercises as builtinExercises,
 } from '@/data/exercises';
 import { getPlanById } from '@/data/plans';
-import { formatDuration } from '@/utils/workout';
+import { formatElapsed } from '@/utils/time';
 import type {
   ExerciseCategory, WarmupItem, MuscleGroup, EquipmentType,
   PlannedExercise, Exercise,
@@ -77,7 +77,13 @@ export default function Workout() {
 
   useEffect(() => {
     if (!activeSession) return;
-    const startTime = new Date(activeSession.date).getTime();
+    // F2：以 startedAt 為準；startedAt 為 null（legacy）→ 顯示 0:00
+    const startedAt = activeSession.startedAt;
+    if (!startedAt) {
+      setElapsed(0);
+      return;
+    }
+    const startTime = new Date(startedAt).getTime();
     const interval = setInterval(() => {
       setElapsed(Math.floor((Date.now() - startTime) / 1000));
     }, 1000);
@@ -106,8 +112,11 @@ export default function Workout() {
   }
 
   const handleFinish = () => {
+    // F3：完成訓練時取消休息計時（前後各一次，確保無殘留）
+    useRestTimerStore.getState().cancel();
     const finished = finishSession();
     if (finished) {
+      useRestTimerStore.getState().cancel();
       updateFromSession(finished); // T-06：更新器械記憶／usageCount／PB
       navigate('/workout/summary', { state: { session: finished } });
     }
@@ -163,7 +172,7 @@ export default function Workout() {
       rightAction={
         <div className="flex items-center gap-2 pr-1">
           <div className="font-mono text-sm text-accent tabular-nums">
-            {formatDuration(elapsed)}
+            {formatElapsed(elapsed)}
           </div>
           <button
             onClick={handleMinimize}

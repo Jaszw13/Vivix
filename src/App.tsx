@@ -17,6 +17,7 @@ import { TrialLock } from '@/components/TrialLock';
 import { FeedbackModal } from '@/components/FeedbackModal';
 import { WeeklyReportModal } from '@/components/WeeklyReportModal';
 import { MiniTimerBar } from '@/components/layout/MiniTimerBar';
+import { RecoveryModal } from '@/components/workout/RecoveryModal';
 import { useTrialStore } from '@/store/trialStore';
 import { useProfileStore } from '@/store/profileStore';
 import { useWorkoutStore } from '@/store/workoutStore';
@@ -197,6 +198,7 @@ function AppContent() {
         <Route path="/settings" element={<Settings />} />
       </Routes>
       <MiniTimerBar />
+      <RecoveryModal />
       <WeeklyReportModal
         open={showWeeklyReport}
         onClose={() => setShowWeeklyReport(false)}

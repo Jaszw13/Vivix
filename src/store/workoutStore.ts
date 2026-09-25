@@ -152,7 +152,7 @@ interface WorkoutState {
   removeSet: (exerciseLogId: string, setId: string) => void;
   toggleSetCompleted: (exerciseLogId: string, setId: string) => void;
   removeExercise: (exerciseLogId: string) => void;
-  finishSession: () => WorkoutSession | null;
+  finishSession: (finishedAt?: string) => WorkoutSession | null;
   clearActiveSession: () => void;
 
   // 匯入（Errata E12：單次 set() 批次寫入，不觸發 finishSession 路徑）
@@ -243,6 +243,7 @@ export const useWorkoutStore = create<WorkoutState>()(
             equipmentType: tax.equipmentType ?? pe.snapshot?.equipmentType,
           };
         });
+        const nowIso = new Date().toISOString();
         const session: WorkoutSession = {
           id: generateId('session'),
           date: localNoonISO(new Date()),
@@ -254,8 +255,9 @@ export const useWorkoutStore = create<WorkoutState>()(
           duration: 0,
           totalVolume: 0,
           exercises,
-          startedAt: new Date().toISOString(),
+          startedAt: nowIso,
           finishedAt: null,
+          lastActivityAt: nowIso,
           // P-5：計畫快照（T6 月曆用）
           planSnapshot: { planId, dayId: day.id, dayName: day.dayName },
         };
@@ -263,6 +265,7 @@ export const useWorkoutStore = create<WorkoutState>()(
       },
 
       startEmptySession: () => {
+        const nowIso = new Date().toISOString();
         const session: WorkoutSession = {
           id: generateId('session'),
           date: localNoonISO(new Date()),
@@ -270,8 +273,9 @@ export const useWorkoutStore = create<WorkoutState>()(
           duration: 0,
           totalVolume: 0,
           exercises: [],
-          startedAt: new Date().toISOString(),
+          startedAt: nowIso,
           finishedAt: null,
+          lastActivityAt: nowIso,
         };
         set({ activeSession: session });
       },
@@ -283,6 +287,7 @@ export const useWorkoutStore = create<WorkoutState>()(
         set({
           activeSession: {
             ...active,
+            lastActivityAt: new Date().toISOString(),
             warmupCompletedIds: done
               ? active.warmupCompletedIds.filter((x) => x !== warmupId)
               : [...active.warmupCompletedIds, warmupId],
@@ -314,6 +319,7 @@ export const useWorkoutStore = create<WorkoutState>()(
         set({
           activeSession: {
             ...active,
+            lastActivityAt: new Date().toISOString(),
             exercises: [...active.exercises, newEx],
           },
         });
@@ -379,7 +385,7 @@ export const useWorkoutStore = create<WorkoutState>()(
             substitutedFrom: ex.exerciseId, // 記錄從哪個動作替換而來
           } as ExerciseLog;
         });
-        set({ activeSession: { ...active, exercises } });
+        set({ activeSession: { ...active, lastActivityAt: new Date().toISOString(), exercises } });
       },
 
       updateSet: (exerciseLogId, setId, patch) => {
@@ -392,7 +398,7 @@ export const useWorkoutStore = create<WorkoutState>()(
             sets: ex.sets.map((s) => (s.id === setId ? { ...s, ...patch } : s)),
           };
         });
-        set({ activeSession: { ...active, exercises } });
+        set({ activeSession: { ...active, lastActivityAt: new Date().toISOString(), exercises } });
       },
 
       addSet: (exerciseLogId) => {
@@ -410,7 +416,7 @@ export const useWorkoutStore = create<WorkoutState>()(
           };
           return { ...ex, sets: [...ex.sets, newSet] };
         });
-        set({ activeSession: { ...active, exercises } });
+        set({ activeSession: { ...active, lastActivityAt: new Date().toISOString(), exercises } });
       },
 
       removeSet: (exerciseLogId, setId) => {
@@ -424,7 +430,7 @@ export const useWorkoutStore = create<WorkoutState>()(
             sets: filtered.map((s, i) => ({ ...s, setNumber: i + 1 })),
           };
         });
-        set({ activeSession: { ...active, exercises } });
+        set({ activeSession: { ...active, lastActivityAt: new Date().toISOString(), exercises } });
       },
 
       toggleSetCompleted: (exerciseLogId, setId) => {
@@ -439,7 +445,7 @@ export const useWorkoutStore = create<WorkoutState>()(
             ),
           };
         });
-        set({ activeSession: { ...active, exercises } });
+        set({ activeSession: { ...active, lastActivityAt: new Date().toISOString(), exercises } });
       },
 
       removeExercise: (exerciseLogId) => {
@@ -448,21 +454,24 @@ export const useWorkoutStore = create<WorkoutState>()(
         set({
           activeSession: {
             ...active,
+            lastActivityAt: new Date().toISOString(),
             exercises: active.exercises.filter((ex) => ex.id !== exerciseLogId),
           },
         });
       },
 
-      finishSession: () => {
+      finishSession: (finishedAt?: string) => {
         const active = get().activeSession;
         if (!active) return null;
         const now = new Date().toISOString();
-        const startedAt = active.startedAt ?? now;
-        const durationSec = Math.max(0, Math.floor((new Date(now).getTime() - new Date(startedAt).getTime()) / 1000));
+        // F4：Recovery 可傳入 lastActivityAt 作為 finishedAt，避免用 now 導致 duration 失真
+        const finishTime = finishedAt ?? now;
+        const startedAt = active.startedAt ?? finishTime;
+        const durationSec = Math.max(0, Math.floor((new Date(finishTime).getTime() - new Date(startedAt).getTime()) / 1000));
         const finished: WorkoutSession = {
           ...active,
           startedAt,
-          finishedAt: now,
+          finishedAt: finishTime,
           duration: durationSec > 0 ? durationSec : active.duration,
           totalVolume: calculateTotalVolume(active),
         };
@@ -597,13 +606,15 @@ export const useWorkoutStore = create<WorkoutState>()(
     }),
     {
       name: 'ironpulse-workouts',
-      version: 10,
+      version: 11,
       partialize: (state) => ({
         sessions: state.sessions,
         customExercises: state.customExercises,
         activePlanId: state.activePlanId,
         nextDayIndex: state.nextDayIndex,
         taxonomyVersion: state.taxonomyVersion,
+        // F4：persist activeSession（含 lastActivityAt），網頁版防忘記完成
+        activeSession: state.activeSession,
         // C4 / L1：personalRecords 為衍生資料，不 persist；讀取時由 sessions + customExercises 派生
       }),
       // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
@@ -678,12 +689,33 @@ export const useWorkoutStore = create<WorkoutState>()(
 
         // A-002 / C4：personalRecords 由 subscribe 自動派生，migrate 不需處理
 
+        // F4 v11：persist activeSession。舊版無 activeSession → null；
+        // 有但缺 lastActivityAt → 取 startedAt；startedAt 也缺 → null。
+        let activeSession: WorkoutSession | null = null;
+        const rawActive = raw.activeSession;
+        if (rawActive && typeof rawActive === 'object') {
+          const asObj = rawActive as Record<string, unknown>;
+          const startedAtRaw = asObj.startedAt;
+          const startedAt = typeof startedAtRaw === 'string' ? startedAtRaw : null;
+          const lastActivityAtRaw = asObj.lastActivityAt;
+          const lastActivityAt =
+            typeof lastActivityAtRaw === 'string' ? lastActivityAtRaw : startedAt;
+          // 確保 exercise log 結構完整（補 lastActivityAt 等）
+          const migratedActive = {
+            ...(rawActive as WorkoutSession),
+            startedAt,
+            lastActivityAt,
+          };
+          activeSession = migratedActive;
+        }
+
         return {
           sessions: safeSessions,
           customExercises,
           activePlanId: typeof raw.activePlanId === 'string' ? raw.activePlanId : null,
           nextDayIndex: typeof raw.nextDayIndex === 'number' ? raw.nextDayIndex : 0,
           taxonomyVersion: typeof raw.taxonomyVersion === 'number' ? raw.taxonomyVersion : 0,
+          activeSession,
         };
       },
     }

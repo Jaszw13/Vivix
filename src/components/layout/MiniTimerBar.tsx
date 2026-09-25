@@ -37,12 +37,20 @@ export function MiniTimerBar() {
     return () => clearInterval(id);
   }, [timerActive, sync]);
 
+  // F3：防 stale — 若計時器還在跑但 activeSession 已被清空（完成/放棄），取消計時
+  useEffect(() => {
+    if (timerActive && activeSession === null) {
+      cancelTimer();
+    }
+  }, [timerActive, activeSession, cancelTimer]);
+
   const onWorkout = location.pathname === '/workout';
   // T13：noNav 路由（summary / onboarding）無 BottomNav → bar 貼底
   const isNoNavRoute =
     location.pathname === '/workout/summary' ||
     location.pathname.startsWith('/onboarding');
-  const show = (timerActive || activeSession) && !onWorkout;
+  // F3：只有 activeSession 存在且不在 /workout 時才顯示
+  const show = activeSession !== null && !onWorkout;
 
   const minutes = Math.floor(remaining / 60);
   const seconds = remaining % 60;
@@ -76,7 +84,7 @@ export function MiniTimerBar() {
           >
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-sm font-bold tracking-wide">
-                {timerActive ? '休息中' : '訓練進行中'}
+                {timerActive ? '休息中…' : '訓練進行中'}
               </span>
               {timerActive && (
                 <span className="font-mono text-sm tabular-nums opacity-80">

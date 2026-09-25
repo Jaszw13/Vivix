@@ -63,12 +63,6 @@ export function getSessionPRs(session: WorkoutSession): PersonalRecord[] {
   });
 }
 
-export function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
 export function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
   const mm = (d.getMonth() + 1).toString().padStart(2, '0');

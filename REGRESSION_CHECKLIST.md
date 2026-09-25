@@ -564,3 +564,47 @@ npx vite build
 - [ ] 身體組成新增/刪除/圖表正常
 - [ ] PR 計算正確
 - [ ] 訓練中替換動作 ≤ 10 秒
+
+## 19. 用戶回饋 v4 修復（F1–F4）
+
+### 19.1 F1 移除 Dashboard「快速開始」
+
+- [ ] Dashboard 無「快速開始」區塊（選擇計畫／自由訓練／記錄有氧三卡）
+- [ ] 今日訓練卡「開始訓練」「記錄有氧」仍可進入
+- [ ] Progress 有氧 tab 新增鈕仍可進入記錄有氧
+- [ ] `Plus` import 已清理，dead-export = 0
+
+### 19.2 F2 頂欄經過時間修復
+
+- [ ] 早上 9 點開訓練頂欄從 0:00 遞增
+- [ ] 下午 3 點開訓練同樣從 0:00 遞增（不再 196:33）
+- [ ] 跨午夜不負數
+- [ ] `startedAt` 為 null（legacy）→ 顯示 0:00
+- [ ] `grep "new Date(.*\.date" src/pages/Workout.tsx src/components/workout` = 0
+- [ ] `formatElapsed` clamp ≥0；<1h → `M:SS`；≥1h → `H:MM:SS`；無負號
+- [ ] rest timer 超時顯示「超時」或 +MM:SS，不出現 `-MM:-SS`
+
+### 19.3 F3 完成訓練取消休息計時
+
+- [ ] 休息中按完成訓練 → summary／主控台無 mini bar
+- [ ] 完成後再進 /workout 為新訓練且無殘留計時
+- [ ] 正常休息中離頁 mini bar 仍顯示倒數
+- [ ] MiniTimerBar show 條件：`activeSession !== null && pathname !== '/workout'`
+- [ ] timerActive 但 activeSession 為 null → render null 且 effect 內 cancel
+
+### 19.4 F4 未完成訓練回收
+
+- [ ] 訓練中 reload → 組數／重量保留（activeSession 已 persist）
+- [ ] 忘按完成、次日打開 → RecoveryModal 彈出
+- [ ] 選「存為完成」→ summary 正確、streak/PR/週報/月曆含該 session
+- [ ] 選「丟棄」→ 無殘留；選「繼續」→ 回訓練頁續練
+- [ ] 30 分鐘內 reload 不彈 modal（直接續練）
+- [ ] `finishSession(finishedAt)` 之 duration／熱量估算合理（不用 now 當 finishedAt）
+
+### 19.5 全局守門
+
+- [ ] `tsc --noEmit` → 0 errors
+- [ ] `vite build` → 成功，precache ≥ 16
+- [ ] `as any` = 0；非空斷言 = 0（排除「LEVEL UP!」）
+- [ ] hex in components/pages = 0
+- [ ] dead-export = 0

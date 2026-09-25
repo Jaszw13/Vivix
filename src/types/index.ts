@@ -379,6 +379,8 @@ export interface WorkoutSession {
   /** E-01：訓練開始／結束時間（原始事實，persist）。migrate：舊 session 設 null */
   startedAt?: string | null;
   finishedAt?: string | null;
+  /** F4：最後活動時間（raw fact）。用於 stale 偵測；migrate：有 activeSession 缺此欄 → 取 startedAt */
+  lastActivityAt?: string | null;
   /** I-2：匯入 v1 標記；=== true 表示來自歷史匯入（Excel / CSV）。
    *  讀取端一律 `s.imported === true`（舊資料沒該欄 = false / undefined 視為非匯入） */
   imported?: boolean;

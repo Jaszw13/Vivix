@@ -70,3 +70,21 @@ export function getWeekStart(date: Date | string, weekOffset = 0): Date {
   monday.setDate(monday.getDate() + weekOffset * 7);
   return monday;
 }
+
+/**
+ * F2：經過時間格式化（任何路徑不得輸出負號）
+ *
+ * - clamp ≥ 0
+ * - <1h → `M:SS`
+ * - ≥1h → `H:MM:SS`
+ */
+export function formatElapsed(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(safe / 3600);
+  const m = Math.floor((safe % 3600) / 60);
+  const s = safe % 60;
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
