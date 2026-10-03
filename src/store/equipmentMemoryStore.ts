@@ -95,16 +95,21 @@ function computeMemoriesFromSessions(sessions: WorkoutSession[]): Record<string,
 }
 
 /**
- * Lightweight memo：以 sessions ref 為 key 快取派生結果，
+ * Lightweight memo：以 sessions ref + taxonomyVersion 為 key 快取派生結果，
  * 同一 ref 多次讀取不重算。sessions 是不可變 push（workoutStore 一律 set 新陣列），
  * 因此 ref 比較有效。
+ * R2：加入 taxonomyVersion — 自訂動作分類變更時即時失效（equipmentId 可能改變）。
  */
 let _memoSessionsRef: WorkoutSession[] | null = null;
+let _memoTaxonomyVersion = -1;
 let _memoResult: Record<string, EquipmentMemory> = {};
 function getMemoizedMemories(): Record<string, EquipmentMemory> {
-  const sessions = useWorkoutStore.getState().sessions;
-  if (sessions !== _memoSessionsRef) {
+  const workout = useWorkoutStore.getState();
+  const sessions = workout.sessions;
+  const taxonomyVersion = workout.taxonomyVersion;
+  if (sessions !== _memoSessionsRef || taxonomyVersion !== _memoTaxonomyVersion) {
     _memoSessionsRef = sessions;
+    _memoTaxonomyVersion = taxonomyVersion;
     _memoResult = computeMemoriesFromSessions(sessions);
   }
   return _memoResult;
@@ -169,6 +174,7 @@ export const useEquipmentMemoryStore = create<EquipmentMemoryState>()(
 
     reset: () => {
       _memoSessionsRef = null;
+      _memoTaxonomyVersion = -1;
       _memoResult = {};
     },
   }),

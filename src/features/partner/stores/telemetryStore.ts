@@ -48,6 +48,11 @@ export const useTelemetryStore = create<TelemetryState>()(
     {
       name: 'vivix-telemetry-store-v1',
       version: 2,
+      // R2：顯式 partialize（events + enabled）
+      partialize: (state) => ({
+        events: state.events,
+        enabled: state.enabled,
+      }),
       // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
       onRehydrateStorage: () => {
         return (state, error) => {

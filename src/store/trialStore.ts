@@ -320,6 +320,18 @@ export const useTrialStore = create<TrialState>()(
     {
       name: 'ironpulse-trial',
       version: 6,
+      // R2：顯式 partialize（只 persist 原始事實，方法不入儲存）
+      partialize: (state) => ({
+        deviceId: state.deviceId,
+        installedAt: state.installedAt,
+        currentStage: state.currentStage,
+        expiresAt: state.expiresAt,
+        usedCodes: state.usedCodes,
+        lastFeedbackAt: state.lastFeedbackAt,
+        feedbackCount: state.feedbackCount,
+        feedbackDismissedAt: state.feedbackDismissedAt,
+        devMode: state.devMode,
+      }),
       // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
       onRehydrateStorage: () => {
         return (state, error) => {
@@ -362,7 +374,18 @@ export const useTrialStore = create<TrialState>()(
           feedbackCount: typeof s.feedbackCount === 'number' ? s.feedbackCount : 0,
           feedbackDismissedAt: s.feedbackDismissedAt || null,
           devMode: false,
-        } as Partial<TrialState>;
+        } as Pick<
+          TrialState,
+          | 'deviceId'
+          | 'installedAt'
+          | 'currentStage'
+          | 'expiresAt'
+          | 'usedCodes'
+          | 'lastFeedbackAt'
+          | 'feedbackCount'
+          | 'feedbackDismissedAt'
+          | 'devMode'
+        >;
       },
     }
   )

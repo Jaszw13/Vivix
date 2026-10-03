@@ -31,6 +31,7 @@ import {
   getExerciseProgress as getExerciseProgressSelector,
   getGroupExerciseProgress as getGroupExerciseProgressSelector,
   getUnderTrainedGroups as getUnderTrainedGroupsSelector,
+  getLastSetsForExercise as getLastSetsForExerciseSelector,
 } from '@/features/stats/selectors';
 import { useCardioStore } from '@/store/cardioStore';
 import { getPlanById } from '@/data/plans';
@@ -575,21 +576,8 @@ export const useWorkoutStore = create<WorkoutState>()(
 
       getWeeklyVolume: () => getWeeklyVolumeSelector(get().sessions),
 
-      getLastSetsForExercise: (exerciseId) => {
-        const sessions = get().sessions;
-        const sorted = [...sessions].sort(
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
-        for (const session of sorted) {
-          const ex = session.exercises.find((e) => e.exerciseId === exerciseId);
-          if (ex) {
-            const completedSets = ex.sets.filter((s) => s.completed);
-            if (completedSets.length > 0) return completedSets;
-            return ex.sets.length > 0 ? ex.sets : null;
-          }
-        }
-        return null;
-      },
+      getLastSetsForExercise: (exerciseId) =>
+        getLastSetsForExerciseSelector(get().sessions, exerciseId),
 
       // ============ 分部位統計（T-02）：薄 delegate 至 selectors ============
       getGroupStats: () =>

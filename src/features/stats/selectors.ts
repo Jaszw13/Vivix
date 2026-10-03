@@ -12,6 +12,7 @@ import type {
   PersonalRecord,
   MuscleGroup,
   GroupStats,
+  SetLog,
 } from '@/types';
 import { DAY_MS, sessionDayKey, dayKey, FOURTEEN_DAYS_MS } from '@/utils/time';
 import { estimate1RM, getSessionPRs } from '@/utils/workout';
@@ -340,4 +341,26 @@ export function getUnderTrainedGroups(
     }
     return false;
   });
+}
+
+/**
+ * R2：取某動作最近一次訓練的組別（純函數，自 workoutStore 遷入）。
+ * 優先回傳已完成組；若全未完成則回傳全部組；找不到回 null。
+ */
+export function getLastSetsForExercise(
+  sessions: WorkoutSession[],
+  exerciseId: string,
+): SetLog[] | null {
+  const sorted = [...sessions].sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+  );
+  for (const session of sorted) {
+    const ex = session.exercises.find((e) => e.exerciseId === exerciseId);
+    if (ex) {
+      const completedSets = ex.sets.filter((s) => s.completed);
+      if (completedSets.length > 0) return completedSets;
+      return ex.sets.length > 0 ? ex.sets : null;
+    }
+  }
+  return null;
 }

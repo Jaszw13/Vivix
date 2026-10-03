@@ -21,6 +21,10 @@ export const useFeatureFlags = create<FeatureFlagsState>()(
     {
       name: 'vivix-feature-flags-v1',
       version: 2,
+      // R2：顯式 partialize（partnerEnabled 是唯一 persist 欄位）
+      partialize: (state) => ({
+        partnerEnabled: state.partnerEnabled,
+      }),
       // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
       onRehydrateStorage: () => {
         return (state, error) => {

@@ -292,6 +292,10 @@ export const usePlansStore = create<PlansState>()(
     {
       name: 'vivix-plans-store-v1',
       version: 1,
+      // R2：顯式 partialize（customPlans 是唯一 persist 欄位）
+      partialize: (state) => ({
+        customPlans: state.customPlans,
+      }),
       // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
       onRehydrateStorage: () => {
         return (state, error) => {
