@@ -9,7 +9,7 @@
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { MuscleGroup, GroupStats, WorkoutSession, PersonalRecord, CardioSession } from '@/types';
+import type { MuscleGroup, GroupStats, WorkoutSession, PersonalRecord, CardioSession, RestDayEntry } from '@/types';
 import { estimate1RM } from '@/utils/workout';
 import { DAY_MS, WEEK_MS } from '@/utils/time';
 import { getStreakDays as getStreakDaysSelector, getConsecutiveWeeksWithCardio } from '@/features/stats/selectors';
@@ -58,6 +58,8 @@ export interface DeriveContext {
   groupStats: Record<MuscleGroup, GroupStats>;
   /** E-D3：有氧 session（事實；用於 streak union + cardio 成就） */
   cardioSessions: CardioSession[];
+  /** R5：休息日（只計 streak） */
+  restDays: RestDayEntry[];
 }
 
 // ── Pre-computed metrics (避免 per-achievement 重算) ──
@@ -155,8 +157,8 @@ function computeMetrics(ctx: DeriveContext): ComputedMetrics {
   // 4. sessions
   const totalSessions = sessions.length;
 
-  // 5. streak — C3：統一走 stats/selectors 權威實作（D1 語義）
-  const streak = getStreakDaysSelector(sessions, cardioSessions);
+  // 5. streak — C3：統一走 stats/selectors 權威實作（D1 語義；R5 含休息日）
+  const streak = getStreakDaysSelector(sessions, cardioSessions, ctx.restDays);
 
   // 6. weekly rhythm (consecutive weeks with ≥2 sessions)
   const weekMap = new Map<string, number>();

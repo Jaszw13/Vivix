@@ -50,6 +50,18 @@ export interface CardioSession {
   createdAt: string;
 }
 
+/** R5：休息日記錄（原始事實，restDayStore persist；L1）
+ *  語義：休息日**只**計入 streak；不計訓練次數／天數／體積／PR／成就／Partner XP。
+ */
+export interface RestDayEntry {
+  id: string;
+  /** dayKey 'YYYY-MM-DD'（本地日） */
+  date: string;
+  activity?: 'walk' | 'stretch' | 'mobility' | 'yoga' | 'other';
+  note?: string;
+  createdAt: string;
+}
+
 /** T8：身體組成記錄（原始事實，bodyMetricsStore persist；L1） */
 export interface BodyMetric {
   id: string;

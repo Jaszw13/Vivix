@@ -34,6 +34,7 @@ import {
   getLastSetsForExercise as getLastSetsForExerciseSelector,
 } from '@/features/stats/selectors';
 import { useCardioStore } from '@/store/cardioStore';
+import { useRestDayStore } from '@/store/restDayStore';
 import { getPlanById } from '@/data/plans';
 import {
   exercises as builtinExercises,
@@ -577,7 +578,12 @@ export const useWorkoutStore = create<WorkoutState>()(
       getTotalVolume: () => getTotalVolumeSelector(get().sessions),
 
       // C3：統一走 selectors 權威（避免 inline 重算）；E-D3：streak = 力量日 ∪ 有氧日
-      getStreakDays: () => getStreakDaysSelector(get().sessions, useCardioStore.getState().sessions),
+      getStreakDays: () =>
+        getStreakDaysSelector(
+          get().sessions,
+          useCardioStore.getState().sessions,
+          useRestDayStore.getState().entries,
+        ),
 
       getExerciseProgress: (exerciseId) =>
         getExerciseProgressSelector(get().sessions, exerciseId),

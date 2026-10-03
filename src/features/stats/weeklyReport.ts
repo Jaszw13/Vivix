@@ -4,7 +4,7 @@
  * L2：所有統計走 stats 層；元件禁止 inline 計算。
  * 週報全派生不 persist — weeklyReportSeenWeek 只存「是否顯示過」。
  */
-import type { WorkoutSession, PersonalRecord, CardioSession } from '@/types';
+import type { WorkoutSession, PersonalRecord, CardioSession, RestDayEntry } from '@/types';
 import { calculateTotalVolume, getSessionPRs } from '@/utils/workout';
 import { getStreakDays } from '@/features/stats/selectors';
 import { getWeekStart, addDays, sessionDayKey } from '@/utils/time';
@@ -26,6 +26,8 @@ export interface WeeklyReport {
   streak: number;
   topLift: PersonalRecord | null;
   partnerMessage: string;
+  /** R5：本週休息天數 */
+  restDayCount: number;
 }
 
 /** 取某週（weekOffset）區間內的 sessions */
@@ -56,13 +58,21 @@ function filterWeekAchievements(
 export function generatePartnerMessage(
   currentCount: number,
   prevCount: number,
+  restDayCount = 0,
 ): string {
-  if (currentCount === 0) return '這週休息也很好，下週繼續。';
-  if (prevCount === 0) return '新開始，每一步都算數。';
-  const delta = currentCount - prevCount;
-  if (delta > 0) return `比上週多練 ${delta} 次，進步看得見。`;
-  if (delta < 0) return `這週練得少一點，但質量更重要。`;
-  return '穩定就是力量。';
+  const base = (() => {
+    if (currentCount === 0) return '這週休息也很好，下週繼續。';
+    if (prevCount === 0) return '新開始，每一步都算數。';
+    const delta = currentCount - prevCount;
+    if (delta > 0) return `比上週多練 ${delta} 次，進步看得見。`;
+    if (delta < 0) return `這週練得少一點，但質量更重要。`;
+    return '穩定就是力量。';
+  })();
+  // R5：平衡規則 — 有訓練也有休息時，資訊性提及（不羞辱）
+  if (restDayCount >= 1 && currentCount >= 1) {
+    return `${base}本週安排了 ${restDayCount} 天休息日，恢復也是進步的一部分。`;
+  }
+  return base;
 }
 
 /**
@@ -77,6 +87,7 @@ export function computeWeeklyReport(
   cardioSessions: CardioSession[],
   achievementUnlocks: AchievementUnlockRecord[],
   weekOffset: number,
+  restDays: RestDayEntry[] = [],
 ): WeeklyReport {
   const weekStart = getWeekStart(new Date(), weekOffset);
   const weekEnd = addDays(weekStart, 7);
@@ -84,6 +95,13 @@ export function computeWeeklyReport(
   const weekSessions = filterWeekSessions(sessions, weekStart, weekEnd);
   const prevWeekStart = addDays(weekStart, -7);
   const prevWeekSessions = filterWeekSessions(sessions, prevWeekStart, weekStart);
+
+  // R5：本週休息天數（只計入 streak，不計訓練天數）
+  const weekRestDays = restDays.filter((r) => {
+    const d = new Date(r.date);
+    return d >= weekStart && d < weekEnd;
+  });
+  const restDayCount = weekRestDays.length;
 
   const totalVolume = weekSessions.reduce(
     (sum, s) => sum + calculateTotalVolume(s),
@@ -104,8 +122,8 @@ export function computeWeeklyReport(
     weekEnd,
   );
 
-  // streak：以整個 sessions + cardioSessions 派生（不是只算本週）
-  const streak = getStreakDays(sessions, cardioSessions);
+  // streak：以整個 sessions + cardioSessions + restDays 派生（不是只算本週）
+  const streak = getStreakDays(sessions, cardioSessions, restDays);
 
   const topLift = prs.reduce<PersonalRecord | null>(
     (max, pr) =>
@@ -116,6 +134,7 @@ export function computeWeeklyReport(
   const partnerMessage = generatePartnerMessage(
     weekSessions.length,
     prevWeekSessions.length,
+    restDayCount,
   );
 
   return {
@@ -130,5 +149,6 @@ export function computeWeeklyReport(
     streak,
     topLift,
     partnerMessage,
+    restDayCount,
   };
 }

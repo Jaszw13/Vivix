@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { useCardioStore } from '@/store/cardioStore';
 import { useAchievementsStore } from '@/store/achievementsStore';
+import { useRestDayStore } from '@/store/restDayStore';
 import { computeWeeklyReport, type AchievementUnlockRecord } from '@/features/stats/weeklyReport';
 import { formatDateFull } from '@/utils/workout';
 import { OVERLAY_SCRIM } from '@/data/theme';
@@ -28,6 +29,7 @@ export function WeeklyReportModal({ open, onClose, weekOffset }: WeeklyReportMod
   const sessions = useWorkoutStore((s) => s.sessions);
   const cardioSessions = useCardioStore((s) => s.sessions);
   const achievementsProgress = useAchievementsStore((s) => s.progress);
+  const restDays = useRestDayStore((s) => s.entries);
   // 內部可瀏覽歷週（初始 = prop；每次開啟重設）
   const [offset, setOffset] = useState(weekOffset);
   useEffect(() => {
@@ -39,8 +41,8 @@ export function WeeklyReportModal({ open, onClose, weekOffset }: WeeklyReportMod
     const unlocks: AchievementUnlockRecord[] = Object.entries(achievementsProgress)
       .filter(([, p]) => p.unlockedAt)
       .map(([id, p]) => ({ id, unlockedAt: p.unlockedAt as string }));
-    return computeWeeklyReport(sessions, cardioSessions, unlocks, offset);
-  }, [sessions, cardioSessions, achievementsProgress, offset]);
+    return computeWeeklyReport(sessions, cardioSessions, unlocks, offset, restDays);
+  }, [sessions, cardioSessions, achievementsProgress, offset, restDays]);
 
   const weekLabel = `${formatDateFull(report.weekStart.toISOString())} – ${formatDateFull(
     addDaysISO(report.weekEnd.toISOString(), -1),
@@ -122,6 +124,7 @@ export function WeeklyReportModal({ open, onClose, weekOffset }: WeeklyReportMod
                   value={deltaStr}
                   highlight={!Number.isNaN(report.volumeDelta) && report.volumeDelta > 0}
                 />
+                <StatTile label="休息天數" value={report.restDayCount} />
               </Card>
 
               {/* streak + 成就 */}

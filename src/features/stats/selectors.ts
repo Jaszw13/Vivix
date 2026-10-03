@@ -13,6 +13,7 @@ import type {
   MuscleGroup,
   GroupStats,
   SetLog,
+  RestDayEntry,
 } from '@/types';
 import { DAY_MS, sessionDayKey, dayKey, FOURTEEN_DAYS_MS } from '@/utils/time';
 import { estimate1RM, getSessionPRs } from '@/utils/workout';
@@ -22,23 +23,30 @@ import type { CustomExercise } from '@/store/workoutStore';
 const MUSCLE_GROUPS: MuscleGroup[] = ['chest', 'back', 'legs', 'shoulders', 'arms', 'core'];
 
 /**
- * 計算連續訓練天數（D1 語義 + E-D3：streak = 力量日 ∪ 有氧日）
- *   - 今天有練（力量或有氧）→ 從今天起算
- *   - 今天未練但昨天有練 → 從昨天起算（仍視為延續）
+ * 計算連續訓練天數（D1 語義 + E-D3：streak = 力量日 ∪ 有氧日 ∪ 休息日 R5）
+ *   - 今天有練／休息 → 從今天起算
+ *   - 今天未練但昨天有練／休息 → 從昨天起算（仍視為延續）
  *   - 否則 0
  *
- * 同一日多次 session 視為一天；以本地時區 toDateString 去重。
+ * R5：休息日只計入 streak（不計訓練次數／體積／PR／成就／Partner XP）。
+ * 同一日多次 session 視為一天；以本地時區 dayKey 去重。
  * 所有消費端（Dashboard／AchievementsPage／questStore）同源。
  */
 export function getStreakDays(
   strengthSessions: WorkoutSession[],
   cardioSessions: CardioSession[] = [],
+  restDays: RestDayEntry[] = [],
 ): number {
-  if (strengthSessions.length === 0 && cardioSessions.length === 0) return 0;
+  if (
+    strengthSessions.length === 0 &&
+    cardioSessions.length === 0 &&
+    restDays.length === 0
+  ) return 0;
 
   const seen = new Set<string>();
   for (const s of strengthSessions) seen.add(sessionDayKey(s.date));
   for (const c of cardioSessions) seen.add(sessionDayKey(c.date));
+  for (const r of restDays) seen.add(r.date);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);

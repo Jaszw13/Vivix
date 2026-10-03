@@ -13,9 +13,11 @@
  */
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Dumbbell, Pencil, Trash2, CalendarPlus } from 'lucide-react';
+import { X, Dumbbell, Pencil, Trash2, CalendarPlus, Coffee } from 'lucide-react';
 import { Card, StatTile } from '@/components/ui/Card';
 import { useWorkoutStore } from '@/store/workoutStore';
+import { useCardioStore } from '@/store/cardioStore';
+import { useRestDayStore, ACTIVITY_LABEL } from '@/store/restDayStore';
 import { calculateTotalVolume, getSessionPRs, formatDateFull } from '@/utils/workout';
 import { dayKey, sessionDayKey } from '@/utils/time';
 import { OVERLAY_SCRIM } from '@/data/theme';
@@ -23,7 +25,7 @@ import { settleAll } from '@/features/stats/settleAll';
 import { buildSessionGCalUrl } from '@/utils/googleCalendar';
 import { useProfileStore } from '@/store/profileStore';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
-import type { WorkoutSession } from '@/types';
+import type { WorkoutSession, RestDayEntry } from '@/types';
 import { DaySessionEditor } from './DaySessionEditor';
 
 interface TrainingCalendarProps {
@@ -52,7 +54,12 @@ export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
   const getStreakDays = useWorkoutStore((s) => s.getStreakDays);
   const customExercises = useWorkoutStore((s) => s.customExercises);
   const bodyWeight = useProfileStore((s) => s.profile.bodyWeight);
+  // R5：有氧 / 休息日
+  const cardioSessions = useCardioStore((s) => s.sessions);
+  const restDays = useRestDayStore((s) => s.entries);
+  const deleteRestDay = useRestDayStore((s) => s.deleteRestDay);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedRestDate, setSelectedRestDate] = useState<string | null>(null);
   // T9-1：DaySessionEditor 狀態
   const [editorDate, setEditorDate] = useState<string | null>(null);
   const [editorSession, setEditorSession] = useState<WorkoutSession | null>(null);
@@ -76,12 +83,27 @@ export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
     return m;
   }, [sessions]);
 
+  // R5：有氧日集合（標籤「氧」）
+  const cardioDaySet = useMemo(() => {
+    const s = new Set<string>();
+    for (const c of cardioSessions) s.add(sessionDayKey(c.date));
+    return s;
+  }, [cardioSessions]);
+
+  // R5：休息日映射
+  const restDayMap = useMemo(() => {
+    const m = new Map<string, RestDayEntry>();
+    for (const r of restDays) m.set(r.date, r);
+    return m;
+  }, [restDays]);
+
   const todayKey = dayKey(new Date());
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0=Sunday
 
   const selectedSession = selectedDate ? sessionMap.get(selectedDate) ?? null : null;
+  const selectedRestDay = selectedRestDate ? restDayMap.get(selectedRestDate) ?? null : null;
 
   // T9-1：開啟 DaySessionEditor（補錄模式）
   const openEditorForEmpty = (dateStr: string) => {
@@ -138,10 +160,17 @@ export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
           // T7：格子 key 用 dayKey 歸一化
           const dateStr = dayKey(new Date(year, month, day));
           const session = sessionMap.get(dateStr);
+          const restDay = restDayMap.get(dateStr);
+          const hasCardio = cardioDaySet.has(dateStr);
           const isToday = dateStr === todayKey;
-          const abbrev = session ? getDayAbbrev(session) : '';
+          // R5：標籤優先序 力量縮寫 > 有氧「氧」> 休息「休」
+          let abbrev = '';
+          if (session) abbrev = getDayAbbrev(session);
+          else if (hasCardio) abbrev = '氧';
+          else if (restDay) abbrev = '休';
           // T9-1：過去日或今天（含未記錄日）允許點擊補錄；未來日不可補錄
           const isPastOrToday = dateStr <= todayKey;
+          const clickable = !!session || !!restDay || isPastOrToday;
 
           return (
             <button
@@ -149,26 +178,31 @@ export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
               onClick={() => {
                 if (session) {
                   setSelectedDate(dateStr);
+                } else if (restDay) {
+                  setSelectedRestDate(dateStr);
                 } else if (isPastOrToday) {
                   openEditorForEmpty(dateStr);
                 }
               }}
               className={`
                 aspect-square flex flex-col items-center justify-center rounded text-xs font-mono transition-all gap-0.5
-                ${session ? 'bg-accent/20 text-text-primary font-bold hover:bg-accent/30' : 'text-text-secondary'}
-                ${!session && isPastOrToday ? 'hover:bg-bg-card cursor-pointer' : ''}
+                ${session ? 'bg-accent/20 text-text-primary font-bold hover:bg-accent/30' : ''}
+                ${!session && restDay ? 'bg-auxiliary/20 text-text-primary hover:bg-auxiliary/30' : ''}
+                ${!session && !restDay && hasCardio ? 'bg-accent/10 text-text-secondary hover:bg-accent/20' : ''}
+                ${!session && !restDay && !hasCardio ? 'text-text-secondary' : ''}
+                ${!session && !restDay && isPastOrToday ? 'hover:bg-bg-card' : ''}
                 ${isToday ? 'ring-1 ring-accent' : ''}
-                ${session || isPastOrToday ? 'cursor-pointer' : 'cursor-default'}
+                ${clickable ? 'cursor-pointer' : 'cursor-default'}
               `}
             >
               <span>{day}</span>
               {abbrev && (
-                <span className="text-[9px] leading-none opacity-70 truncate max-w-full">
+                <span className={`text-[9px] leading-none ${restDay && !session ? 'text-auxiliary font-bold' : 'opacity-70'} truncate max-w-full`}>
                   {abbrev}
                 </span>
               )}
               {/* T9-1：未記錄過去日顯示淡 + 號提示 */}
-              {!session && isPastOrToday && (
+              {!session && !restDay && isPastOrToday && (
                 <span className="text-[8px] leading-none opacity-30">+</span>
               )}
             </button>
@@ -295,6 +329,88 @@ export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
                     aria-label="刪除這天訓練"
                   >
                     <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* R5：休息日詳情 bottom sheet */}
+      <AnimatePresence>
+        {selectedRestDay && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-end justify-center"
+            style={{ background: OVERLAY_SCRIM.background }}
+            onClick={() => setSelectedRestDate(null)}
+          >
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-[480px] bg-bg-primary rounded-t-card max-h-[70vh] overflow-y-auto scrollbar-hide"
+            >
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-10 h-1 rounded-full bg-border" />
+              </div>
+              <div className="flex items-center justify-between px-5 py-3 border-b border-border">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Coffee size={18} className="text-auxiliary flex-shrink-0" />
+                  <div className="min-w-0">
+                    <h3 className="font-display text-base tracking-wide uppercase text-text-primary">
+                      {formatDateFull(selectedRestDay.date)}
+                    </h3>
+                    <p className="text-[10px] text-text-secondary mt-0.5">休息日</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedRestDate(null)}
+                  className="w-8 h-8 flex items-center justify-center text-text-secondary hover:text-text-primary transition-colors flex-shrink-0"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="px-5 py-4 space-y-4">
+                <Card className="p-3 space-y-2">
+                  {selectedRestDay.activity && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-text-secondary">恢復活動</span>
+                      <span className="text-sm font-bold text-text-primary">
+                        {ACTIVITY_LABEL[selectedRestDay.activity]}
+                      </span>
+                    </div>
+                  )}
+                  {selectedRestDay.note && (
+                    <div>
+                      <div className="text-xs text-text-secondary mb-1">備註</div>
+                      <div className="text-sm text-text-primary">{selectedRestDay.note}</div>
+                    </div>
+                  )}
+                  {!selectedRestDay.activity && !selectedRestDay.note && (
+                    <div className="text-sm text-text-secondary">單純休息日</div>
+                  )}
+                </Card>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      if (window.confirm('確認刪除這個休息日記錄？')) {
+                        deleteRestDay(selectedRestDay.id);
+                        useTelemetryStore.getState().log('rest_day_deleted');
+                        setSelectedRestDate(null);
+                        settleAll(undefined, { silent: true });
+                        const streak = getStreakDays();
+                        setToast(`已刪除，連續 ${streak} 天`);
+                      }
+                    }}
+                    className="flex-1 flex items-center justify-center gap-2 py-2.5 text-xs uppercase tracking-wider text-auxiliary font-bold border border-auxiliary/40 rounded-button hover:bg-auxiliary/10 transition-colors"
+                  >
+                    <Trash2 size={14} /> 刪除休息日
                   </button>
                 </div>
               </div>

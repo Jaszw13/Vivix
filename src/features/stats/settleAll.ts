@@ -21,6 +21,7 @@ import type { WorkoutSession, PersonalRecord, MuscleGroup, GroupStats, CardioSes
 import { useWorkoutStore, getAllExercises } from '@/store/workoutStore';
 import { useProfileStore } from '@/store/profileStore';
 import { useCardioStore } from '@/store/cardioStore';
+import { useRestDayStore } from '@/store/restDayStore';
 import { useAchievementsStore, type DeriveContext } from '@/store/achievementsStore';
 import { useQuestStore } from '@/features/partner/stores/questStore';
 import { usePartnerStore } from '@/features/partner/stores/partnerStore';
@@ -57,6 +58,7 @@ function buildAchieveCtx(): DeriveContext {
     hasCustomPlans: usePlansStore.getState().customPlans.length > 0,
     groupStats: workout.getGroupStats(),
     cardioSessions: cardio.sessions,
+    restDays: useRestDayStore.getState().entries,
   };
 }
 
@@ -155,10 +157,11 @@ export function settleAll(
     }
   }
 
-  // 3. quests settlement（streak union 同源）
+  // 3. quests settlement（streak union 同源；R5 含休息日）
   const workout = useWorkoutStore.getState();
   const cardio = useCardioStore.getState();
-  const streakDays = getStreakDaysSelector(workout.sessions, cardio.sessions);
+  const restDays = useRestDayStore.getState().entries;
+  const streakDays = getStreakDaysSelector(workout.sessions, cardio.sessions, restDays);
   const questCtx = buildQuestCtx(streakDays);
   const questStore = useQuestStore.getState();
   questStore.recompute(questCtx);
@@ -214,10 +217,11 @@ export function settleTaxonomyChange(): string[] {
   const achievementsStore = useAchievementsStore.getState();
   const unlocks = achievementsStore.recompute(achieveCtx);
 
-  // quests 也重算（streak union 同源）
+  // quests 也重算（streak union 同源；R5 含休息日）
   const workout = useWorkoutStore.getState();
   const cardio = useCardioStore.getState();
-  const streakDays = getStreakDaysSelector(workout.sessions, cardio.sessions);
+  const restDays = useRestDayStore.getState().entries;
+  const streakDays = getStreakDaysSelector(workout.sessions, cardio.sessions, restDays);
   const questCtx = buildQuestCtx(streakDays);
   useQuestStore.getState().recompute(questCtx);
 

@@ -17,10 +17,11 @@
  */
 import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus, Minus, Trash2, Search, Dumbbell, Save } from 'lucide-react';
+import { X, Plus, Minus, Trash2, Search, Dumbbell, Save, Coffee } from 'lucide-react';
 import { Card, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useWorkoutStore, getAllExercises } from '@/store/workoutStore';
+import { useRestDayStore, ACTIVITY_LABEL } from '@/store/restDayStore';
 import { useProfileStore } from '@/store/profileStore';
 import { getEquipmentTypesForIds } from '@/data/equipment';
 import { generateId, createEmptySet, formatDateFull } from '@/utils/workout';
@@ -36,6 +37,7 @@ import type {
   MuscleGroup,
   EquipmentType,
   Exercise,
+  RestDayEntry,
 } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -46,7 +48,7 @@ interface DaySessionEditorProps {
   existingSession?: WorkoutSession | null;
   onClose: () => void;
   /** 儲存成功後回呼（T9-3：呼叫端執行 settleAll + toast） */
-  onSaved?: (session: WorkoutSession) => void;
+  onSaved?: (session: WorkoutSession | null) => void;
 }
 
 /** 從 Exercise 定義建立草稿 ExerciseLog（預設 3 組空 set，completed=true） */
@@ -78,8 +80,14 @@ export function DaySessionEditor({ date, existingSession, onClose, onSaved }: Da
   const isEdit = !!existingSession;
   const addPastSession = useWorkoutStore((s) => s.addPastSession);
   const updatePastSession = useWorkoutStore((s) => s.updatePastSession);
+  const addRestDay = useRestDayStore((s) => s.addRestDay);
   const allExercises = getAllExercises();
   const gymEquipmentIds = useProfileStore((s) => s.gymEquipmentIds);
+
+  // R5：模式切換（僅補錄模式可選）- workout / rest
+  const [mode, setMode] = useState<'workout' | 'rest'>('workout');
+  const [restActivity, setRestActivity] = useState<RestDayEntry['activity'] | undefined>('walk');
+  const [restNote, setRestNote] = useState('');
 
   // 本地草稿（T9-1：受控輸入只改 draft，不觸發 store 寫入）
   const [draft, setDraft] = useState<ExerciseLog[]>(() =>
@@ -155,9 +163,20 @@ export function DaySessionEditor({ date, existingSession, onClose, onSaved }: Da
   };
 
   // ----- 儲存 -----
-  const canSave = draft.length > 0 && draft.every((d) => d.sets.length > 0 && d.sets.some((s) => s.reps > 0));
+  const canSave = mode === 'rest'
+    ? true
+    : draft.length > 0 && draft.every((d) => d.sets.length > 0 && d.sets.some((s) => s.reps > 0));
   const handleSave = () => {
     if (!canSave) return;
+    if (mode === 'rest') {
+      addRestDay(date, {
+        activity: restActivity,
+        note: restNote.trim() || undefined,
+      });
+      onSaved?.(null);
+      onClose();
+      return;
+    }
     // 補錄的組數預設 completed=true；保險起見再次標記
     const cleanLogs: ExerciseLog[] = draft.map((d) => ({
       ...d,
@@ -205,13 +224,17 @@ export function DaySessionEditor({ date, existingSession, onClose, onSaved }: Da
           {/* 標題 */}
           <div className="flex items-center justify-between px-5 py-3 border-b border-border flex-shrink-0">
             <div className="flex items-center gap-2 min-w-0">
-              <Dumbbell size={18} className="text-accent flex-shrink-0" />
+              {mode === 'rest' ? (
+                <Coffee size={18} className="text-auxiliary flex-shrink-0" />
+              ) : (
+                <Dumbbell size={18} className="text-accent flex-shrink-0" />
+              )}
               <div className="min-w-0">
                 <h3 className="font-display text-base tracking-wide uppercase text-text-primary">
                   {formatDateFull(date)}
                 </h3>
                 <p className="text-[10px] text-text-secondary mt-0.5">
-                  {isEdit ? '編輯這天訓練' : '補錄這天訓練'}
+                  {isEdit ? '編輯這天訓練' : mode === 'rest' ? '標記休息日' : '補錄這天訓練'}
                 </p>
               </div>
             </div>
@@ -224,8 +247,85 @@ export function DaySessionEditor({ date, existingSession, onClose, onSaved }: Da
             </button>
           </div>
 
+          {/* R5：模式切換（僅補錄模式） */}
+          {!isEdit && (
+            <div className="px-5 pt-3 flex-shrink-0">
+              <div className="grid grid-cols-2 gap-1 p-1 bg-bg-secondary rounded-button">
+                <button
+                  type="button"
+                  onClick={() => setMode('workout')}
+                  className={cn(
+                    'py-2 rounded-button text-xs font-bold transition-colors flex items-center justify-center gap-1.5',
+                    mode === 'workout' ? 'bg-accent text-bg-primary' : 'text-text-secondary hover:text-text-primary',
+                  )}
+                >
+                  <Dumbbell size={13} /> 補錄訓練
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode('rest')}
+                  className={cn(
+                    'py-2 rounded-button text-xs font-bold transition-colors flex items-center justify-center gap-1.5',
+                    mode === 'rest' ? 'bg-auxiliary text-bg-primary' : 'text-text-secondary hover:text-text-primary',
+                  )}
+                >
+                  <Coffee size={13} /> 休息日
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* 內容 */}
           <div className="px-5 py-4 space-y-3 flex-1 overflow-y-auto">
+            {/* R5：休息日表單 */}
+            {mode === 'rest' ? (
+              <div className="space-y-3">
+                <div className="py-4 text-center">
+                  <Coffee size={28} className="mx-auto mb-2 text-auxiliary opacity-60" />
+                  <p className="text-sm text-text-primary">標記為休息日</p>
+                  <p className="text-[11px] text-text-secondary/70 mt-1">
+                    休息日只計入連續天數，不影響訓練數據
+                  </p>
+                </div>
+                <Card className="p-3 space-y-3">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-1.5">
+                      恢復活動（選填）
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(Object.keys(ACTIVITY_LABEL) as Array<NonNullable<RestDayEntry['activity']>>).map((act) => (
+                        <button
+                          key={act}
+                          type="button"
+                          onClick={() => setRestActivity(restActivity === act ? undefined : act)}
+                          className={cn(
+                            'px-2 py-2 rounded-button text-xs font-bold border transition-colors',
+                            restActivity === act
+                              ? 'bg-auxiliary/15 text-auxiliary border-auxiliary/50'
+                              : 'bg-bg-secondary text-text-secondary border-border/40 hover:text-text-primary',
+                          )}
+                        >
+                          {ACTIVITY_LABEL[act]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-1.5">
+                      備註（選填）
+                    </div>
+                    <input
+                      type="text"
+                      value={restNote}
+                      onChange={(e) => setRestNote(e.target.value)}
+                      placeholder="例如：主動恢復"
+                      className="w-full bg-bg-secondary rounded-button px-3 py-2 text-text-primary font-mono border border-border/40 focus:border-accent focus:outline-none"
+                    />
+                  </div>
+                </Card>
+              </div>
+            ) : (
+            <>
             {/* 動作列表 */}
             {draft.length === 0 ? (
               <div className="py-8 text-center">
@@ -453,6 +553,8 @@ export function DaySessionEditor({ date, existingSession, onClose, onSaved }: Da
                 </motion.div>
               )}
             </AnimatePresence>
+            </>
+            )}
           </div>
 
           {/* 底部操作列 */}
@@ -461,7 +563,7 @@ export function DaySessionEditor({ date, existingSession, onClose, onSaved }: Da
               取消
             </Button>
             <Button onClick={handleSave} disabled={!canSave} className="flex-1">
-              <Save size={14} /> {isEdit ? '儲存變更' : '儲存補錄'}
+              <Save size={14} /> {isEdit ? '儲存變更' : mode === 'rest' ? '標記休息日' : '儲存補錄'}
             </Button>
           </div>
         </motion.div>

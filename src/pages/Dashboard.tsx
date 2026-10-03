@@ -1,14 +1,16 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
-import { Flame, TrendingUp, Trophy, Zap, Award, Cat, Dog, ChevronRight, Gift, Activity } from 'lucide-react';
+import { Flame, TrendingUp, Trophy, Zap, Award, Cat, Dog, ChevronRight, Gift, Activity, Coffee } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { Button } from '@/components/ui/Button';
 import { Card, SectionHeader, StatTile, Badge } from '@/components/ui/Card';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { useProfileStore } from '@/store/profileStore';
 import { useCardioStore } from '@/store/cardioStore';
-import type { CardioMachine } from '@/types';
+import { useRestDayStore, ACTIVITY_LABEL } from '@/store/restDayStore';
+import { dayKey } from '@/utils/time';
+import type { CardioMachine, RestDayEntry } from '@/types';
 import {
   useAchievementsStore,
   SORTED_ACHIEVEMENTS,
@@ -48,6 +50,26 @@ export default function Dashboard() {
 
   const [cardioModalOpen, setCardioModalOpen] = useState(false);
 
+  // R5：休息日
+  const addRestDay = useRestDayStore((s) => s.addRestDay);
+  const deleteRestDay = useRestDayStore((s) => s.deleteRestDay);
+  const restEntries = useRestDayStore((s) => s.entries);
+  const todayRestDay = useRestDayStore((s) =>
+    s.entries.find((e) => e.date === dayKey(new Date())) ?? null,
+  );
+  const [restModalOpen, setRestModalOpen] = useState(false);
+  const handleAddRestDay = (opts: { activity?: RestDayEntry['activity']; note?: string }) => {
+    addRestDay(dayKey(new Date()), opts);
+    useTelemetryStore.getState().log('rest_day_added');
+    setRestModalOpen(false);
+  };
+  const handleDeleteRestDay = () => {
+    if (todayRestDay) {
+      deleteRestDay(todayRestDay.id);
+      useTelemetryStore.getState().log('rest_day_deleted');
+    }
+  };
+
   // Partner 夥伴卡片
   const partnerEnabled = useFeatureFlags((s) => s.partnerEnabled);
   const partner = usePartnerStore();
@@ -84,8 +106,9 @@ export default function Dashboard() {
       hasCustomPlans: false, // T-05 尚未實作 custom plans
       groupStats,
       cardioSessions,
+      restDays: restEntries,
     };
-  }, [sessions, personalRecords, profile.bodyWeight, getGroupStats, cardioSessions]);
+  }, [sessions, personalRecords, profile.bodyWeight, getGroupStats, cardioSessions, restEntries]);
 
   useEffect(() => {
     // C5：統一透過 settleTaxonomyChange 結算（保證 achievements + quests 同源）
@@ -339,6 +362,37 @@ export default function Dashboard() {
           >
             <Activity size={16} /> 記錄有氧
           </Button>
+
+          {/* R5：休息日 */}
+          {todayRestDay ? (
+            <div className="mt-2 flex items-center justify-between rounded-button border border-accent/30 bg-accent/10 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <Coffee size={16} className="text-accent" />
+                <span className="text-sm font-bold text-accent">今天：休息日</span>
+                {todayRestDay.activity && (
+                  <span className="text-[10px] text-text-secondary">
+                    {ACTIVITY_LABEL[todayRestDay.activity]}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={handleDeleteRestDay}
+                className="text-[10px] text-text-secondary hover:text-accent transition-colors"
+              >
+                刪除
+              </button>
+            </div>
+          ) : (
+            <Button
+              fullWidth
+              size="sm"
+              variant="ghost"
+              className="mt-2 border border-border/40"
+              onClick={() => setRestModalOpen(true)}
+            >
+              <Coffee size={16} /> 記錄休息日
+            </Button>
+          )}
         </Card>
       </motion.div>
 
@@ -547,6 +601,13 @@ export default function Dashboard() {
           setCardioModalOpen(false);
         }}
       />
+
+      {/* R5：休息日 Modal */}
+      <RestDayFormModal
+        open={restModalOpen}
+        onClose={() => setRestModalOpen(false)}
+        onSubmit={handleAddRestDay}
+      />
     </PageShell>
   );
 }
@@ -696,6 +757,90 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       </div>
       {children}
     </label>
+  );
+}
+
+// ============ R5：休息日標記 Modal ============
+const ACTIVITY_OPTIONS: { value: RestDayEntry['activity']; label: string }[] = [
+  { value: 'walk', label: '散步' },
+  { value: 'stretch', label: '伸展' },
+  { value: 'mobility', label: '活動度' },
+  { value: 'yoga', label: '瑜珈' },
+  { value: 'other', label: '其他' },
+];
+
+interface RestDayFormModalProps {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (opts: { activity?: RestDayEntry['activity']; note?: string }) => void;
+}
+function RestDayFormModal({ open, onClose, onSubmit }: RestDayFormModalProps) {
+  const [activity, setActivity] = useState<RestDayEntry['activity'] | undefined>('walk');
+  const [note, setNote] = useState('');
+
+  const reset = () => {
+    setActivity('walk');
+    setNote('');
+  };
+  const close = () => { reset(); onClose(); };
+  const submit = () => {
+    onSubmit({ activity, note: note.trim() || undefined });
+    reset();
+  };
+
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-md bg-bg-primary rounded-t-2xl sm:rounded-2xl p-5 shadow-2xl border border-border/40 animate-in fade-in slide-in-from-bottom-4 duration-200">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-display text-2xl tracking-wide uppercase text-text-primary">
+              標記休息日
+            </h3>
+            <p className="text-xs text-text-secondary mt-0.5">
+              休息日只計入連續天數，不影響訓練數據
+            </p>
+          </div>
+          <button onClick={close} className="text-text-secondary hover:text-text-primary" aria-label="關閉">
+            <ChevronRight className="rotate-45" size={22} />
+          </button>
+        </div>
+        <div className="space-y-3">
+          <Field label="恢復活動（選填）">
+            <div className="grid grid-cols-3 gap-2">
+              {ACTIVITY_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  onClick={() => setActivity(activity === o.value ? undefined : o.value)}
+                  className={cn(
+                    'px-2 py-2 rounded-button text-xs font-bold border transition-colors',
+                    activity === o.value
+                      ? 'bg-accent/15 text-accent border-accent/50'
+                      : 'bg-bg-secondary text-text-secondary border-border/40 hover:text-text-primary',
+                  )}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <Field label="備註（選填）">
+            <input
+              type="text"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="例如：主動恢復"
+              className="w-full bg-bg-secondary rounded-button px-3 py-2 text-text-primary font-mono border border-border/40 focus:border-accent focus:outline-none"
+            />
+          </Field>
+        </div>
+        <div className="grid grid-cols-2 gap-3 mt-5">
+          <Button variant="ghost" onClick={close}>取消</Button>
+          <Button onClick={submit}>標記</Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
