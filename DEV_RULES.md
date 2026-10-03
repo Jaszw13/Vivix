@@ -111,12 +111,12 @@ L0_positioning:
 ### StylePack 風格系統律（L2.5）
 
 ```yaml
-S-1: 陣容 10 款＝8 core（release-safe）＋2 personal-only（非商業、release 排除）
+S-1: 陣容 9 款＝8 core（release-safe）＋1 personal-only（非商業、release 排除）
      core: elegant-beige, industrial-power, retro-card, aurora-glass,
            neobrutal-pop, muji-calm, y2k-chrome, wpa-trail
-     personal: hello-kitty, kawaii-pastel
+     personal: kawaii-pastel
 S-2: 預設雙預設：light→elegant-beige、dark→industrial-power
-S-3: hello-kitty 與 kawaii-pastel 皆 light-only（強制亮色）
+S-3: kawaii-pastel 為 light-only（強制亮色）
 S-4: aurora-glass 參考 Apple HIG 玻璃材質：backdrop-filter blur(20px) saturate(180%)、
      1px rgba(255,255,255,.15) 邊、分層深度陰影
 S-5: 動態人格層＝每 pack 的 motion{transition,hover,clickFx}；
@@ -132,7 +132,7 @@ S-7: 版權：personal 資產放 src/themes/personal/assets/（.gitignore），
 - **Hex 規則修訂**：色碼只准 `src/data/stylePacks*.ts` 與 `src/data/theme.ts`；CSS 與 components/pages = 0。
 - **字體**：一律系統字體棧，不新增 `@font-face`。
 - **動態人格層**：按鈕形狀／hover／clickFx 透過 `[data-pack]` attribute selector 驅動（CSS），無 JS 分支。
-- **守門**：`VITE_RELEASE_MODE=production` build 後 `grep -ri "hello-kitty\|kitty" dist/` = 0。
+- **守門**：`VITE_RELEASE_MODE=production` build 後 `grep -ri "kawaii\|kitty" dist/` = 0。
 
 ## L3：編排律（Orchestration Law）
 

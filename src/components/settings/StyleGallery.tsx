@@ -35,15 +35,34 @@ function PackPreview({ pack }: { pack: StylePack }) {
   };
 
   return (
-    <div className="h-24 w-full flex flex-col p-3 gap-2 overflow-hidden" style={style}>
+    <div
+      className="h-24 w-full flex flex-col p-3 gap-2 overflow-hidden relative"
+      style={
+        pack.assets?.bg
+          ? {
+              ...style,
+              backgroundImage: `url(${pack.assets.bg})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }
+          : style
+      }
+    >
+      {/* 若有 bg 圖片，加一層半透明遮罩確保文字可讀 */}
+      {pack.assets?.bg && (
+        <div
+          className="absolute inset-0"
+          style={{ background: `${pack.vars['bg-primary']}cc` }}
+        />
+      )}
       <div
-        className="text-[10px] font-bold tracking-wider"
+        className="text-[10px] font-bold tracking-wider relative"
         style={{ color: pack.vars['text-primary'] }}
       >
         VIVIX
       </div>
       <div
-        className="flex-1 flex flex-col gap-1 rounded p-2"
+        className="flex-1 flex flex-col gap-1 rounded p-2 relative"
         style={{
           background: pack.vars['bg-card'],
           borderRadius: pack.shape.radiusBtn,
@@ -59,7 +78,7 @@ function PackPreview({ pack }: { pack: StylePack }) {
         />
       </div>
       <div
-        className="h-2.5 rounded-sm"
+        className="h-2.5 rounded-sm relative"
         style={{ background: pack.vars['accent'], borderRadius: pack.shape.radiusBtn }}
       />
     </div>

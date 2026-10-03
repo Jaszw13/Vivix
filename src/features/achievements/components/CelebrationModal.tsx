@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import { Sparkles, Award, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { PackCheer } from '@/components/deco/PersonalDecor';
 import { TIER_COLORS, TRACK_LABELS, type AchievementDef } from '@/data/achievements';
 
 export interface CelebrationItem {
@@ -95,7 +96,9 @@ export function CelebrationModal({ items, open, onContinue, onViewWall }: Props)
                       boxShadow: `0 0 40px ${tier.color}80`,
                     }}
                   >
-                    <Award size={40} style={{ color: tier.color }} strokeWidth={2} />
+                    <PackCheer className="w-12 h-12 object-contain">
+                      <Award size={40} style={{ color: tier.color }} strokeWidth={2} />
+                    </PackCheer>
                     <Sparkles size={16} className="absolute -top-1 -right-1 text-accent" strokeWidth={2.5} />
                     <Sparkles size={12} className="absolute -bottom-1 -left-2 text-accent" strokeWidth={2.5} />
                   </motion.div>

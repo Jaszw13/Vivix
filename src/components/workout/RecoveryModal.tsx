@@ -20,12 +20,17 @@ import { useWorkoutStore } from '@/store/workoutStore';
 import { useRestTimerStore } from '@/store/restTimerStore';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { dayKey } from '@/utils/time';
+import { getMotionForPack, toFramerVariants, toFramerTransition } from '@/data/packMotion';
+import { useThemeStore } from '@/store/themeStore';
 
 const STALE_MS = 30 * 60 * 1000;
 
 export function RecoveryModal() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const packId = useThemeStore((s) => s.activePackId);
+  const motionEnabled = useThemeStore((s) => s.motionEnabled);
+  const variant = getMotionForPack(packId, motionEnabled);
 
   useEffect(() => {
     // persist 同步 rehydrate，settleOnLoad 已在 App effect 跑完
@@ -97,10 +102,11 @@ export function RecoveryModal() {
           onClick={handleContinue}
         >
           <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+            variants={toFramerVariants(variant)}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            transition={toFramerTransition(variant)}
             className="w-full max-w-[480px] bg-bg-card rounded-t-[24px] p-6 shadow-card"
             onClick={(e) => e.stopPropagation()}
           >

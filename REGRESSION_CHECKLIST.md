@@ -683,16 +683,16 @@ npx vite build
 
 ## 21. StylePack 風格系統（v1）
 
-### 21.1 10 款切換
+### 21.1 9 款切換
 
-- [ ] dev 可切換 10 款（8 core + 2 personal），每款 CSS vars 即時生效
+- [ ] dev 可切換 9 款（8 core + 1 personal），每款 CSS vars 即時生效
 - [ ] 每款按鈕形狀／圓角／邊框／陰影視覺可區分（attribute-driven）
 - [ ] 每款字體（display/body/numbers）切換正確
 - [ ] 切換 pack 時 favicon/manifest/theme-color 同步更新
 
 ### 21.2 畫廊
 
-- [ ] Core 組顯示 8 款；Personal 組顯示 2 款（dev）
+- [ ] Core 組顯示 8 款；Personal 組顯示 1 款（dev）
 - [ ] Personal 卡有「自用」badge
 - [ ] active 卡有 accent 勾選 ring
 - [ ] 點擊卡即時套用 pack，不刷新頁面
@@ -700,7 +700,7 @@ npx vite build
 ### 21.3 Release 閘門
 
 - [ ] `VITE_RELEASE_MODE=production npm run build` 成功
-- [ ] production build 後 `grep -ri "hello-kitty\|kawaii-pastel\|kitty" dist/` = 0
+- [ ] production build 後 `grep -ri "kawaii\|kitty" dist/` = 0
 - [ ] production build 後 Personal 組不渲染（畫廊只見 Core 8 款）
 - [ ] personal assets 目錄在 `.gitignore`
 
@@ -714,7 +714,7 @@ npx vite build
 
 ### 21.5 mode 與 migrate
 
-- [ ] hello-kitty / kawaii-pastel 強制亮色（mode='light-only'，切換後 theme='light'）
+- [ ] kawaii-pastel 強制亮色（mode='light-only'，切換後 theme='light'）
 - [ ] 預設雙預設：light→elegant-beige、dark→industrial-power
 - [ ] 舊用戶 localStorage='dark'|'light' → migrate 至對應預設 pack，平滑過渡
-- [ ] production 下 activePackId=hello-kitty → fallback elegant-beige（不崩潰）
+- [ ] production 下 activePackId=kawaii-pastel → fallback elegant-beige（不崩潰）

@@ -17,6 +17,8 @@ import { useRestDayStore } from '@/store/restDayStore';
 import { computeWeeklyReport, type AchievementUnlockRecord } from '@/features/stats/weeklyReport';
 import { formatDateFull } from '@/utils/workout';
 import { OVERLAY_SCRIM } from '@/data/theme';
+import { getMotionForPack, toFramerVariants, toFramerTransition } from '@/data/packMotion';
+import { useThemeStore } from '@/store/themeStore';
 
 interface WeeklyReportModalProps {
   open: boolean;
@@ -30,6 +32,9 @@ export function WeeklyReportModal({ open, onClose, weekOffset }: WeeklyReportMod
   const cardioSessions = useCardioStore((s) => s.sessions);
   const achievementsProgress = useAchievementsStore((s) => s.progress);
   const restDays = useRestDayStore((s) => s.entries);
+  const packId = useThemeStore((s) => s.activePackId);
+  const motionEnabled = useThemeStore((s) => s.motionEnabled);
+  const variant = getMotionForPack(packId, motionEnabled);
   // 內部可瀏覽歷週（初始 = prop；每次開啟重設）
   const [offset, setOffset] = useState(weekOffset);
   useEffect(() => {
@@ -65,10 +70,11 @@ export function WeeklyReportModal({ open, onClose, weekOffset }: WeeklyReportMod
           onClick={onClose}
         >
           <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+            variants={toFramerVariants(variant)}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            transition={toFramerTransition(variant)}
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-[480px] bg-bg-primary rounded-t-card max-h-[90vh] overflow-y-auto scrollbar-hide"
           >

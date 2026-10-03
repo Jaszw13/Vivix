@@ -428,7 +428,7 @@ const Y_AXIS_PROPS = { stroke: 'var(--text-secondary)', tick: { fontSize: 10 }, 
 - `src/types/theme.ts`：`StylePack` 介面（id/label/license/mode/vars/shape/typo/deco/glass/motion）。
 - `src/data/stylePacksShared.ts`：`buildVars()`、`hexToRgba()`、`shadowFor()`、系統字體棧。
 - `src/data/stylePacks.ts`：8 款 `CORE_PACKS`；`STYLE_PACKS` 依 `VITE_RELEASE_MODE` 條件合併 personal。
-- `src/data/stylePacksPersonal.ts`：2 款 `PERSONAL_PACKS`（hello-kitty、kawaii-pastel）；唯一引用 personal 資產的模組。
+- `src/data/stylePacksPersonal.ts`：1 款 `PERSONAL_PACKS`（kawaii-pastel）；唯一引用 personal 資產的模組。
 
 ### 風格畫廊
 

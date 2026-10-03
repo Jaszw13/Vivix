@@ -254,26 +254,6 @@ select:focus {
   transform: scale(1.03);
 }
 
-/* hello-kitty：超圓 + 貼紙感黑邊 */
-[data-pack='hello-kitty'] .btn {
-  border-radius: 20px;
-  border-width: 2px;
-  box-shadow: 0 3px 0 var(--border-color);
-}
-[data-pack='hello-kitty'] .btn:active {
-  transform: translateY(2px);
-  box-shadow: 0 1px 0 var(--border-color);
-}
-
-/* kawaii-pastel：blob 不規則大圓 */
-[data-pack='kawaii-pastel'] .btn {
-  border-radius: 24px;
-  box-shadow: 0 3px 10px rgba(242, 184, 205, 0.4);
-}
-[data-pack='kawaii-pastel'] .btn:active {
-  transform: scale(0.95);
-}
-
 /* ============ Glass 材質（aurora-glass） ============ */
 [data-glass='true'] .glass,
 [data-pack='aurora-glass'] .bg-bg-card {
@@ -354,4 +334,175 @@ select:focus {
   50% { transform: translate(4px, -2px); }
   75% { transform: translate(-2px, -2px); }
   100% { transform: translate(0, 0); opacity: 0; }
+}
+
+/* shimmer：金箔掃光條（elegant-beige） */
+.vivix-fx-shimmer span {
+  width: 3px;
+  height: 14px;
+  border-radius: 1px;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+}
+
+/* holo：箔片旋轉（retro-card） */
+.vivix-fx-holo span {
+  border-radius: 1px;
+  background: var(--auxiliary);
+  box-shadow: 0 0 4px var(--accent);
+  animation: vivix-fx-holo 0.7s ease-out forwards;
+}
+@keyframes vivix-fx-holo {
+  0%   { transform: translate(0, 0) rotate(0deg) scale(1); opacity: 1; }
+  50%  { transform: translate(var(--fx-dx, 0), var(--fx-dy, 0)) rotate(120deg) scale(1.3); }
+  100% { transform: translate(var(--fx-dx, 0), var(--fx-dy, 0)) rotate(240deg) scale(0); opacity: 0; }
+}
+
+/* stamp：方形印章壓印（wpa-trail） */
+.vivix-fx-stamp span {
+  width: 14px;
+  height: 14px;
+  border-radius: 0;
+  border: 2px solid var(--auxiliary);
+  background: transparent;
+  animation: vivix-fx-stamp 0.25s ease-out forwards;
+}
+@keyframes vivix-fx-stamp {
+  0%   { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+  60%  { transform: translate(-50%, -50%) scale(1);   opacity: 1; }
+  100% { transform: translate(-50%, -50%) scale(1);   opacity: 0; }
+}
+
+/* ============ deco 裝飾層（P-FIX-0-D） ============ */
+/* 顏色全部讀 CSS Variables，不寫死 hex/rgba */
+
+.deco-layer { opacity: 0.08; }
+
+.deco-grid {
+  background-image:
+    linear-gradient(var(--text-primary) 1px, transparent 1px),
+    linear-gradient(90deg, var(--text-primary) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.deco-halftone {
+  background-image: radial-gradient(circle, var(--text-primary) 1px, transparent 1.5px);
+  background-size: 8px 8px;
+}
+
+.deco-starburst {
+  background-image: repeating-conic-gradient(
+    from 0deg at 50% 0%,
+    var(--text-primary) 0deg 6deg,
+    transparent 6deg 18deg
+  );
+}
+
+.deco-polka {
+  background-image: radial-gradient(circle, var(--accent) 3px, transparent 4px);
+  background-size: 22px 22px;
+  opacity: 0.14;
+}
+
+.deco-rays {
+  background-image: repeating-conic-gradient(
+    from 0deg at 50% 100%,
+    var(--accent) 0deg 4deg,
+    transparent 4deg 16deg
+  );
+  opacity: 0.1;
+}
+
+.deco-clouds {
+  background-image:
+    radial-gradient(circle at 20% 30%, var(--accent) 0 18px, transparent 19px),
+    radial-gradient(circle at 30% 36%, var(--accent) 0 22px, transparent 23px),
+    radial-gradient(circle at 76% 64%, var(--accent) 0 20px, transparent 21px),
+    radial-gradient(circle at 86% 58%, var(--accent) 0 16px, transparent 17px);
+  background-repeat: no-repeat;
+}
+
+.deco-blob {
+  background-image:
+    radial-gradient(ellipse 40% 30% at 18% 78%, var(--accent) 0 60%, transparent 61%),
+    radial-gradient(ellipse 34% 26% at 84% 24%, var(--auxiliary) 0 60%, transparent 61%);
+}
+
+/* ============ 動態人格層：attribute-driven hover（S-9） ============ */
+
+/* elegant-beige：lift */
+[data-pack='elegant-beige'] .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+/* industrial-power：glow */
+[data-pack='industrial-power'] .btn:hover {
+  box-shadow: 0 0 20px var(--accent-soft), 0 0 0 1px var(--accent);
+}
+
+/* retro-card：emboss */
+[data-pack='retro-card'] .btn:hover {
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.25), 3px 3px 0 var(--text-primary);
+}
+
+/* aurora-glass：scale */
+[data-pack='aurora-glass'] .btn:hover {
+  transform: scale(1.03);
+}
+
+/* neobrutal-pop：shadow-collapse */
+[data-pack='neobrutal-pop'] .btn:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 var(--text-primary);
+}
+
+/* muji-calm：opacity */
+[data-pack='muji-calm'] .btn:hover {
+  opacity: 0.8;
+}
+
+/* y2k-chrome：inflation */
+[data-pack='y2k-chrome'] .btn:hover {
+  transform: scale(1.04);
+  filter: brightness(1.06);
+}
+
+/* wpa-trail：stamp-press（hover 抬升，press 由既有 :active 處理） */
+[data-pack='wpa-trail'] .btn:hover {
+  box-shadow: 0 4px 0 var(--border-color), 0 6px 12px rgba(0, 0, 0, 0.14);
+}
+
+/* motion 關閉時停用所有 hover 位移／縮放（保留顏色類回饋） */
+[data-motion='off'] .btn:hover {
+  transform: none !important;
+  filter: none !important;
+}
+
+/* ============================================================
+   卡片 hover／active 動態層（P-FIX-3 §3-C）
+   以 [data-pack] attribute selector 逐款覆寫；所有 pack 都有，
+   即使「不變形」也定義 transition，令顏色變化有過渡。
+   ============================================================ */
+[data-pack] .rounded-card {
+  transition: transform var(--pack-duration, 0.18s) var(--pack-ease, ease-out),
+    box-shadow var(--pack-duration, 0.18s) var(--pack-ease, ease-out),
+    border-color var(--pack-duration, 0.18s) var(--pack-ease, ease-out);
+}
+
+/* cyber-neon：glitch + 電光 */
+[data-pack='cyber-neon'] .rounded-card:hover {
+  transform: translate(-1px, 1px);
+  box-shadow: 0 0 0 1px var(--accent), 0 0 18px -2px var(--accent);
+}
+
+/* candy-pop：jelly bounce */
+[data-pack='candy-pop'] .rounded-card:hover {
+  transform: scale(1.015);
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.18);
+}
+
+/* motion 關閉時停用卡片 hover 變形 */
+[data-motion='off'] .rounded-card:hover {
+  transform: none !important;
 }

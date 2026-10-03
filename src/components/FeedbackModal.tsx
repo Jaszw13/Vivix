@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, Send, X, Star } from 'lucide-react';
 import { useTrialStore } from '@/store/trialStore';
 import { OVERLAY_SCRIM } from '@/data/theme';
+import { getMotionForPack, toFramerVariants, toFramerTransition } from '@/data/packMotion';
+import { useThemeStore } from '@/store/themeStore';
 
 interface FeedbackModalProps {
   show: boolean;
@@ -10,6 +12,9 @@ interface FeedbackModalProps {
 
 export function FeedbackModal({ show }: FeedbackModalProps) {
   const { submitFeedback, dismissFeedback } = useTrialStore();
+  const packId = useThemeStore((s) => s.activePackId);
+  const motionEnabled = useThemeStore((s) => s.motionEnabled);
+  const variant = getMotionForPack(packId, motionEnabled);
   const [frequency, setFrequency] = useState('');
   const [favorite, setFavorite] = useState('');
   const [issue, setIssue] = useState('');
@@ -54,10 +59,11 @@ export function FeedbackModal({ show }: FeedbackModalProps) {
           onClick={handleDismiss}
         >
           <motion.div
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+            variants={toFramerVariants(variant)}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            transition={toFramerTransition(variant)}
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-[480px] bg-bg-primary rounded-t-card max-h-[90vh] overflow-y-auto"
           >

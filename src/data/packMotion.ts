@@ -1,11 +1,12 @@
 /**
- * 動態人格層 — 過場動畫 registry（S4）
+ * 動態人格層 — 過場動畫 registry（P-FIX-0-A）
  *
  * 每個 StylePack.motion.transition 對應一組 framer-motion variant。
- * PageShell sections / modal / sheet 讀此 map 決定進出場動畫。
+ * PageShell / modal / sheet 讀 getMotionForPack() 決定進出場動畫。
  * motionEnabled=false 時，duration 強制 0。
  */
-import type { PackTransition, PackHover } from '@/types/theme';
+import type { PackTransition } from '@/types/theme';
+import { getStylePack } from './stylePacks';
 
 export interface MotionVariant {
   duration: number;
@@ -32,21 +33,30 @@ export const PACK_MOTION: Record<PackTransition, MotionVariant> = {
   jelly: { duration: 0.5, ease: EASE_BACK, enter: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.85 } },
 };
 
-export const PACK_HOVER_CSS: Record<PackHover, string> = {
-  lift: 'hover:-translate-y-0.5',
-  glow: 'hover:brightness-125',
-  emboss: 'hover:brightness-105',
-  scale: 'hover:scale-[1.03]',
-  'shadow-collapse': 'hover:shadow-none',
-  opacity: 'hover:opacity-80',
-  inflation: 'hover:scale-[1.04]',
-  'stamp-press': 'active:translate-y-1',
-  wiggle: 'hover:rotate-1',
-  squish: 'active:scale-95',
-};
-
 /** motionEnabled=false 時回傳 duration=0 的靜態 variant */
 export function getMotion(transition: PackTransition, motionEnabled: boolean): MotionVariant {
   const v = PACK_MOTION[transition];
   return motionEnabled ? v : { ...v, duration: 0, enter: { opacity: 1 }, exit: { opacity: 0 } };
+}
+
+/** packId → 該 pack 的 motion variant（含 null 保護與 motionEnabled 關閉邏輯） */
+export function getMotionForPack(packId: string, motionEnabled: boolean): MotionVariant {
+  const pack = getStylePack(packId);
+  const transition: PackTransition = pack?.motion.transition ?? 'smooth';
+  return getMotion(transition, motionEnabled);
+}
+
+/** MotionVariant → framer-motion variants
+ *  `enter` 是「進場後」的目標態、`exit` 是「離場／起始」態，
+ *  所以 hidden 必須對應 exit，visible 對應 enter。 */
+export function toFramerVariants(v: MotionVariant) {
+  return {
+    hidden: { opacity: 0, ...v.exit },
+    visible: { opacity: 1, ...v.enter },
+  };
+}
+
+/** MotionVariant → framer-motion transition */
+export function toFramerTransition(v: MotionVariant) {
+  return { duration: v.duration, ease: v.ease };
 }

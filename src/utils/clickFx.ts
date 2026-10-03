@@ -1,7 +1,7 @@
 /**
- * 點擊特效 spawner（S4 動態人格層）
+ * 點擊特效 spawner（P-FIX-0-C 動態人格層）
  *
- * spawnClickFx(x, y, pack)：依 pack.motion.clickFx 在 (x,y) 建立粒子/閃光 DOM，
+ * spawnClickFxType(x, y, type)：依 clickFx 類型在 (x,y) 建立粒子 DOM，
  * animationend 自動移除。data-fx="off" 時 no-op。同屏粒子上限 6。
  *
  * 不寫死色碼：顏色全部讀 CSS Variables（var(--accent) / var(--auxiliary) 等）。
@@ -17,11 +17,7 @@ function isFxEnabled(): boolean {
   return document.documentElement.getAttribute('data-fx') !== 'off';
 }
 
-function spawnParticle(
-  x: number,
-  y: number,
-  type: PackClickFx,
-): void {
+function spawnParticle(x: number, y: number, type: PackClickFx): void {
   if (!isFxEnabled() || activeCount >= MAX_PARTICLES) return;
 
   const el = document.createElement('div');
@@ -33,16 +29,23 @@ function spawnParticle(
   el.style.zIndex = '9999';
   el.style.transform = 'translate(-50%, -50%)';
 
-  // 粒子數量依特效類型
   const count = type === 'confetti' ? 8 : type === 'stars' || type === 'hearts' ? 5 : 4;
+
+  // 容器先掛載（在迴圈外，只掛一次）
+  document.body.appendChild(el);
 
   for (let i = 0; i < count; i++) {
     const p = document.createElement('span');
     p.style.position = 'absolute';
     p.style.left = '0';
     p.style.top = '0';
-    // 顏色由 CSS 控制（attribute selector 讀 var）
-    document.body.appendChild(el);
+
+    // 每顆粒子獨立擴散角度與距離（修正全部重疊）
+    const angle = (Math.PI * 2 * i) / count + Math.random() * 0.4;
+    const dist = 22 + Math.random() * 18;
+    p.style.setProperty('--fx-dx', `${Math.cos(angle) * dist}px`);
+    p.style.setProperty('--fx-dy', `${Math.sin(angle) * dist - 12}px`);
+
     el.appendChild(p);
   }
 
@@ -54,21 +57,7 @@ function spawnParticle(
 }
 
 /**
- * 依 clickFx 類型建立特效 DOM。
- * @param x 螢幕 X 座標
- * @param y 螢幕 Y 座標
- */
-export function spawnClickFx(x: number, y: number): void {
-  if (typeof document === 'undefined') return;
-  const fx = document.documentElement.getAttribute('data-pack') || 'default';
-  // 從當前 pack 讀 clickFx（透過 data-pack 查 STYLE_PACKS，但為避免循環依賴，
-  // 實際 clickFx 類型由 CSS attribute selector 決定視覺；此處只建立容器）
-  void fx;
-  spawnParticle(x, y, 'ripple');
-}
-
-/**
- * 明確指定 clickFx 類型的 spawn（給 Button 元件主動呼叫用）。
+ * 明確指定 clickFx 類型的 spawn（對外唯一入口）。
  */
 export function spawnClickFxType(x: number, y: number, type: PackClickFx): void {
   if (type === 'none') return;

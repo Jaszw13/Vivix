@@ -1,0 +1,25 @@
+/**
+ * Personal-only CSS（P-FIX 動態人格層 — 個人款 hover／btn／card 規則）
+ *
+ * 此檔案僅在非 production build 載入（由 stylePacksPersonal.ts 動態 import）。
+ * production 下 Vite 不會打包此檔，release 閘門 grep "kawaii" dist/ = 0。
+ */
+
+/* kawaii-pastel：blob 不規則大圓 */
+[data-pack='kawaii-pastel'] .btn {
+  border-radius: 24px;
+  box-shadow: 0 3px 10px rgba(242, 184, 205, 0.4);
+}
+[data-pack='kawaii-pastel'] .btn:active {
+  transform: scale(0.95);
+}
+
+/* kawaii-pastel：squish hover */
+[data-pack='kawaii-pastel'] .btn:hover {
+  transform: scale(0.96);
+}
+
+/* kawaii-pastel：squish card */
+[data-pack='kawaii-pastel'] .rounded-card:hover {
+  transform: scale(0.985);
+}

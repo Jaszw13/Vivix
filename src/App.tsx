@@ -24,6 +24,7 @@ import { useWorkoutStore } from '@/store/workoutStore';
 import { useRestTimerStore } from '@/store/restTimerStore';
 import { settleOnLoad } from '@/features/stats/settleAll';
 import { getISOWeek, getWeekStart, addDays } from '@/utils/time';
+import { installClickFxListener } from '@/utils/clickFxListener';
 
 /**
  * App 級 ErrorBoundary：
@@ -179,6 +180,9 @@ function AppContent() {
     const id = setInterval(tick, 100);
     return () => clearInterval(id);
   }, []);
+
+  // P-FIX-2：全域點擊特效監聽（讓原生 button 也觸發 clickFx）
+  useEffect(() => installClickFxListener(), []);
 
   return (
     <>

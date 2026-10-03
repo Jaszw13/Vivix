@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Lock, Unlock, Zap, AlertCircle, Smartphone } from 'lucide-react';
 import { useTrialStore, STANDARD_STAGES, DEV_STAGES } from '@/store/trialStore';
 import { DAY_MS } from '@/utils/time';
+import { getMotionForPack, toFramerVariants, toFramerTransition } from '@/data/packMotion';
+import { useThemeStore } from '@/store/themeStore';
 
 interface TrialLockProps {
   children: React.ReactNode;
@@ -48,6 +50,9 @@ function LockedScreen() {
     useTrialStore();
   const [code, setCode] = useState('');
   const [result, setResult] = useState<{ success: boolean; message: string } | null>(null);
+  const packId = useThemeStore((s) => s.activePackId);
+  const motionEnabled = useThemeStore((s) => s.motionEnabled);
+  const variant = getMotionForPack(packId, motionEnabled);
 
   const stageInfo = getStageInfo();
   const stages = devMode ? DEV_STAGES : STANDARD_STAGES;
@@ -66,8 +71,10 @@ function LockedScreen() {
   return (
     <div className="min-h-screen w-full max-w-[480px] mx-auto bg-bg-primary flex flex-col items-center justify-center px-6 py-12">
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        variants={toFramerVariants(variant)}
+        initial="hidden"
+        animate="visible"
+        transition={toFramerTransition(variant)}
         className="w-full"
       >
         {/* 鎖定圖示 */}

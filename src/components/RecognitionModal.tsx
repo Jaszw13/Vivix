@@ -11,6 +11,8 @@ import { estimate1RM, setLoadKg } from '@/utils/workout';
 import { resolveCurrentTaxonomy } from '@/features/exercises/taxonomy';
 import type { CustomExercise } from '@/store/workoutStore';
 import { sessionDayKey } from '@/utils/time';
+import { getMotionForPack, toFramerVariants, toFramerTransition } from '@/data/packMotion';
+import { useThemeStore } from '@/store/themeStore';
 
 export interface RecognitionStats {
   sessions: number;
@@ -78,6 +80,9 @@ export default function RecognitionModal({
   onGoAchievements,
 }: RecognitionModalProps) {
   const volTon = useMemo(() => (stats.totalVolumeKg / 1000).toFixed(1), [stats.totalVolumeKg]);
+  const packId = useThemeStore((s) => s.activePackId);
+  const motionEnabled = useThemeStore((s) => s.motionEnabled);
+  const variant = getMotionForPack(packId, motionEnabled);
 
   useEffect(() => {
     if (!open) return;
@@ -110,10 +115,11 @@ export default function RecognitionModal({
       >
         <motion.div
           key="recognition-panel"
-          initial={{ y: 220, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 220, opacity: 0 }}
-          transition={{ type: 'spring', damping: 26 }}
+          variants={toFramerVariants(variant)}
+          initial="hidden"
+          animate="visible"
+          exit="hidden"
+          transition={toFramerTransition(variant)}
           className="w-full max-w-[480px] max-h-[92vh] bg-bg-primary rounded-t-3xl sm:rounded-3xl border border-border flex flex-col"
           onClick={(e) => e.stopPropagation()}
         >

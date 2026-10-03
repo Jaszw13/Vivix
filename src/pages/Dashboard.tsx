@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useEffect, useMemo, useState } from 'react';
 import { Flame, TrendingUp, Trophy, Zap, Award, Cat, Dog, ChevronRight, Gift, Activity, Coffee } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
+import { PackAvatar } from '@/components/deco/PersonalDecor';
 import { Button } from '@/components/ui/Button';
 import { Card, SectionHeader, StatTile, Badge } from '@/components/ui/Card';
 import { useWorkoutStore } from '@/store/workoutStore';
@@ -238,10 +239,12 @@ export default function Dashboard() {
               className="relative flex items-center gap-3 w-full text-left active:scale-[0.99] transition-transform"
               aria-label={`查看 ${partner.name} 的 Partner 詳情`}
             >
-              {/* Partner species icon */}
-              <div className="w-12 h-12 rounded-full bg-accent/15 text-accent flex items-center justify-center flex-shrink-0 border border-accent/30">
-                {partner.species === 'cat' ? <Cat size={22} /> : <Dog size={22} />}
-              </div>
+              {/* Partner species icon（personal pack 可替換為 avatar 圖片） */}
+              <PackAvatar className="w-12 h-12 rounded-full object-cover flex-shrink-0 border border-accent/30">
+                <div className="w-12 h-12 rounded-full bg-accent/15 text-accent flex items-center justify-center flex-shrink-0 border border-accent/30">
+                  {partner.species === 'cat' ? <Cat size={22} /> : <Dog size={22} />}
+                </div>
+              </PackAvatar>
 
               {/* Partner 名稱 + 等級 + XP */}
               <div className="flex-1 min-w-0">

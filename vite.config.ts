@@ -1,23 +1,29 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tsconfigPaths from "vite-tsconfig-paths";
 import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
-export default defineConfig({
-  build: {
-    sourcemap: 'hidden',
-  },
-  plugins: [
-    react({
-      babel: {
-        plugins: [
-          'react-dev-locator',
-        ],
-      },
-    }),
-    tsconfigPaths(),
-    VitePWA({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  const isRelease = env.VITE_RELEASE_MODE === 'production';
+  return {
+    build: {
+      // production release 關閉 sourcemap，確保 personal 源碼（含 kawaii 字串）
+      // 不會洩漏到 dist/，release 閘門 grep "kawaii" dist/ = 0。
+      // dev／staging 仍保留 hidden sourcemap 除錯。
+      sourcemap: isRelease ? false : 'hidden',
+    },
+    plugins: [
+      react({
+        babel: {
+          plugins: [
+            'react-dev-locator',
+          ],
+        },
+      }),
+      tsconfigPaths(),
+      VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       // ⚠️ 雙主題 manifest 由 index.html inline script 動態載入（G-05）
@@ -82,4 +88,5 @@ export default defineConfig({
       },
     }),
   ],
+  }
 })

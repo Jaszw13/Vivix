@@ -31,6 +31,8 @@ import { fuzzySuggest } from '@/utils/fuzzy';
 import { resolveCurrentTaxonomy } from '@/features/exercises/taxonomy';
 import RecognitionModal, { computeBatchRecognitionStats } from './RecognitionModal';
 import { settleAll } from '@/features/stats/settleAll';
+import { getMotionForPack, toFramerVariants, toFramerTransition } from '@/data/packMotion';
+import { useThemeStore } from '@/store/themeStore';
 
 type Mode = 'matrix' | 'table' | null;
 type StepId = 1 | 2 | 3;
@@ -72,6 +74,9 @@ export default function ImportHistoryModal({
 }: ImportHistoryModalProps) {
   const importSessionsBatch = useWorkoutStore((s) => s.importSessionsBatch);
   const allExercises = getAllExercises();
+  const packId = useThemeStore((s) => s.activePackId);
+  const motionEnabled = useThemeStore((s) => s.motionEnabled);
+  const variant = getMotionForPack(packId, motionEnabled);
   const builtinNames = useMemo(() => allExercises.filter((e) => !e.isCustom).map((e) => e.name), [allExercises]);
   const customNameToExercise = useMemo(() => {
     const m = new Map<string, CustomExercise>();
@@ -378,10 +383,11 @@ export default function ImportHistoryModal({
         >
           <motion.div
             key="import-panel"
-            initial={{ y: 260, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 260, opacity: 0 }}
-            transition={{ type: 'spring', damping: 28 }}
+            variants={toFramerVariants(variant)}
+            initial="hidden"
+            animate="visible"
+            exit="hidden"
+            transition={toFramerTransition(variant)}
             className="w-full max-w-[520px] max-h-[92vh] bg-bg-primary rounded-t-3xl sm:rounded-3xl border border-border flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >

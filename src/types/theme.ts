@@ -15,9 +15,9 @@ export type PackDeco =
   | 'halftone'
   | 'starburst'
   | 'blob'
-  | 'speedline'
   | 'grid'
-  | 'bow'
+  | 'polka'
+  | 'rays'
   | 'clouds'
   | 'none';
 
@@ -79,9 +79,31 @@ export interface StylePack {
   deco: PackDeco[];
   /** aurora-glass 為 true：backdrop-filter + 半透明背景 */
   glass?: boolean;
+  /** personal-only 可愛版圖片資產（路徑相對於 src/）；core pack 不填 */
+  assets?: Partial<PackAssets>;
   motion: {
     transition: PackTransition;
     hover: PackHover;
     clickFx: PackClickFx;
   };
+}
+
+/**
+ * 可愛版圖片資產（P-FIX-1）
+ * 僅 personal pack 填入；core pack 的 assets 為 undefined。
+ * 所有路徑均為 Vite 可解析的 import URL（含副檔名）。
+ */
+export interface PackAssets {
+  /** 頭像（夥伴／Dashboard 右上） */
+  avatar: string;
+  /** 背景裝飾（PackDeco 背景圖） */
+  bg: string;
+  /** 空狀態插畫（訓練／成就空清單） */
+  empty: string;
+  /** 慶祝插畫（PR／解鎖彈窗） */
+  celebrate: string;
+  /** 吉祥物（輔助裝飾，選用） */
+  mascot: string;
+  /** 徽章（成就解鎖 badge） */
+  badge: string;
 }

@@ -19,6 +19,7 @@ import {
 import { Trophy, TrendingUp, BarChart3, AlertCircle, Dumbbell, Activity, Plus, X, Zap, Info, Trash2, Scale, Share2 } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { Card, SectionHeader, Badge, StatTile } from '@/components/ui/Card';
+import { PackEmpty } from '@/components/deco/PersonalDecor';
 import { Button } from '@/components/ui/Button';
 import { WeeklyReportModal } from '@/components/WeeklyReportModal';
 import { TrainingCalendar } from '@/components/progress/TrainingCalendar';
@@ -586,7 +587,10 @@ export default function Progress() {
             />
             <Card className="divide-y divide-border/40">
               {scopedPRs.length === 0 ? (
-                <div className="p-8 text-center text-sm text-text-secondary">
+                <div className="p-8 text-center text-sm text-text-secondary flex flex-col items-center gap-3">
+                  <PackEmpty className="w-32 h-32 object-contain opacity-90">
+                    <></>
+                  </PackEmpty>
                   {scope === 'all' ? '尚無個人紀錄' : `${MUSCLE_GROUP_LABELS[scope]}尚無 PR`}
                 </div>
               ) : (
