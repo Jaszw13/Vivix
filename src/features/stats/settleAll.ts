@@ -26,6 +26,7 @@ import { useQuestStore } from '@/features/partner/stores/questStore';
 import { usePartnerStore } from '@/features/partner/stores/partnerStore';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { useFeatureFlags } from '@/features/partner/stores/featureFlags';
+import { usePlansStore } from '@/store/plansStore';
 import { handleWorkoutCompleted } from '@/features/partner/engine/rewardEngine';
 import type { RewardContext, RewardResult } from '@/features/partner/types';
 import { getStreakDays as getStreakDaysSelector } from '@/features/stats/selectors';
@@ -53,16 +54,15 @@ function buildAchieveCtx(): DeriveContext {
     personalRecords: workout.personalRecords,
     bodyWeight: profile.profile.bodyWeight,
     hasCustomExercises: customExercises.length > 0,
-    hasCustomPlans: false, // T-05 尚未實作 custom plans
+    hasCustomPlans: usePlansStore.getState().customPlans.length > 0,
     groupStats: workout.getGroupStats(),
     cardioSessions: cardio.sessions,
   };
 }
 
 /** E-D4：有當日 cardio 紀錄且尚未發過 cardio XP → 20 XP；每日上限 1 次
- *  紀錄 cardioXpGrantedDay 放 partnerStore.stats（以 partner 附加 stats 記錄；若無 stats 則內存 dailyXpGrantedDay 保底）
+ *  R1：cardioXpGrantedDay 落 partnerStore persist，重整不重複發放
  */
-let inMemCardioGrantedDay: string | null = null;
 function settleCardioDailyXp(): RewardResult | null {
   const partner = usePartnerStore.getState();
   if (!partner.name) return null;
@@ -71,12 +71,11 @@ function settleCardioDailyXp(): RewardResult | null {
   const todayKey = dayKey(new Date());
   const hasToday = cardioSessions.some((c) => sessionDayKey(c.date) === todayKey);
   if (!hasToday) return null;
-  if (inMemCardioGrantedDay === todayKey) return null;
+  if (partner.cardioXpGrantedDay === todayKey) return null;
 
-  const beforeLevel = partner.getLevel();
   const xpOutcome = partner.addXp(CARDIO_DAILY_XP);
   const formOutcome = partner.checkFormUnlock();
-  inMemCardioGrantedDay = todayKey;
+  usePartnerStore.getState().setCardioXpGrantedDay(todayKey);
 
   return {
     xpGained: xpOutcome.xpGained,

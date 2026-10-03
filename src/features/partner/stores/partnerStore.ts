@@ -31,6 +31,8 @@ interface PartnerStoreState extends PartnerState {
   getLevel: () => number;
   getTotalWorkouts: () => number;
   getTotalTrainingDays: () => number;
+  /** R1：寫入 cardio 每日 XP 已發放日（persist） */
+  setCardioXpGrantedDay: (day: string | null) => void;
 }
 
 const DEFAULT_PARTNER: PartnerState = {
@@ -47,6 +49,7 @@ const DEFAULT_PARTNER: PartnerState = {
   unlockedTitleIds: [],
   equippedTitleId: undefined,
   createdAt: '',
+  cardioXpGrantedDay: null,
 };
 
 export const usePartnerStore = create<PartnerStoreState>()(
@@ -164,10 +167,12 @@ export const usePartnerStore = create<PartnerStoreState>()(
         const sessions = useWorkoutStore.getState().sessions.filter((s) => s.imported !== true);
         return new Set(sessions.map((s) => sessionDayKey(s.date))).size;
       },
+
+      setCardioXpGrantedDay: (day) => set({ cardioXpGrantedDay: day }),
     }),
     {
       name: 'vivix-partner-store-v1',
-      version: 2,
+      version: 3,
       // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
       onRehydrateStorage: () => {
         return (state, error) => {
@@ -191,6 +196,7 @@ export const usePartnerStore = create<PartnerStoreState>()(
         unlockedTitleIds: state.unlockedTitleIds,
         equippedTitleId: state.equippedTitleId,
         createdAt: state.createdAt,
+        cardioXpGrantedDay: state.cardioXpGrantedDay,
       }),
       migrate: (persistedState, version) => {
         const s = (persistedState ?? {}) as Record<string, unknown>;
@@ -208,6 +214,8 @@ export const usePartnerStore = create<PartnerStoreState>()(
           unlockedTitleIds: (rest.unlockedTitleIds as string[]) ?? DEFAULT_PARTNER.unlockedTitleIds,
           equippedTitleId: (rest.equippedTitleId as string) ?? DEFAULT_PARTNER.equippedTitleId,
           createdAt: (rest.createdAt as string) ?? DEFAULT_PARTNER.createdAt,
+          cardioXpGrantedDay:
+            typeof rest.cardioXpGrantedDay === 'string' ? rest.cardioXpGrantedDay : null,
         };
       },
     }

@@ -16,6 +16,8 @@ export interface PartnerState {
   unlockedTitleIds: string[];
   equippedTitleId?: string;
   createdAt: string;
+  /** R1：cardio 每日 XP 已發放的 dayKey（YYYY-MM-DD）；null = 今日未發 */
+  cardioXpGrantedDay: string | null;
 }
 
 export interface PartnerForm {
