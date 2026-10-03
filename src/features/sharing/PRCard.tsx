@@ -10,7 +10,7 @@ interface PRCardProps {
 
 /**
  * PR 球員卡（S4）
- * - 90s-retro-card：復古球員卡版面（粗黑邊、金箔、Slab Serif、偽 3D 傾斜）
+ * - retro-card：復古球員卡版面（粗黑邊、金箔、Slab Serif、偽 3D 傾斜）
  * - 其他風格：套用對應 shape 與 vars
  * 所有色碼來自 pack.vars，元件內不出現 hex。
  */
@@ -18,7 +18,7 @@ export function PRCard({ pr, pack }: PRCardProps) {
   const activePackId = useThemeStore((s) => s.activePackId);
   const effectivePack = pack ?? getStylePack(activePackId) ?? getStylePack('elegant-beige')!;
   const shadows = packShadows(effectivePack.shape.shadow);
-  const is90s = effectivePack.id === '90s-retro-card';
+  const is90s = effectivePack.id === 'retro-card';
 
   const value = pr.repPR !== undefined ? `BW × ${pr.repPR}` : `${pr.weight}kg × ${pr.reps}`;
   const sub = pr.repPR !== undefined ? 'REPS' : `1RM ${pr.estimated1RM}kg`;

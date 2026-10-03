@@ -6,12 +6,20 @@ import type { StylePack } from '@/types/theme';
 interface ThemeState {
   theme: Theme;
   activePackId: string;
+  /** 點擊特效開關（persist） */
+  fxEnabled: boolean;
+  /** 過場動畫開關（persist） */
+  motionEnabled: boolean;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
   setPack: (id: string) => void;
+  setFx: (on: boolean) => void;
+  setMotion: (on: boolean) => void;
 }
 
 const STORAGE_KEY = 'ironpulse-theme';
+const FX_KEY = 'vivix-fx-enabled';
+const MOTION_KEY = 'vivix-motion-enabled';
 
 // 預設 pack：dark → industrial-power，light → elegant-beige
 const DEFAULT_PACK_DARK = 'industrial-power';
@@ -78,7 +86,7 @@ function applyDocumentIcons(theme: Theme) {
 }
 
 /**
- * 將 StylePack 的 CSS Variables 注入 documentElement，並套用 shape/typo。
+ * 將 StylePack 的 CSS Variables 注入 documentElement，並套用 shape/typo/attribute。
  * 所有色碼皆來自 data/stylePacks.ts，components/pages 內不出現 hex。
  */
 export function applyPack(pack: StylePack) {
@@ -90,9 +98,10 @@ export function applyPack(pack: StylePack) {
     root.style.setProperty(`--${k}`, v);
   });
 
-  // 2. shape：圓角 + 陰影
+  // 2. shape：圓角 + 邊框寬度 + 陰影
   root.style.setProperty('--radius-card', pack.shape.radiusCard);
   root.style.setProperty('--radius-button', pack.shape.radiusBtn);
+  root.style.setProperty('--border-width', pack.shape.borderWidth);
   const shadows = packShadows(pack.shape.shadow);
   root.style.setProperty('--shadow-card', shadows.card);
   root.style.setProperty('--shadow-button', shadows.button);
@@ -102,14 +111,39 @@ export function applyPack(pack: StylePack) {
   root.style.setProperty('--font-body', pack.typo.body);
   root.style.setProperty('--font-numbers', pack.typo.numbers);
 
-  // 4. dark/light class（影響 RestTimer 等讀 theme 的地方）
-  const themeClass = pack.dark ? 'dark' : 'light';
+  // 4. mode → theme class（light-only 強制 light）
+  const theme: Theme = pack.mode === 'dark' ? 'dark' : 'light';
   root.classList.remove('dark', 'light');
-  root.classList.add(themeClass);
+  root.classList.add(theme);
+
+  // 5. attribute-driven 樣式（data-pack / data-theme / data-glass）
+  root.setAttribute('data-pack', pack.id);
+  root.setAttribute('data-theme', theme);
+  root.setAttribute('data-glass', pack.glass ? 'true' : 'false');
+}
+
+/** 套用 fx/motion 開關至 <html> data attribute */
+function applyFxMotion(fx: boolean, motion: boolean) {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  root.setAttribute('data-fx', fx ? 'on' : 'off');
+  root.setAttribute('data-motion', motion ? 'on' : 'off');
+}
+
+/** 從 localStorage 讀 fx/motion；若 prefers-reduced-motion 且用戶未手動設 → 預設 off */
+function getInitialFxMotion(): { fxEnabled: boolean; motionEnabled: boolean } {
+  if (typeof window === 'undefined') return { fxEnabled: true, motionEnabled: true };
+  const fxRaw = localStorage.getItem(FX_KEY);
+  const motionRaw = localStorage.getItem(MOTION_KEY);
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // 用戶未手動設 + reduced-motion → 關閉；否則預設開
+  const fxEnabled = fxRaw ? fxRaw === 'true' : !reducedMotion;
+  const motionEnabled = motionRaw ? motionRaw === 'true' : !reducedMotion;
+  return { fxEnabled, motionEnabled };
 }
 
 /** 從舊版 localStorage（只存 'dark'|'light'）或新版（存 packId）解析初始狀態 */
-function getInitialState(): { theme: Theme; activePackId: string } {
+function getInitialPackId(): { theme: Theme; activePackId: string } {
   if (typeof window === 'undefined') {
     return { theme: 'light', activePackId: DEFAULT_PACK_LIGHT };
   }
@@ -120,9 +154,14 @@ function getInitialState(): { theme: Theme; activePackId: string } {
     return { theme: saved, activePackId: packId };
   }
   // 新版存 packId
-  if (saved && getStylePack(saved)) {
-    const pack = getStylePack(saved)!;
-    return { theme: pack.dark ? 'dark' : 'light', activePackId: saved };
+  if (saved) {
+    const pack = getStylePack(saved);
+    if (pack) {
+      const theme: Theme = pack.mode === 'dark' ? 'dark' : 'light';
+      return { theme, activePackId: saved };
+    }
+    // activePackId 為 personal 但 production 下不存在 → fallback 預設
+    return { theme: 'light', activePackId: DEFAULT_PACK_LIGHT };
   }
   // 預設
   return { theme: 'light', activePackId: DEFAULT_PACK_LIGHT };
@@ -141,20 +180,23 @@ function applyThemeClass(theme: Theme) {
 
 // 啟動時立即套用初始 pack（CSS vars + class + icons）
 if (typeof window !== 'undefined') {
-  const initial = getInitialState();
+  const initial = getInitialPackId();
   const pack = getStylePack(initial.activePackId);
   if (pack) {
     applyPack(pack);
   } else {
-    // fallback：只套 class
     applyThemeClass(initial.theme);
   }
   applyDocumentIcons(initial.theme);
+  const { fxEnabled, motionEnabled } = getInitialFxMotion();
+  applyFxMotion(fxEnabled, motionEnabled);
 }
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
-  theme: getInitialState().theme,
-  activePackId: getInitialState().activePackId,
+  theme: getInitialPackId().theme,
+  activePackId: getInitialPackId().activePackId,
+  fxEnabled: getInitialFxMotion().fxEnabled,
+  motionEnabled: getInitialFxMotion().motionEnabled,
 
   setTheme: (theme) => {
     // 切換 dark/light 時同步切換至對應預設 pack
@@ -175,9 +217,21 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     const pack = getStylePack(id);
     if (!pack) return;
     applyPack(pack);
-    const theme = pack.dark ? 'dark' : 'light';
+    const theme: Theme = pack.mode === 'dark' ? 'dark' : 'light';
     applyDocumentIcons(theme);
     localStorage.setItem(STORAGE_KEY, id);
     set({ theme, activePackId: id });
+  },
+
+  setFx: (on) => {
+    localStorage.setItem(FX_KEY, String(on));
+    applyFxMotion(on, get().motionEnabled);
+    set({ fxEnabled: on });
+  },
+
+  setMotion: (on) => {
+    localStorage.setItem(MOTION_KEY, String(on));
+    applyFxMotion(get().fxEnabled, on);
+    set({ motionEnabled: on });
   },
 }));

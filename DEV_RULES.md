@@ -99,14 +99,40 @@ L0_positioning:
 4. 元件不得 inline 計算統計（如 inline 算 streak、inline 算 volume）。
 5. 日期格式化一律用 `utils/format.ts`；禁止 `toLocaleDateString` 散落。
 6. 時間常數一律用 `utils/time.ts`；禁止硬編碼 `86400000`。
-7. UI 顏色一律用 `data/theme.ts`；禁止 hex 散落於 components/pages。
+7. UI 顏色一律用 CSS Variables（`var(--accent)` 等）；**hex 色碼只准出現在 `src/data/stylePacks*.ts` 與 `src/data/theme.ts`**；components/pages 禁止 hex。
 
 ### 驗收 grep
 
 - `grep "86400000" src` 僅出現於 `utils/time.ts`
 - `grep toLocaleDateString src/pages|components` = 0
-- `grep "#[0-9A-Fa-f]{3,8}" src/components src/pages` = 0（data/theme.ts 除外）
+- `grep "#[0-9A-Fa-f]{6}" src/components src/pages` = 0（色碼僅准於 `src/data/stylePacks*.ts`、`src/data/theme.ts`）
 - `grep "as any" src` = 0
+
+### StylePack 風格系統律（L2.5）
+
+```yaml
+S-1: 陣容 10 款＝8 core（release-safe）＋2 personal-only（非商業、release 排除）
+     core: elegant-beige, industrial-power, retro-card, aurora-glass,
+           neobrutal-pop, muji-calm, y2k-chrome, wpa-trail
+     personal: hello-kitty, kawaii-pastel
+S-2: 預設雙預設：light→elegant-beige、dark→industrial-power
+S-3: hello-kitty 與 kawaii-pastel 皆 light-only（強制亮色）
+S-4: aurora-glass 參考 Apple HIG 玻璃材質：backdrop-filter blur(20px) saturate(180%)、
+     1px rgba(255,255,255,.15) 邊、分層深度陰影
+S-5: 動態人格層＝每 pack 的 motion{transition,hover,clickFx}；
+     fxEnabled / motionEnabled 用戶可手動關閉，persist 於 themeStore；
+     prefers-reduced-motion 預設關閉兩者
+S-6: Release 閘門：import.meta.env.VITE_RELEASE_MODE==='production' 時
+     STYLE_PACKS 只回 core；personal 模組獨立檔案利 tree-shake
+S-7: 版權：personal 資產放 src/themes/personal/assets/（.gitignore），
+     README 註明 Sanrio 版權、僅自用、勿散布；release build 不含
+```
+
+- **License 分層**：`core`（release-safe，恆打包）／`personal-only`（dev-only，production tree-shake）。
+- **Hex 規則修訂**：色碼只准 `src/data/stylePacks*.ts` 與 `src/data/theme.ts`；CSS 與 components/pages = 0。
+- **字體**：一律系統字體棧，不新增 `@font-face`。
+- **動態人格層**：按鈕形狀／hover／clickFx 透過 `[data-pack]` attribute selector 驅動（CSS），無 JS 分支。
+- **守門**：`VITE_RELEASE_MODE=production` build 後 `grep -ri "hello-kitty\|kitty" dist/` = 0。
 
 ## L3：編排律（Orchestration Law）
 

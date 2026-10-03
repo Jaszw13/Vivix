@@ -71,3 +71,11 @@ coverage/
 *.mov
 *.MP4
 vivix 宣傳片/
+
+# Personal-only StylePack assets（版權：Sanrio；僅自用，不進版本控制）
+src/themes/personal/assets/*
+!src/themes/personal/assets/README.md
+
+# 用戶提供的 personal 圖片（不進版本控制；應移至 src/themes/personal/assets/）
+Hello kitty image/
+可愛版/

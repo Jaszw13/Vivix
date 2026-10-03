@@ -54,7 +54,7 @@ export async function sharePRCard(pr: PersonalRecord, packId?: string): Promise<
  */
 function buildCardSVG(pr: PersonalRecord, pack: StylePack): string {
   const shadows = packShadows(pack.shape.shadow);
-  const is90s = pack.id === '90s-retro-card';
+  const is90s = pack.id === 'retro-card';
   const W = 360;
   const H = 480;
   const value = pr.repPR !== undefined ? `BW × ${pr.repPR}` : `${pr.weight}kg × ${pr.reps}`;

@@ -618,3 +618,34 @@ set.drops.push({ weight, reps })  ← SetLog.drops?: {weight, reps}[]
 ```
 
 **PR / 1RM 邊界**：`getSessionPRs` / `estimate1RM` 只用主組（`set.weight` / `set.reps`），**drops 不計 1RM**。舊 session 無 `drops` 欄位 → `set.drops ?? []` 無感。
+
+## StylePack 切換流
+
+```
+用戶點擊 StyleGallery 卡
+  │
+  ▼
+themeStore.setPack(id)
+  │
+  ├─ getStylePack(id) 查 STYLE_PACKS
+  ├─ applyPack(pack):
+  │    ├─ Object.entries(pack.vars).forEach → root.style.setProperty('--*', v)
+  │    ├─ setProperty('--radius-card/--radius-button/--border-width')
+  │    ├─ packShadows(shape.shadow) → setProperty('--shadow-card/--shadow-button')
+  │    ├─ setProperty('--font-display/--font-body/--font-numbers')
+  │    ├─ pack.mode → 'dark'|'light' class（light-only 強制 light）
+  │    └─ setAttribute('data-pack'|'data-theme'|'data-glass')
+  ├─ applyDocumentIcons(theme)（favicon/manifest/theme-color）
+  ├─ localStorage.setItem('ironpulse-theme', id)
+  └─ set({ theme, activePackId: id })
+
+啟動時（module load）：
+  getInitialPackId() → getStylePack(saved) → applyPack(pack)
+  migrate：舊值 'dark'|'light' → industrial-power/elegant-beige
+  personal pack 在 production 不存在 → fallback elegant-beige
+
+fx/motion：
+  getInitialFxMotion() → 讀 localStorage 'vivix-fx-enabled'/'vivix-motion-enabled'
+  prefers-reduced-motion 且用戶未手動設 → 預設 off
+  setFx/setMotion → setAttribute('data-fx'|'data-motion') + persist
+```

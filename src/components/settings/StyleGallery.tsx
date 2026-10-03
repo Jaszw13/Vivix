@@ -1,8 +1,7 @@
 import { useThemeStore } from '@/store/themeStore';
-import { STYLE_PACKS } from '@/data/stylePacks';
-import { packShadows } from '@/data/stylePacks';
+import { STYLE_PACKS, packShadows } from '@/data/stylePacks';
 import type { StylePack, PackLicense } from '@/types/theme';
-import { Check, Sparkles } from 'lucide-react';
+import { Check, Sparkles, Lock } from 'lucide-react';
 
 interface StyleGalleryProps {
   onSelect?: () => void;
@@ -10,7 +9,6 @@ interface StyleGalleryProps {
 
 const LICENSE_LABEL: Record<PackLicense, string> = {
   core: 'Core',
-  experimental: 'Experimental',
   'personal-only': 'Personal',
 };
 
@@ -19,6 +17,7 @@ const LICENSE_LABEL: Record<PackLicense, string> = {
  */
 function PackPreview({ pack }: { pack: StylePack }) {
   const shadows = packShadows(pack.shape.shadow);
+  const borderWidth = parseInt(pack.shape.borderWidth, 10) || 1;
   const style: React.CSSProperties = {
     // 局部 CSS var 覆蓋（僅此卡）
     ['--bg-primary' as string]: pack.vars['bg-primary'],
@@ -29,7 +28,7 @@ function PackPreview({ pack }: { pack: StylePack }) {
     ['--border-color' as string]: pack.vars['border-color'],
     background: pack.vars['bg-primary'],
     borderRadius: pack.shape.radiusCard,
-    border: pack.shape.shadow === 'hard' ? '2px solid' : '1px solid',
+    border: `${borderWidth}px solid`,
     borderColor: pack.vars['border-color'],
     boxShadow: shadows.card,
     fontFamily: pack.typo.display,
@@ -74,7 +73,6 @@ export function StyleGallery({ onSelect }: StyleGalleryProps) {
   const groups: { license: PackLicense; packs: StylePack[] }[] = (
     [
       { license: 'core', packs: STYLE_PACKS.filter((p) => p.license === 'core') },
-      { license: 'experimental', packs: STYLE_PACKS.filter((p) => p.license === 'experimental') },
       { license: 'personal-only', packs: STYLE_PACKS.filter((p) => p.license === 'personal-only') },
     ] as { license: PackLicense; packs: StylePack[] }[]
   ).filter((g) => g.packs.length > 0);
@@ -87,7 +85,12 @@ export function StyleGallery({ onSelect }: StyleGalleryProps) {
             <h3 className="text-sm font-semibold text-text-primary">
               {LICENSE_LABEL[group.license]}
             </h3>
-            {group.license === 'experimental' && (
+            {group.license === 'personal-only' && (
+              <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded border border-accent/50 text-accent flex items-center gap-0.5">
+                <Lock size={8} /> 自用
+              </span>
+            )}
+            {group.license === 'core' && (
               <Sparkles size={12} className="text-accent" />
             )}
             <span className="text-xs text-text-muted">({group.packs.length})</span>

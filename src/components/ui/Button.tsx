@@ -1,5 +1,7 @@
 import { forwardRef, type ButtonHTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
+import { spawnClickFxType } from '@/utils/clickFx';
+import { getStylePack } from '@/data/stylePacks';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 type Size = 'sm' | 'md' | 'lg';
@@ -17,11 +19,11 @@ const sizeClasses: Record<Size, string> = {
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'primary', size = 'md', fullWidth, className, children, ...rest },
+  { variant = 'primary', size = 'md', fullWidth, className, children, onClick, ...rest },
   ref
 ) {
   const base =
-    'inline-flex items-center justify-center gap-2 font-bold uppercase tracking-wider transition-all active:translate-y-px disabled:opacity-40 disabled:pointer-events-none select-none';
+    'btn inline-flex items-center justify-center gap-2 font-bold uppercase tracking-wider transition-all active:translate-y-px disabled:opacity-40 disabled:pointer-events-none select-none';
 
   const variants: Record<Variant, string> = {
     primary:
@@ -33,9 +35,24 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       'border border-auxiliary/60 text-auxiliary rounded-button hover:bg-auxiliary/10',
   };
 
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // 點擊特效：依當前 pack.motion.clickFx 產生粒子
+    const packId = typeof document !== 'undefined'
+      ? document.documentElement.getAttribute('data-pack')
+      : null;
+    if (packId) {
+      const pack = getStylePack(packId);
+      if (pack) {
+        spawnClickFxType(e.clientX, e.clientY, pack.motion.clickFx);
+      }
+    }
+    onClick?.(e);
+  };
+
   return (
     <button
       ref={ref}
+      onClick={handleClick}
       className={cn(
         base,
         sizeClasses[size],

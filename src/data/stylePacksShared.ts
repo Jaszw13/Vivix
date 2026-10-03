@@ -1,5 +1,5 @@
 /**
- * StylePack 共用 helpers（S2）
+ * StylePack 共用 helpers（S1）
  *
  * 抽出至獨立模組，讓 stylePacksPersonal.ts 可 import buildVars
  * 而不引入循環依賴。
@@ -12,18 +12,19 @@ export function shadowFor(kind: PackShadow): { card: string; button: string } {
       return { card: 'none', button: 'none' };
     case 'soft':
       return {
-        card: '0 2px 8px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
-        button: '0 1px 2px rgba(0,0,0,0.1)',
+        card: '0 2px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.04)',
+        button: '0 1px 3px rgba(0,0,0,0.12)',
       };
     case 'hard':
       return {
-        card: '0 4px 0 0 rgba(0,0,0,0.85)',
-        button: '0 3px 0 0 rgba(0,0,0,0.85)',
+        card: '0 4px 0 0 rgba(0,0,0,0.9)',
+        button: '0 3px 0 0 rgba(0,0,0,0.9)',
       };
-    case 'glow':
+    case 'glass':
+      // Apple HIG 玻璃：分層深度陰影 + 內光
       return {
-        card: '0 0 12px rgba(200,255,0,0.25), 0 0 2px rgba(255,46,136,0.3)',
-        button: '0 0 8px rgba(200,255,0,0.4)',
+        card: '0 8px 32px rgba(0,0,0,0.35), 0 2px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.12)',
+        button: '0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15)',
       };
   }
 }
@@ -36,6 +37,10 @@ export function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+/**
+ * 建構 CSS Variables 映射。所有色碼僅存在於此處被呼叫（data/stylePacks*.ts）。
+ * 參數對應 §0 既有 CSS 變數名。
+ */
 export function buildVars(
   bgPrimary: string,
   bgSecondary: string,
@@ -62,7 +67,7 @@ export function buildVars(
   };
 }
 
-// 系統字體棧（不新增 @font-face）
+// 系統字體棧（不新增 @font-face 依賴）
 export const SYSTEM_SANS =
   '-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", Helvetica, Arial, sans-serif';
 export const SYSTEM_SERIF =
@@ -71,3 +76,13 @@ export const SYSTEM_SLAB =
   '"Rockwell", "Courier New", Georgia, serif';
 export const SYSTEM_MONO =
   '"JetBrains Mono", "SF Mono", Menlo, Consolas, monospace';
+export const SYSTEM_ROUNDED =
+  '"Nunito", "Quicksand", "PingFang TC", "Noto Sans TC", sans-serif';
+export const SYSTEM_GEOMETRIC =
+  '"Futura", "Century Gothic", "Avenir Next", "Noto Sans TC", sans-serif';
+export const SYSTEM_BUBBLE =
+  '"Comic Sans MS", "Chalkboard SE", "Marker Felt", "Noto Sans TC", sans-serif';
+export const SYSTEM_STENCIL =
+  'Impact, "Arial Black", "Oswald", "Noto Sans TC", sans-serif';
+export const SYSTEM_CHROME =
+  '"Bebas Neue", "Oswald", Impact, "Noto Sans TC", sans-serif';

@@ -15,6 +15,7 @@ import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { usePartnerStore } from '@/features/partner/stores/partnerStore';
 import ImportHistoryModal from '@/components/ImportHistoryModal';
 import { StyleGallery } from '@/components/settings/StyleGallery';
+import { useThemeStore } from '@/store/themeStore';
 import { cn } from '@/lib/utils';
 
 export default function Settings() {
@@ -42,6 +43,7 @@ export default function Settings() {
   const telemetryExportJSON = useTelemetryStore((s) => s.exportJSON);
   const partnerName = usePartnerStore((s) => s.name);
   const partnerReset = usePartnerStore((s) => s.resetPartner);
+  const { fxEnabled, motionEnabled, setFx, setMotion } = useThemeStore();
 
   // 開發者選單隱藏開關：連點 VIVIX 5 次
   const tapCountRef = useRef(0);
@@ -135,6 +137,59 @@ export default function Settings() {
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
         <SectionHeader title="風格畫廊" subtitle="選擇你的 StylePack" />
         <StyleGallery />
+      </motion.div>
+
+      {/* 動態人格層：fx / motion 開關 */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.03 }}
+        className="mt-6"
+      >
+        <SectionHeader title="動態" subtitle="點擊特效與過場動畫" />
+        <Card className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium text-text-primary">點擊特效</div>
+              <div className="text-[11px] text-text-muted">按鈕點擊時的粒子／閃光效果</div>
+            </div>
+            <button
+              onClick={() => setFx(!fxEnabled)}
+              className={cn(
+                'h-9 w-16 rounded-full relative transition-colors',
+                fxEnabled ? 'bg-accent' : 'bg-border'
+              )}
+            >
+              <span
+                className={cn(
+                  'absolute top-1 left-1 w-7 h-7 rounded-full bg-bg-card transition-transform',
+                  fxEnabled && 'translate-x-7'
+                )}
+              />
+            </button>
+          </div>
+          <div className="h-px bg-border/40" />
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium text-text-primary">過場動畫</div>
+              <div className="text-[11px] text-text-muted">頁面切換與模組進出場動畫</div>
+            </div>
+            <button
+              onClick={() => setMotion(!motionEnabled)}
+              className={cn(
+                'h-9 w-16 rounded-full relative transition-colors',
+                motionEnabled ? 'bg-accent' : 'bg-border'
+              )}
+            >
+              <span
+                className={cn(
+                  'absolute top-1 left-1 w-7 h-7 rounded-full bg-bg-card transition-transform',
+                  motionEnabled && 'translate-x-7'
+                )}
+              />
+            </button>
+          </div>
+        </Card>
       </motion.div>
 
       {/* 個人資料 */}

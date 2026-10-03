@@ -420,3 +420,24 @@ const Y_AXIS_PROPS = { stroke: 'var(--text-secondary)', tick: { fontSize: 10 }, 
 - **底部留白**：`main` 加 `pb-32`（含 safe-area），確保最後一卡完整可見於浮動 BottomNav 之上。
 - **統一節奏**：section 間 `space-y-6`；SectionHeader `mb-3`；Card `p-4`。
 - 頁面容器底部預留浮動 nav 空間，禁止內容被 BottomNav 遮擋。
+
+## 20. StylePack 風格系統（v1）
+
+### Registry
+
+- `src/types/theme.ts`：`StylePack` 介面（id/label/license/mode/vars/shape/typo/deco/glass/motion）。
+- `src/data/stylePacksShared.ts`：`buildVars()`、`hexToRgba()`、`shadowFor()`、系統字體棧。
+- `src/data/stylePacks.ts`：8 款 `CORE_PACKS`；`STYLE_PACKS` 依 `VITE_RELEASE_MODE` 條件合併 personal。
+- `src/data/stylePacksPersonal.ts`：2 款 `PERSONAL_PACKS`（hello-kitty、kawaii-pastel）；唯一引用 personal 資產的模組。
+
+### 風格畫廊
+
+- `src/components/settings/StyleGallery.tsx`：依 license 分組（Core／Personal）；每卡用**局部 inline CSS 變數**預覽（不污染全局）；personal 卡加「自用」badge；active 卡 accent 勾選。
+- `src/pages/Settings.tsx`：風格畫廊入口 + 動態 section（fxEnabled／motionEnabled toggle）。
+
+### 動態人格層
+
+- `src/data/packMotion.ts`：`PACK_MOTION` map（transition → duration/ease/enter-exit）；`getMotion(transition, motionEnabled)` 於 motionEnabled=false 時回傳 duration=0。
+- `src/utils/clickFx.ts`：`spawnClickFxType(x, y, type)` 依 clickFx 建粒子 DOM，`animationend` 自刪；`data-fx="off"` 時 no-op；同屏上限 6。
+- `index.css`：`[data-pack] .btn` attribute selector 定義每款按鈕的 border-radius／box-shadow／press transform；`.vivix-fx-*` 粒子動畫。
+- `themeStore.applyPack()`：設 `data-pack`、`data-theme`、`data-glass`、`data-fx`、`data-motion`。
