@@ -14,7 +14,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Dumbbell, Pencil, Trash2, CalendarPlus } from 'lucide-react';
-import { Card, Badge, StatTile } from '@/components/ui/Card';
+import { Card, StatTile } from '@/components/ui/Card';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { calculateTotalVolume, getSessionPRs, formatDateFull } from '@/utils/workout';
 import { dayKey, sessionDayKey } from '@/utils/time';
@@ -226,17 +226,6 @@ export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
               </div>
 
               <div className="px-5 py-4 space-y-4">
-                {/* 動作 chips */}
-                {selectedSession.exercises.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedSession.exercises.map((ex) => (
-                      <Badge key={ex.id} variant="default">
-                        {ex.name}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-
                 {/* 統計 */}
                 <Card className="p-2 grid grid-cols-2 gap-1">
                   <StatTile
