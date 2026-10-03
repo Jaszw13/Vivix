@@ -10,7 +10,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "check": "tsc -b --noEmit"
+    "check": "tsc -b --noEmit",
+    "check:release": "bash scripts/check-release-gate.sh"
   },
   "dependencies": {
     "clsx": "^2.1.1",

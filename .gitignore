@@ -79,3 +79,9 @@ src/themes/personal/assets/*
 # 用戶提供的 personal 圖片（不進版本控制；應移至 src/themes/personal/assets/）
 Hello kitty image/
 可愛版/
+
+# 驗證截圖（含第三方 IP，僅本機參考，不進版控）
+docs/
+
+# AI agent 工作區（僅本機）
+.workbuddy-ai/

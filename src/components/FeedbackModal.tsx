@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { MessageSquare, Send, X, Star } from 'lucide-react';
 import { useTrialStore } from '@/store/trialStore';
 import { OVERLAY_SCRIM } from '@/data/theme';
-import { getMotionForPack, toFramerVariants, toFramerTransition } from '@/data/packMotion';
+import { getMotionForPack, toFramerTransition } from '@/data/packMotion';
 import { useThemeStore } from '@/store/themeStore';
 
 interface FeedbackModalProps {
@@ -59,10 +59,9 @@ export function FeedbackModal({ show }: FeedbackModalProps) {
           onClick={handleDismiss}
         >
           <motion.div
-            variants={toFramerVariants(variant)}
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
+            initial={{ y: '100%', opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: '100%', opacity: 0 }}
             transition={toFramerTransition(variant)}
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-[480px] bg-bg-primary rounded-t-card max-h-[90vh] overflow-y-auto"

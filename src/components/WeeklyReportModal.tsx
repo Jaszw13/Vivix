@@ -17,7 +17,7 @@ import { useRestDayStore } from '@/store/restDayStore';
 import { computeWeeklyReport, type AchievementUnlockRecord } from '@/features/stats/weeklyReport';
 import { formatDateFull } from '@/utils/workout';
 import { OVERLAY_SCRIM } from '@/data/theme';
-import { getMotionForPack, toFramerVariants, toFramerTransition } from '@/data/packMotion';
+import { getMotionForPack, toFramerTransition } from '@/data/packMotion';
 import { useThemeStore } from '@/store/themeStore';
 
 interface WeeklyReportModalProps {
@@ -70,10 +70,9 @@ export function WeeklyReportModal({ open, onClose, weekOffset }: WeeklyReportMod
           onClick={onClose}
         >
           <motion.div
-            variants={toFramerVariants(variant)}
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
+            initial={{ y: '100%', opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: '100%', opacity: 0 }}
             transition={toFramerTransition(variant)}
             onClick={(e) => e.stopPropagation()}
             className="w-full max-w-[480px] bg-bg-primary rounded-t-card max-h-[90vh] overflow-y-auto scrollbar-hide"

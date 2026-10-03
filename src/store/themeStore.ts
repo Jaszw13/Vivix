@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Theme } from '@/types';
 import { getStylePack, packShadows } from '@/data/stylePacks';
+import { getMotion } from '@/data/packMotion';
 import type { StylePack } from '@/types/theme';
 
 interface ThemeState {
@@ -120,6 +121,17 @@ export function applyPack(pack: StylePack) {
   root.setAttribute('data-pack', pack.id);
   root.setAttribute('data-theme', theme);
   root.setAttribute('data-glass', pack.glass ? 'true' : 'false');
+
+  // 6. 動態人格層：--pack-duration / --pack-ease（卡片過渡節奏）
+  //    motionEnabled 由 data-motion 讀取；init 時尚未設，applyFxMotion 會緊接重算
+  applyMotionVars(root, pack, root.getAttribute('data-motion') !== 'off');
+}
+
+/** 依 pack.motion.transition + motionEnabled 寫入 --pack-duration / --pack-ease */
+function applyMotionVars(root: HTMLElement, pack: StylePack, motionEnabled: boolean) {
+  const mv = getMotion(pack.motion.transition, motionEnabled);
+  root.style.setProperty('--pack-duration', `${mv.duration}s`);
+  root.style.setProperty('--pack-ease', `cubic-bezier(${mv.ease.join(', ')})`);
 }
 
 /** 套用 fx/motion 開關至 <html> data attribute */
@@ -128,6 +140,11 @@ function applyFxMotion(fx: boolean, motion: boolean) {
   const root = document.documentElement;
   root.setAttribute('data-fx', fx ? 'on' : 'off');
   root.setAttribute('data-motion', motion ? 'on' : 'off');
+
+  // 切換 motion 開關時，卡片過渡節奏需即時更新（motion=false → duration 0s）
+  const packId = root.getAttribute('data-pack');
+  const pack = packId ? getStylePack(packId) : null;
+  if (pack) applyMotionVars(root, pack, motion);
 }
 
 /** 從 localStorage 讀 fx/motion；若 prefers-reduced-motion 且用戶未手動設 → 預設 off */

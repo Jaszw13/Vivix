@@ -23,8 +23,10 @@
 ## Release 保證
 
 - `VITE_RELEASE_MODE=production` 時，`stylePacksPersonal.ts` 模組被 tree-shake。
-- 此資料夾的圖片不會被 production build 引用。
-- `grep -ri "kawaii\|kitty" dist/` 應為 0。
+- `vite.config.ts` 的 release 守衛（`release-gate-personal-assets`）會在 `generateBundle` 階段
+  以 md5 比對剔除所有個人版資產（tree-shaking 管不到 `emitFile` 的實體檔，必須主動剔除）。
+- 驗收（檔案系統，非字串搜尋——檔名為 content-hash，不含 `kawaii`）：
+  `find dist -type f \( -name "*.jpeg" -o -name "*.jpg" -o -name "*.webp" \) | wc -l` 必須為 `0`。
 
 ## 注意
 

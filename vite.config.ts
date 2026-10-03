@@ -1,7 +1,51 @@
-import { defineConfig, loadEnv } from 'vite'
+import fs from 'node:fs'
+import path from 'node:path'
+import crypto from 'node:crypto'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tsconfigPaths from "vite-tsconfig-paths";
 import { VitePWA } from 'vite-plugin-pwa'
+
+/** 遞迴收集 personal 資產的內容 md5（排除 dotfile / README） */
+function collectPersonalHashes(dir: string): Set<string> {
+  const out = new Set<string>()
+  if (!fs.existsSync(dir)) return out
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name)
+    if (e.isDirectory()) {
+      for (const h of collectPersonalHashes(p)) out.add(h)
+    } else if (!e.name.startsWith('.') && !e.name.endsWith('.md')) {
+      out.add(crypto.createHash('md5').update(fs.readFileSync(p)).digest('hex'))
+    }
+  }
+  return out
+}
+
+/** Release 守衛：剔除個人版資產（tree-shaking 管不到 emitFile 的實體檔） */
+function releaseGatePersonalAssets(isRelease: boolean): Plugin {
+  return {
+    name: 'release-gate-personal-assets',
+    apply: 'build',
+    generateBundle(_options, bundle) {
+      if (!isRelease) return
+      const hashes = collectPersonalHashes(
+        path.resolve('src/themes/personal/assets/kawaii-pastel'),
+      )
+      if (hashes.size === 0) return
+      let removed = 0
+      for (const [fileName, output] of Object.entries(bundle)) {
+        if (output.type !== 'asset') continue
+        const buf = Buffer.from(output.source as string | Uint8Array)
+        if (hashes.has(crypto.createHash('md5').update(buf).digest('hex'))) {
+          this.warn(`[release-gate] 剔除個人版資產：${fileName}`)
+          delete bundle[fileName]
+          removed++
+        }
+      }
+      this.warn(`[release-gate] 共剔除 ${removed} 個個人版資產`)
+    },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
@@ -87,6 +131,7 @@ export default defineConfig(({ mode }) => {
         enabled: false,
       },
     }),
+      releaseGatePersonalAssets(isRelease),
   ],
   }
 })

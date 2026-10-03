@@ -31,7 +31,7 @@ import { fuzzySuggest } from '@/utils/fuzzy';
 import { resolveCurrentTaxonomy } from '@/features/exercises/taxonomy';
 import RecognitionModal, { computeBatchRecognitionStats } from './RecognitionModal';
 import { settleAll } from '@/features/stats/settleAll';
-import { getMotionForPack, toFramerVariants, toFramerTransition } from '@/data/packMotion';
+import { getMotionForPack, toFramerTransition } from '@/data/packMotion';
 import { useThemeStore } from '@/store/themeStore';
 
 type Mode = 'matrix' | 'table' | null;
@@ -383,10 +383,9 @@ export default function ImportHistoryModal({
         >
           <motion.div
             key="import-panel"
-            variants={toFramerVariants(variant)}
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
+            initial={{ y: 260, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 260, opacity: 0 }}
             transition={toFramerTransition(variant)}
             className="w-full max-w-[520px] max-h-[92vh] bg-bg-primary rounded-t-3xl sm:rounded-3xl border border-border flex flex-col"
             onClick={(e) => e.stopPropagation()}

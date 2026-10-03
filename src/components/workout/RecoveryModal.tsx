@@ -20,7 +20,7 @@ import { useWorkoutStore } from '@/store/workoutStore';
 import { useRestTimerStore } from '@/store/restTimerStore';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { dayKey } from '@/utils/time';
-import { getMotionForPack, toFramerVariants, toFramerTransition } from '@/data/packMotion';
+import { getMotionForPack, toFramerTransition } from '@/data/packMotion';
 import { useThemeStore } from '@/store/themeStore';
 
 const STALE_MS = 30 * 60 * 1000;
@@ -102,10 +102,9 @@ export function RecoveryModal() {
           onClick={handleContinue}
         >
           <motion.div
-            variants={toFramerVariants(variant)}
-            initial="hidden"
-            animate="visible"
-            exit="hidden"
+            initial={{ y: '100%', opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: '100%', opacity: 0 }}
             transition={toFramerTransition(variant)}
             className="w-full max-w-[480px] bg-bg-card rounded-t-[24px] p-6 shadow-card"
             onClick={(e) => e.stopPropagation()}

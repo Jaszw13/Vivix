@@ -490,16 +490,21 @@ select:focus {
     border-color var(--pack-duration, 0.18s) var(--pack-ease, ease-out);
 }
 
-/* cyber-neon：glitch + 電光 */
-[data-pack='cyber-neon'] .rounded-card:hover {
-  transform: translate(-1px, 1px);
-  box-shadow: 0 0 0 1px var(--accent), 0 0 18px -2px var(--accent);
+/* aurora-glass：彈性回饋 */
+[data-pack='aurora-glass'] .rounded-card:hover {
+  transform: scale(1.02);
+  box-shadow: 0 8px 28px -8px var(--accent-soft);
 }
 
-/* candy-pop：jelly bounce */
-[data-pack='candy-pop'] .rounded-card:hover {
-  transform: scale(1.015);
-  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.18);
+/* neobrutal-pop：硬陰影塌陷 */
+[data-pack='neobrutal-pop'] .rounded-card:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 var(--text-primary);
+}
+
+/* muji-calm：僅微透明度，不變形 */
+[data-pack='muji-calm'] .rounded-card:hover {
+  opacity: 0.94;
 }
 
 /* motion 關閉時停用卡片 hover 變形 */

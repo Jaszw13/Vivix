@@ -11,7 +11,7 @@ import { estimate1RM, setLoadKg } from '@/utils/workout';
 import { resolveCurrentTaxonomy } from '@/features/exercises/taxonomy';
 import type { CustomExercise } from '@/store/workoutStore';
 import { sessionDayKey } from '@/utils/time';
-import { getMotionForPack, toFramerVariants, toFramerTransition } from '@/data/packMotion';
+import { getMotionForPack, toFramerTransition } from '@/data/packMotion';
 import { useThemeStore } from '@/store/themeStore';
 
 export interface RecognitionStats {
@@ -115,10 +115,9 @@ export default function RecognitionModal({
       >
         <motion.div
           key="recognition-panel"
-          variants={toFramerVariants(variant)}
-          initial="hidden"
-          animate="visible"
-          exit="hidden"
+          initial={{ y: 220, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 220, opacity: 0 }}
           transition={toFramerTransition(variant)}
           className="w-full max-w-[480px] max-h-[92vh] bg-bg-primary rounded-t-3xl sm:rounded-3xl border border-border flex flex-col"
           onClick={(e) => e.stopPropagation()}
