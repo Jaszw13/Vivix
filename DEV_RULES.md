@@ -56,14 +56,15 @@ L0_positioning:
 
 | Store | persist | 不 persist（衍生） |
 |-------|---------|------------------|
-| workoutStore v11 | sessions（含 startedAt/finishedAt/lastActivityAt/planSnapshot）、customExercises、activePlanId、nextDayIndex、taxonomyVersion、activeSession（F4 persist，含 lastActivityAt） | personalRecords |
+| workoutStore v11 | sessions（含 startedAt/finishedAt/lastActivityAt/planSnapshot、**SetLog.drops**）、customExercises、activePlanId、nextDayIndex、taxonomyVersion、activeSession（F4 persist，含 lastActivityAt） | personalRecords |
 | achievementsStore v4 | progress[id].unlockedAt（永久 D2）、seen、pending | lastMetrics、current |
 | questStore v2 | claimed、completedAt | current |
-| partnerStore v2 | species、name、unlockedFormIds、cosmetics | level、totalWorkouts、totalTrainingDays |
+| partnerStore v3 | species、name、unlockedFormIds、cosmetics、**cardioXpGrantedDay** | level、totalWorkouts、totalTrainingDays |
 | equipmentMemoryStore v2 | （改讀取時派生） | memories |
 | profileStore v5 | profile（含 experienceLevel 原始事實）、onboardingCompleted、goal、weeklyReportSeenWeek、gymEquipmentIds（T7-3） | — |
 | plansStore v1 | customPlans | — |
 | cardioStore v1 | sessions（id/date/machine/durationMin/kcal/avgHr/distanceKm/createdAt） | —（皆原始事實） |
+| **restDayStore v1** | entries（id/date/activity?/note?/createdAt） | —（皆原始事實） |
 | bodyMetricsStore v1 | metrics（id/date/weightKg/muscleMassKg/bodyFatPercent/fatMassKg/createdAt）（T8-1） | —（皆原始事實） |
 | themeStore | theme | — |
 | trialStore v6 | stage、usedCodes、... | — |
@@ -78,6 +79,8 @@ L0_positioning:
 3. `migrate` 必須剝除舊衍生欄位（如 v6 的 personalRecords）。
 4. persist key 全部不變（`ironpulse-*` / `vivix-*`），不得換 key 造成資料丟失。
 5. **熱量值一律禁止 persist**：strengthKcal / cardioKcal / MET 計算結果（含 low/high/activeMin/restMin/isFallback）皆為衍生，走 `features/stats/energy.ts` 即時派生；唯一例外是 `CardioSession.kcal` — 此為**用戶手動輸入的機器原始讀數**，定義為「事實」而非「推估」，屬 cardioStore 白名單（見 CALORIE_MODEL.md §4.1）。
+6. **休息日語義（R5）**：`restDayStore.entries` 為原始事實（date/activity/note）；休息日**只**計入 streak（`getStreakDays` 第三參數），不計訓練次數／天數／體積／PR／成就／Partner XP 與形態。
+7. **遞減組體積規則（R6）**：`SetLog.drops` 為原始事實（可 persist）；體積計算一律用 `utils/workout.ts` 的 `setLoadKg(set) = 主組 + Σdrops`；**PR / 1RM 只用主組**，drops 不計 1RM。
 
 ## L2：派生律（Derivation Law）
 
@@ -117,7 +120,9 @@ L0_positioning:
 4. `quests` settlement：達標 → completed（claim 由用戶）
 5. `telemetry`：新解鎖統一在此 log
 
-### 觸發點（僅三處）
+### 觸發點
+
+完整 12 處清單與例外（cardio/import/page-mount）見 ARCHITECTURE.md §5。核心三類：
 
 - `finishSession` 後（WorkoutSummary mount）→ `settleAll(rewardCtx)`
 - `editCustomExercise` / `deleteCustomExercise` 後 → `settleTaxonomyChange()`
@@ -130,6 +135,7 @@ L0_positioning:
 1. 禁止在元件、store action 內直接呼叫其他 store 的結算（如 achievementsStore 直接 telemetry.log）。
 2. 禁止多處獨立觸發結算造成重複慶祝批次。
 3. 一次 finish 只產生一組慶祝批次。
+4. **休息日不 settle（R5）**：`addRestDay` / `deleteRestDay` **不**呼叫 `settleAll`；休息日不觸發 Partner XP、成就、訓練次數。僅 streak 透過 `getStreakDays` 第三參數（restDays）在消費端派生。刪除休息日時由呼叫端（TrainingCalendar）執行 `settleAll(undefined, { silent: true })` 以回退 streak 派生視圖（不產生 XP/成就）。
 
 ## L4：遷移律（Migration Law）
 

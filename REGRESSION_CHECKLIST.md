@@ -57,9 +57,9 @@ npx vite build
 
 ### 2.4 試用鎖
 
-- [ ] 5 階段漸進解鎖（2→4→8→15→31→永久）
+- [ ] 4 階段漸進解鎖（1→7→30→永久）
 - [ ] 數字碼驗證正確
-- [ ] persist key `vivix-trial-*` 不變
+- [ ] persist key `ironpulse-trial` 不變
 - [ ] 清除瀏覽器資料可重置（已知限制）
 
 ### 2.5 Onboarding
@@ -608,3 +608,75 @@ npx vite build
 - [ ] `as any` = 0；非空斷言 = 0（排除「LEVEL UP!」）
 - [ ] hex in components/pages = 0
 - [ ] dead-export = 0
+
+## 20. 整合輪 R 驗收矩陣（R1–R6）
+
+### 20.1 R1：settleAll hasCustomPlans 修復 + 有氧 XP persist
+
+- [ ] `settleAll` 讀 `usePlansStore.getState().customPlans.length > 0`（非 hardcode false）
+- [ ] plansStore 不 import settleAll（無循環依賴）
+- [ ] partnerStore 新增 `cardioXpGrantedDay: string | null`（persist + partialize + migrate 補 null）
+- [ ] settleAll 刪除模組級 `inMemCardioGrantedDay`，改讀寫 partnerStore 欄位
+- [ ] 當日有 cardio session 後重整頁面 → Partner XP 不重複發放
+
+### 20.2 R2：衛生三項
+
+- [ ] trialStore / telemetryStore / plansStore / featureFlags 皆有顯式 `partialize`
+- [ ] equipmentMemoryStore memo key 含 `workoutStore.taxonomyVersion`（自訂動作變更即時失效）
+- [ ] `getLastSetsForExercise` 已遷入 `selectors.ts` 純函數；workoutStore 改薄 delegate
+- [ ] dead-export = 0；tsc 0
+
+### 20.3 R3：PR 顯示修復
+
+- [ ] workoutStore 有 `recomputePersonalRecords()` action
+- [ ] `settleOnLoad` 開頭呼叫 `recomputePersonalRecords`（rehydrate 後填充）
+- [ ] Progress 曲線選擇器派生自有紀錄動作（date 降序、去重；`-bw` entry 顯示 BW badge；含自訂）
+- [ ] PR 空但 sessions 有資料時 fallback 從 sessions 取動作
+- [ ] 全局 PR 列表非空；腿部部位 PR > 0；選「史密斯 RDL」有曲線；reload 保持
+
+### 20.4 R4：日 sheet 去重複
+
+- [ ] TrainingCalendar 日 sheet 無頂部動作 chips 列
+- [ ] 保留 stats 卡＋明細 list＋編輯/刪除/GCal 按鈕
+- [ ] 每動作只出現一次
+
+### 20.5 R5：休息日一等公民
+
+- [ ] `RestDayEntry` type 定義正確（id/date/activity?/note?/createdAt）
+- [ ] restDayStore v1 persist `vivix-rest-days-v1`，partialize {entries}，migrate guard
+- [ ] `addRestDay` 拒未來日、一日一筆；`deleteRestDay`
+- [ ] `getStreakDays(sessions, cardioSessions, restDays)` 第三參數；全部呼叫點已傳入 restDays
+- [ ] 休息日**只**計入 streak；不計訓練次數／天數／體積／PR／成就／Partner XP 與形態
+- [ ] Dashboard 今日卡「記錄休息日」按鈕；已標記 → chip + 刪除；telemetry `rest_day_added/deleted`
+- [ ] DaySessionEditor 模式切換：補錄訓練／標記休息日
+- [ ] 月曆標籤優先序：力量縮寫 > 有氧「氧」 > 休息「休」；休息日格可點 → sheet 顯示 entry + 刪除
+- [ ] WeeklyReport「休息天數」tile；partnerMessage 平衡規則
+- [ ] 斷層日補休息 → streak +N 但訓練次數不變；Partner XP 不變；刪除回退
+
+### 20.6 R6：遞減組
+
+- [ ] `SetLog.drops?: { weight, reps }[]`；讀取一律 `set.drops ?? []`（無需 migrate）
+- [ ] `setLoadKg(set)` = 主組 + Σdrops
+- [ ] 全專案 `weight * reps` 體積計算已替換為 `setLoadKg`（calculateTotalVolume、selectors、週報、月曆、WorkoutSummary、RecognitionModal）
+- [ ] ExerciseSetList + DaySessionEditor「＋遞減」按鈕；顯示 `20×10 →15×8`；可刪；telemetry `drop_set_added`
+- [ ] PR / 1RM 只用主組（getSessionPRs / estimate1RM 不動）
+- [ ] 體積含 drops；1RM 不變；舊 session 無感
+
+### 20.7 R7：文件漂移
+
+- [ ] ARCHITECTURE.md §7 版本表更新至最終值；restDayStore v1 列入
+- [ ] ARCHITECTURE.md trial persist key = `ironpulse-trial`，4 階段；B-01 標完成
+- [ ] ARCHITECTURE.md settleAll 觸發點 = 12 處並明列 cardio/import/page-mount 例外
+- [ ] DEV_RULES 白名單含 restDayStore v1；L1 補休息日語義 + drop-set 體積規則；L3 註休息日不 settle
+- [ ] README 5 階段 → 4 階段
+- [ ] REGRESSION_CHECKLIST 新增本輪 section
+
+### 20.8 全局守門（R8）
+
+- [ ] `npx tsc --noEmit` → 0 errors
+- [ ] `npm run build` → 成功，precache ≥ 16
+- [ ] `grep "as any" src` = 0
+- [ ] `grep -rnE "(^|[^!])!([.,;:)\]]|$)" src | grep -v "LEVEL UP"` = 0
+- [ ] `grep "#[0-9A-Fa-f]{3,8}" src/components src/pages` = 0
+- [ ] dead-export = 0
+- [ ] 每任務一個 commit；全綠後 `git push origin main`

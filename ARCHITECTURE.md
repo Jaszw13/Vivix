@@ -122,7 +122,7 @@ RecognitionModal 每匯入批次一次（E8，非 ever-once）
 | `src/utils/time.ts` | `DAY_MS` / `WEEK_MS` / `FOURTEEN_DAYS_MS` / `dayKey` / `diffDays` / `addDays` / `getISOWeek` / `getWeekStart`（T5 週報用） | grep `86400000` 僅出現於此 |
 | `src/utils/format.ts` | `formatDateShort` / `formatDateFull` / `formatUnlockDate` / `formatWeekdayShort` | grep `toLocaleDateString` 於 pages/components = 0 |
 | `src/data/theme.ts` | `REST_TIMER_THEME` / `THEME_DEFINITIONS` / `CHART_WEEK_COLORS` / `OVERLAY_SCRIM` | grep hex 於 components/pages = 0 |
-| `src/features/stats/selectors.ts` | `getStreakDays`（D1 + E-D3 union 語義：力量日 ∪ 有氧日）；熱量統計（每週力量/有氧 kcal、總和）同源於本檔；PR／groupStats／volume 現仍為 workoutStore 單一函數（`computePRsFromSessions`／`getGroupStats`），無重複實作；漸進移入為 backlog B-01 | store/元件不得 inline 重算 |
+| `src/features/stats/selectors.ts` | `getStreakDays`（D1 + E-D3 union 語義：力量日 ∪ 有氧日 ∪ 休息日，R5 三參數）；`getLastSetsForExercise`（R2 已遷入）；熱量統計（每週力量/有氧 kcal、總和）同源於本檔；groupStats／groupWeeklyVolume 亦已遷入；B-01 完成 | store/元件不得 inline 重算 |
 | `src/features/stats/settleAll.ts` | `settleAll` / `settleTaxonomyChange` / `settleOnLoad`；cardio metrics 納入 buildAchieveCtx；有氧日 XP（20/日上限 1 次）；streak union 所有消費端；T4 `pr_celebrated` telemetry 第 5 節 | 跨 store 結算唯一入口（L3） |
 | `src/features/stats/weeklyReport.ts` | `computeWeeklyReport`（純函數；全派生不 persist）、`generatePartnerMessage`（規則式文案） | T5 週報唯一計算來源；元件禁止 inline |
 | `src/features/stats/energy.ts` | `estimateStrengthKcal`（雙段 MET，null＝體重未填）；`estimateCardioKcal`（用戶 kcal 優先，否則 MET fallback，null＝體重未填且無 kcal）；純函式 | 僅 selectors.ts 消費；元件禁止 inline import |
@@ -153,17 +153,25 @@ RecognitionModal 每匯入批次一次（E8，非 ever-once）
    a. `handleWorkoutCompleted(rewardCtx)`（僅力量 session，提供 rewardCtx 時）
    b. **`settleCardioDailyXp()`**（有氧 20 XP / 日，每日上限 1 次；E-D4）
 3. `achievements` settlement：達標且未 unlocked → `unlockedAt = now` + pending（+9 cardio 成就納入；舊 58 不動）
-4. `quests` settlement：達標 → completed（ctx streak 取 **力量日 ∪ 有氧日 union**，E-D3）
+4. `quests` settlement：達標 → completed（ctx streak 取 **力量日 ∪ 有氧日 ∪ 休息日 union**，E-D3 + R5）
 5. `telemetry`：新解鎖統一在此 log；另 cardio add/delete 與 EE 事件在 action 內觸發
 
-**觸發點僅四處**：
+**觸發點（共 12 處；例外標註）**：
 
-- `finishSession` 後（WorkoutSummary mount）
-- `addCardio` / `deleteCardio` / `editCustomExercise` / `deleteCustomExercise` 後（走 `settleTaxonomyChange`）
-- `addPastSession` / `updatePastSession` / `deletePastSession` 後（T9-3；由 TrainingCalendar 呼叫端執行 `settleAll(undefined, { silent: true })`，store 內不 settle）
-- load / migrate 後一次（`settleOnLoad`，`silent: true` 不彈慶祝）
+1. `finishSession` 後（WorkoutSummary mount，`settleAll({ rewardCtx })`）
+2. `addCardio` 後（cardioStore，`settleAll()`）— 有氧例外：走 cardio 結算
+3. `deleteCardio` 後（cardioStore，`settleAll()`）— 有氧例外
+4. `settleOnLoad`（App mount，`settleAll(undefined, { silent: true })`）— page-mount 例外：silent 不彈慶祝
+5. TrainingCalendar 儲存補錄後（`settleAll(undefined, { silent: true })`）
+6. TrainingCalendar 刪除 session 後（`settleAll(undefined, { silent: true })`）
+7. TrainingCalendar 刪除休息日後（`settleAll(undefined, { silent: true })`）— R5
+8. ImportHistoryModal 匯入完成後（`settleAll(undefined, { silent: true, skipPartner: true })`）— import 例外：silent + skipPartner
+9. `settleTaxonomyChange` — Dashboard mount（成就/quest 冪等重算）
+10. `settleTaxonomyChange` — Exercises 頁編輯/刪除自訂動作後
+11. `settleTaxonomyChange` — AchievementsPage mount
+12. `settleTaxonomyChange` — Exercises 頁分類變更後
 
-註：頁面進入（Dashboard／AchievementsPage mount）呼叫 `settleTaxonomyChange` 為冪等安全網 — `unlockedAt` 永久，不會重複慶祝／重複 telemetry。
+註：`settleTaxonomyChange` 為冪等安全網 — `unlockedAt` 永久，不會重複慶祝／重複 telemetry。休息日（R5）不觸發 Partner XP / 成就 / 訓練次數，僅透過 streak union 影響連續天數與 quests。
 
 ## 6. 有氧與熱量（E-1 / E-2）
 
@@ -204,18 +212,46 @@ Actions：`addCardio` / `deleteCardio`（皆觸發 `settleTaxonomyChange` 後結
 | 未輸入 kcal + 有體重 | CARDIO_MET × kg × min/60 | `≈ {kcal} kcal（推估值）` |
 | 未輸入 kcal + 無體重 | 無法估算 | `—` + 提示 |
 
-### 6.4 Streak union（E-D3）
+### 6.4 Streak union（E-D3 + R5）
 
-唯一來源：`selectors.getStreakDays(workoutSessions, cardioSessions)`
+唯一來源：`selectors.getStreakDays(workoutSessions, cardioSessions, restDays)`
 
 ```
-trainingDays = dayKey(sessions.date) ∪ dayKey(cardioSessions.date)
+trainingDays = dayKey(sessions.date) ∪ dayKey(cardioSessions.date) ∪ restDays.date
 ```
 
 - D1 語義保留（昨天有練、今天未練仍延續）
 - 消費端：Dashboard streak tile / AchievementsPage streak / questCtx.streakDays / report 全部同源
+- R5：休息日**只**計入 streak；不計訓練次數／天數／體積／PR／成就／Partner XP 與形態
 
-### 6.5 成就 +9（cardio_*）
+### 6.6 休息日（R5 / Q1-Q4）
+
+`restDayStore v1`，persist key `vivix-rest-days-v1`，version 1 + migrate（L4）。**邊界：只依賴 types + zustand persist，不 import workoutStore/settleAll（防循環）。**
+
+```ts
+interface RestDayEntry {
+  id: string; date: string;            // dayKey 'YYYY-MM-DD'
+  activity?: 'walk'|'stretch'|'mobility'|'yoga'|'other';
+  note?: string; createdAt: string;
+}
+```
+
+- `addRestDay(date, opts)`：拒未來日、一日一筆（同 dayKey 覆蓋）
+- `deleteRestDay(id)` / `getRestDay(date)`
+- 月曆標籤優先序：力量縮寫 > 有氧「氧」 > 休息「休」
+- 週報加「休息天數」tile；partnerMessage 平衡規則（restDays≥1 && sessions≥1 → 資訊性提及）
+- telemetry：`rest_day_added` / `rest_day_deleted`
+
+### 6.7 遞減組 Drop Sets（R6 / Q2）
+
+`SetLog.drops?: { weight: number; reps: number }[]`（選填，舊資料無感，無需 migrate）。
+
+- **體積**：`setLoadKg(set) = set.weight×set.reps + Σ(drops)`；全專案體積計算（calculateTotalVolume、selectors groupStats/groupWeeklyVolume、週報、月曆、WorkoutSummary、RecognitionModal）統一改用 `setLoadKg`
+- **PR / 1RM**：只用主組（`getSessionPRs` / `estimate1RM` 不動），drops 不計 1RM
+- UI：ExerciseSetList＋DaySessionEditor 每組「＋遞減」按鈕新增 drop、顯示 `20×10 →15×8`、可編輯可刪
+- telemetry：`drop_set_added`
+
+### 6.8 成就 +9（cardio_*）
 
 metric 擴充：`cardioMinutesTotal` / `cardioSessionsTotal` / `cardioWeeklyRhythmWeeks`
 
@@ -234,13 +270,14 @@ metric 擴充：`cardioMinutesTotal` / `cardioSessionsTotal` / `cardioWeeklyRhyt
 
 | Store | 版本 | persist 內容 | 不再 persist 的衍生欄位 |
 |-------|------|-------------|----------------------|
-| workoutStore | v8 | sessions（含 startedAt/finishedAt）、customExercises、activePlanId、nextDayIndex、taxonomyVersion | personalRecords、任何 kcal/MET 結果 |
+| workoutStore | v11 | sessions（含 startedAt/finishedAt、SetLog.drops）、customExercises、activePlanId、nextDayIndex、taxonomyVersion | personalRecords、任何 kcal/MET 結果 |
 | achievementsStore | v4 | progress[id].unlockedAt（永久 D2） | lastMetrics, current |
 | questStore | v2 | claimed, completedAt | current |
-| partnerStore | v2 | species, name, unlockedFormIds, ... | level, totalWorkouts, totalTrainingDays |
-| equipmentMemoryStore | v2 | （改讀取時派生） | memories |
+| partnerStore | v3 | species, name, unlockedFormIds, cardioXpGrantedDay, ... | level, totalWorkouts, totalTrainingDays |
+| equipmentMemoryStore | — | （改讀取時派生，不 persist） | memories |
 | cardioStore | v1 | CardioSession 原始事實（durationMin/kcal 輸入/avgHr/distanceKm/...） | fallback kcal、kcal low/high、任何 MET 計算結果 |
-| profileStore | v2 | profile, onboardingCompleted, goal | — |
+| restDayStore | v1 | RestDayEntry[]{ id, date, activity?, note?, createdAt } | — |
+| profileStore | v5 | profile, onboardingCompleted, goal, gymEquipmentIds | — |
 
 **D2 語義**：`unlockedAt` 永久保存；進度條 live 反映真實數據（手造刪 sessions 後進度即時下降，但已 unlocked 成就不消失）。
 
@@ -266,7 +303,7 @@ metric 擴充：`cardioMinutesTotal` / `cardioSessionsTotal` / `cardioWeeklyRhyt
 ## 10. 試用鎖與 Onboarding
 
 - 試用：4 階段漸進解鎖（1/7/30/永久天數），數字碼驗證；stage 0 免碼直接升級（T1）
-- `trialStore` v6；persist key `vivix-trial-*` 不變
+- `trialStore` v6；persist key `ironpulse-trial`
 - Onboarding：首次啟動流程，完成後 `profileStore.onboardingCompleted = true`
 - 試用續用碼本期保留；商業化前移 env（D6，寫入 DEV_RULES，本期不動）
 

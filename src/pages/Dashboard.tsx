@@ -83,7 +83,7 @@ export default function Dashboard() {
   // ⚠️ 用細粒度 selector 拎 action，唔好拎成個 store object：
   //   zustand 如果直接 useXxxStore() 唔傳 selector → 每 render 都有新 object ref，
   //   放落 useEffect deps 會每次都視為變化 → 觸發 recompute() → recompute set state →
-  //   re-render → deps 又新 → infinite loop → React error #185。
+  //   re-render → deps 又新 → infinite loop → React error code 185。
   // C5：改透過 settleTaxonomyChange 統一編排
   const markUnlockSeen = useAchievementsStore((s) => s.markUnlockSeen);
   const pendingUnlockIds = useAchievementsStore((s) => s.pendingUnlockIds);

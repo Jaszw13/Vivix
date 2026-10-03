@@ -45,7 +45,7 @@ settleAll（stats/settleAll.ts）固定順序：
        totalWorkouts = sessions.filter(s => s.imported !== true).length
        // （成就/統計用 totalWorkouts 則是 sessions.length，含 imported；兩語義嚴格分開）
        totalPRs = personalRecords.length
-       streakDays = getStreakDaysSelector(sessions, cardioSessions)  ← D1 + E-D3 union
+       streakDays = getStreakDaysSelector(sessions, cardioSessions, restDays)  ← D1 + E-D3 + R5 union
   5. questStore.recompute(questCtx) → 達標 → completed
   6. telemetry.log('achievement_unlocked', {id}) 統一在此
   │
@@ -219,34 +219,38 @@ settleOnLoad()
 UI 顯示
 ```
 
-## 4. streak 計算（C3 / D1 + E-D3）
+## 4. streak 計算（C3 / D1 + E-D3 + R5）
 
-唯一來源：`stats/selectors.ts` 的 `getStreakDays(workoutSessions, cardioSessions)`。
+唯一來源：`stats/selectors.ts` 的 `getStreakDays(workoutSessions, cardioSessions, restDays)`。
 
 ```
 trainingDayKeys =
     dayKey(workoutSessions[i].date)
   ∪ dayKey(cardioSessions[j].date)     ← E-D3 union：有氧日計入 streak
+  ∪ restDays[k].date                    ← R5 union：休息日計入 streak
 
-getStreakDays(sessions, cardioSessions)
+getStreakDays(sessions, cardioSessions, restDays)
   │
-  ├─ 今天有訓練（力量 or 有氧）→ cursor = today
+  ├─ 今天有訓練（力量 or 有氧 or 休息）→ cursor = today
   ├─ 今天未練但昨天有練 → cursor = yesterday（仍延續，D1 不變）
   └─ 否則 → 0
   │
   ▼
-  從 cursor 往回一天天比對（本地時區 toDateString 去重，力量+有氧聯集）
+  從 cursor 往回一天天比對（本地時區 toDateString 去重，力量+有氧+休息聯集）
   │
   ▼
   streak = 連續天數
 ```
 
-**同源保證**：Dashboard、AchievementsPage、questStore recompute ctx、report 頁面全部 import 同一個 `getStreakDays`（兩個參數版本）。有氧刪除 → streak 可能即時下降（但已 unlocked 成就不消失，D2）。
+**同源保證**：Dashboard、AchievementsPage、questStore recompute ctx、report 頁面全部 import 同一個 `getStreakDays`（三個參數版本）。有氧刪除 / 休息日刪除 → streak 可能即時下降（但已 unlocked 成就不消失，D2）。
+
+**R5 語義**：休息日**只**計入 streak；不計訓練次數／天數／體積／PR／成就／Partner XP 與形態。
 
 **驗收**：
 - 「昨天有氧、今天未練」：Dashboard 與成就頁 streak 相同且 >0
 - 「斷 2 天（不含有氧）」：兩處同為 0
 - addCardio 當天補紀錄 → streak 即時 +1（可復原）
+- 斷層日補休息日 → streak +N 但訓練次數不變；刪除回退
 
 ## 5. 熱量派生（E-1 / E-2；L1：永不 persist）
 
@@ -458,7 +462,7 @@ App.tsx mount
        │    ├─ totalVolume / volumeDelta（vs 上上週）
        │    ├─ prs = weekSessions.flatMap(getSessionPRs)
        │    ├─ achievementsUnlocked（unlockedAt 落在上週區間）
-       │    ├─ streak = getStreakDays(sessions, cardioSessions)（全域，非只本週）
+       │    ├─ streak = getStreakDays(sessions, cardioSessions, restDays)（全域，非只本週）
        │    └─ partnerMessage = generatePartnerMessage（規則式，休息週不羞辱）
        │
        └─ 內建歷週導覽（‹ ›）→ setOffset（每次重算）
@@ -559,3 +563,58 @@ touch 點（lastActivityAt 更新）：
 - persist 週報衍生數據（computeWeeklyReport 全派生；僅 weeklyReportSeenWeek 可 persist）
 - 在 C1–C8 之外新增功能或重構
 - 醫療級宣稱；穿戴裝置整合（心率帶、手錶、功率計皆不做）
+- **休息日走 settleAll 觸發 XP / 成就 / 訓練次數**（R5：休息日只計入 streak，不透過 settleAll 結算）
+
+## 15. 休息日資料流（R5 / Q1–Q4）
+
+```
+Dashboard 今日卡「記錄休息日」
+  │
+  ▼
+restDayStore.addRestDay(date, { activity, note })
+  │  ├─ 拒未來日、一日一筆（同 dayKey 覆蓋）
+  │  ├─ telemetry 'rest_day_added'
+  │  └─ persist entries（vivix-rest-days-v1）
+  │
+  ▼
+不呼叫 settleAll（L3 休息日不結算）
+  │
+  ▼
+消費端透過 getStreakDays(sessions, cardioSessions, restDays) 派生
+  ├─ Dashboard streak tile +1
+  ├─ AchievementsPage streak +1（成就進度不變）
+  ├─ questCtx.streakDays +1
+  └─ 週報「休息天數」tile +1
+```
+
+**刪除流程**：
+```
+TrainingCalendar 休息日 sheet「刪除」
+  → restDayStore.deleteRestDay(id) → telemetry 'rest_day_deleted'
+  → settleAll(undefined, { silent: true })  ← 僅回退 streak 派生視圖，不產 XP/成就
+```
+
+**月曆標籤優先序**：力量縮寫 > 有氧「氧」 > 休息「休」
+
+## 16. 遞減組 Drop Set 資料流（R6 / Q2）
+
+```
+ExerciseSetList / DaySessionEditor「＋遞減」
+  │
+  ▼
+set.drops.push({ weight, reps })  ← SetLog.drops?: {weight, reps}[]
+  │  └─ telemetry 'drop_set_added'
+  │
+  ▼
+體積計算（全專案統一 setLoadKg）：
+  setLoadKg(set) = set.weight × set.reps + Σ(drops[i].weight × drops[i].reps)
+  │
+  ├─ calculateTotalVolume(sessions)
+  ├─ selectors getGroupStats / getGroupWeeklyVolume
+  ├─ weeklyReport totalVolume
+  ├─ TrainingCalendar 日 sheet 噸數
+  ├─ WorkoutSummary 噸數
+  └─ RecognitionModal 噸數
+```
+
+**PR / 1RM 邊界**：`getSessionPRs` / `estimate1RM` 只用主組（`set.weight` / `set.reps`），**drops 不計 1RM**。舊 session 無 `drops` 欄位 → `set.drops ?? []` 無感。
