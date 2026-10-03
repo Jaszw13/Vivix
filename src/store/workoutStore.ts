@@ -17,6 +17,7 @@ import { DEFAULT_MEDIA, resolveEquipmentType } from '@/types';
 import {
   generateId,
   calculateTotalVolume,
+  setLoadKg,
   createExerciseLog as _createExerciseLog,
 } from '@/utils/workout';
 import { dayKey, localNoonISO } from '@/utils/time';
@@ -35,6 +36,7 @@ import {
 } from '@/features/stats/selectors';
 import { useCardioStore } from '@/store/cardioStore';
 import { useRestDayStore } from '@/store/restDayStore';
+import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { getPlanById } from '@/data/plans';
 import {
   exercises as builtinExercises,
@@ -152,6 +154,10 @@ interface WorkoutState {
   updateSet: (exerciseLogId: string, setId: string, patch: Partial<SetLog>) => void;
   addSet: (exerciseLogId: string) => void;
   removeSet: (exerciseLogId: string, setId: string) => void;
+  /** R6：遞減組操作 */
+  addDropSet: (exerciseLogId: string, setId: string) => void;
+  updateDropSet: (exerciseLogId: string, setId: string, dropIndex: number, patch: { weight?: number; reps?: number }) => void;
+  removeDropSet: (exerciseLogId: string, setId: string, dropIndex: number) => void;
   toggleSetCompleted: (exerciseLogId: string, setId: string) => void;
   removeExercise: (exerciseLogId: string) => void;
   finishSession: (finishedAt?: string) => WorkoutSession | null;
@@ -437,6 +443,67 @@ export const useWorkoutStore = create<WorkoutState>()(
         set({ activeSession: { ...active, lastActivityAt: new Date().toISOString(), exercises } });
       },
 
+      // R6：遞減組
+      addDropSet: (exerciseLogId, setId) => {
+        const active = get().activeSession;
+        if (!active) return;
+        const exercises = active.exercises.map((ex) => {
+          if (ex.id !== exerciseLogId) return ex;
+          return {
+            ...ex,
+            sets: ex.sets.map((s) => {
+              if (s.id !== setId) return s;
+              const drops = s.drops ?? [];
+              const lastDrop = drops[drops.length - 1];
+              const baseWeight = lastDrop ? lastDrop.weight : s.weight;
+              const baseReps = lastDrop ? lastDrop.reps : s.reps;
+              return {
+                ...s,
+                drops: [...drops, { weight: Math.max(0, baseWeight - 2.5), reps: baseReps }],
+              };
+            }),
+          };
+        });
+        set({ activeSession: { ...active, lastActivityAt: new Date().toISOString(), exercises } });
+        useTelemetryStore.getState().log('drop_set_added');
+      },
+
+      updateDropSet: (exerciseLogId, setId, dropIndex, patch) => {
+        const active = get().activeSession;
+        if (!active) return;
+        const exercises = active.exercises.map((ex) => {
+          if (ex.id !== exerciseLogId) return ex;
+          return {
+            ...ex,
+            sets: ex.sets.map((s) => {
+              if (s.id !== setId) return s;
+              const drops = [...(s.drops ?? [])];
+              if (dropIndex < 0 || dropIndex >= drops.length) return s;
+              drops[dropIndex] = { ...drops[dropIndex], ...patch };
+              return { ...s, drops };
+            }),
+          };
+        });
+        set({ activeSession: { ...active, lastActivityAt: new Date().toISOString(), exercises } });
+      },
+
+      removeDropSet: (exerciseLogId, setId, dropIndex) => {
+        const active = get().activeSession;
+        if (!active) return;
+        const exercises = active.exercises.map((ex) => {
+          if (ex.id !== exerciseLogId) return ex;
+          return {
+            ...ex,
+            sets: ex.sets.map((s) => {
+              if (s.id !== setId) return s;
+              const drops = (s.drops ?? []).filter((_, i) => i !== dropIndex);
+              return { ...s, drops: drops.length > 0 ? drops : undefined };
+            }),
+          };
+        });
+        set({ activeSession: { ...active, lastActivityAt: new Date().toISOString(), exercises } });
+      },
+
       toggleSetCompleted: (exerciseLogId, setId) => {
         const active = get().activeSession;
         if (!active) return;
@@ -529,7 +596,7 @@ export const useWorkoutStore = create<WorkoutState>()(
           warmupCompletedIds: [],
           duration: 0,
           totalVolume: exerciseLogs.reduce(
-            (sum, ex) => sum + ex.sets.filter((s) => s.completed).reduce((s2, s) => s2 + s.weight * s.reps, 0),
+            (sum, ex) => sum + ex.sets.filter((s) => s.completed).reduce((s2, s) => s2 + setLoadKg(s), 0),
             0,
           ),
           exercises: exerciseLogs,
@@ -555,7 +622,7 @@ export const useWorkoutStore = create<WorkoutState>()(
               // 重算 totalVolume（若 exercises 變更）
               if (patch.exercises) {
                 merged.totalVolume = patch.exercises.reduce(
-                  (sum, ex) => sum + ex.sets.filter((set) => set.completed).reduce((s2, set) => s2 + set.weight * set.reps, 0),
+                  (sum, ex) => sum + ex.sets.filter((set) => set.completed).reduce((s2, set) => s2 + setLoadKg(set), 0),
                   0,
                 );
               }

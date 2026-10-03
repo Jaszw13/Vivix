@@ -288,11 +288,13 @@ export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
                             {ex.name}
                           </div>
                           <div className="font-mono text-xs text-text-secondary flex-shrink-0 ml-2">
-                            {completedSets.map((s) =>
-                              s.weight > 0
-                                ? `${s.weight}×${s.reps}`
-                                : `BW×${s.reps}`
-                            ).join(' · ')}
+                            {completedSets.map((s) => {
+                              const main = s.weight > 0 ? `${s.weight}×${s.reps}` : `BW×${s.reps}`;
+                              const drops = (s.drops ?? []).map((d) =>
+                                d.weight > 0 ? `${d.weight}×${d.reps}` : `BW×${d.reps}`,
+                              ).join('→');
+                              return drops ? `${main}→${drops}` : main;
+                            }).join(' · ')}
                           </div>
                         </div>
                       );

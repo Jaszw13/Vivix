@@ -16,7 +16,7 @@ import type {
   RestDayEntry,
 } from '@/types';
 import { DAY_MS, sessionDayKey, dayKey, FOURTEEN_DAYS_MS } from '@/utils/time';
-import { estimate1RM, getSessionPRs } from '@/utils/workout';
+import { estimate1RM, getSessionPRs, setLoadKg } from '@/utils/workout';
 import { resolveCurrentTaxonomy } from '@/features/exercises/taxonomy';
 import type { CustomExercise } from '@/store/workoutStore';
 
@@ -212,7 +212,7 @@ export function getGroupStats(
       if (!group) continue;
       const completed = ex.sets.filter((s) => s.completed);
       if (completed.length === 0) continue;
-      const vol = completed.reduce((s, x) => s + x.weight * x.reps, 0);
+      const vol = completed.reduce((s, x) => s + setLoadKg(x), 0);
       out[group].totalVolumeKg += vol;
       trainDatesByGroup[group].add(dateKey);
       varietyByGroup[group].add(ex.exerciseId);
@@ -267,7 +267,7 @@ export function getGroupWeeklyVolume(
       if (cur.muscleGroup !== group) continue;
       weekVol += ex.sets
         .filter((x) => x.completed)
-        .reduce((sum, x) => sum + x.weight * x.reps, 0);
+        .reduce((sum, x) => sum + setLoadKg(x), 0);
     }
     if (weekVol > 0) {
       weeklyMap.set(key, (weeklyMap.get(key) ?? 0) + weekVol);

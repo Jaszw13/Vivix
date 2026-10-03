@@ -13,11 +13,19 @@ export function estimate1RM(weight: number, reps: number): number {
   return Math.round(weight * (1 + reps / 30));
 }
 
+/** R6：單組總負重（kg）= 主組 weight×reps + Σ drops；1RM 仍只用主組 */
+export function setLoadKg(set: { weight: number; reps: number; drops?: { weight: number; reps: number }[] }): number {
+  const main = set.weight * set.reps;
+  const drops = set.drops ?? [];
+  if (drops.length === 0) return main;
+  return main + drops.reduce((s, d) => s + d.weight * d.reps, 0);
+}
+
 export function calculateTotalVolume(session: WorkoutSession): number {
   return session.exercises.reduce((total, ex) => {
     return (
       total +
-      ex.sets.reduce((s, set) => s + (set.completed ? set.weight * set.reps : 0), 0)
+      ex.sets.reduce((s, set) => s + (set.completed ? setLoadKg(set) : 0), 0)
     );
   }, 0);
 }

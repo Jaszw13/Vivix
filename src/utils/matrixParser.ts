@@ -8,6 +8,7 @@
 // - Load 交叉驗證 warning；VBT marker 丟棄；Feedback 同日去重（E6）
 
 import { splitQuoteAware } from '@/utils/textSplit';
+import { setLoadKg } from '@/utils/workout';
 
 export interface MatrixLoadWarning {
   dateISO: string;
@@ -333,7 +334,7 @@ export function parseMatrixTSV(text: string, overrides?: MatrixContextOverride):
         if (sets.length === 0) continue;
 
         // Load 交叉驗證
-        const total = sets.reduce((s, x) => s + x.weight * x.reps, 0);
+        const total = sets.reduce((s, x) => s + setLoadKg(x), 0);
         const loadNum = Number(loadCell.replace(/,/g, ''));
         if (Number.isFinite(loadNum) && loadNum > 0) {
           const diff = Math.abs(total - loadNum);

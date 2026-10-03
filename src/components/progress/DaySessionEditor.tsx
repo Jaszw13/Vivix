@@ -22,6 +22,7 @@ import { Card, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useWorkoutStore, getAllExercises } from '@/store/workoutStore';
 import { useRestDayStore, ACTIVITY_LABEL } from '@/store/restDayStore';
+import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { useProfileStore } from '@/store/profileStore';
 import { getEquipmentTypesForIds } from '@/data/equipment';
 import { generateId, createEmptySet, formatDateFull } from '@/utils/workout';
@@ -159,6 +160,62 @@ export function DaySessionEditor({ date, existingSession, onClose, onSaved }: Da
           ? { ...d, sets: d.sets.map((s) => (s.id === setId ? { ...s, ...patch } : s)) }
           : d,
       ),
+    );
+  };
+
+  // R6：遞減組（drops）draft 操作
+  const addDropSet = (logId: string, setId: string) => {
+    setDraft((prev) =>
+      prev.map((d) => {
+        if (d.id !== logId) return d;
+        return {
+          ...d,
+          sets: d.sets.map((s) => {
+            if (s.id !== setId) return s;
+            const drops = s.drops ?? [];
+            const last = drops[drops.length - 1];
+            return {
+              ...s,
+              drops: [...drops, { weight: Math.max(0, (last?.weight ?? s.weight) - 2.5), reps: last?.reps ?? s.reps }],
+            };
+          }),
+        };
+      }),
+    );
+    useTelemetryStore.getState().log('drop_set_added');
+  };
+
+  const updateDropSet = (logId: string, setId: string, dropIndex: number, patch: { weight?: number; reps?: number }) => {
+    setDraft((prev) =>
+      prev.map((d) => {
+        if (d.id !== logId) return d;
+        return {
+          ...d,
+          sets: d.sets.map((s) => {
+            if (s.id !== setId) return s;
+            const drops = [...(s.drops ?? [])];
+            if (dropIndex < 0 || dropIndex >= drops.length) return s;
+            drops[dropIndex] = { ...drops[dropIndex], ...patch };
+            return { ...s, drops };
+          }),
+        };
+      }),
+    );
+  };
+
+  const removeDropSet = (logId: string, setId: string, dropIndex: number) => {
+    setDraft((prev) =>
+      prev.map((d) => {
+        if (d.id !== logId) return d;
+        return {
+          ...d,
+          sets: d.sets.map((s) => {
+            if (s.id !== setId) return s;
+            const drops = (s.drops ?? []).filter((_, i) => i !== dropIndex);
+            return { ...s, drops: drops.length > 0 ? drops : undefined };
+          }),
+        };
+      }),
     );
   };
 
@@ -374,28 +431,71 @@ export function DaySessionEditor({ date, existingSession, onClose, onSaved }: Da
                   {/* 組數行 */}
                   <div className="flex flex-col gap-1.5">
                     {log.sets.map((set) => (
-                      <div key={set.id} className="grid grid-cols-[1.5rem_1fr_1fr_1.5rem] gap-2 items-center">
-                        <div className="font-mono text-xs text-text-secondary text-center">{set.setNumber}</div>
-                        <NumberInput
-                          value={set.weight}
-                          step={2.5}
-                          onDecrease={() => updateSet(log.id, set.id, { weight: Math.max(0, set.weight - 2.5) })}
-                          onIncrease={() => updateSet(log.id, set.id, { weight: set.weight + 2.5 })}
-                          onChange={(v) => updateSet(log.id, set.id, { weight: v })}
-                        />
-                        <NumberInput
-                          value={set.reps}
-                          step={1}
-                          onDecrease={() => updateSet(log.id, set.id, { reps: Math.max(0, set.reps - 1) })}
-                          onIncrease={() => updateSet(log.id, set.id, { reps: set.reps + 1 })}
-                          onChange={(v) => updateSet(log.id, set.id, { reps: v })}
-                        />
+                      <div key={set.id}>
+                        <div className="grid grid-cols-[1.5rem_1fr_1fr_1.5rem] gap-2 items-center">
+                          <div className="font-mono text-xs text-text-secondary text-center">{set.setNumber}</div>
+                          <NumberInput
+                            value={set.weight}
+                            step={2.5}
+                            onDecrease={() => updateSet(log.id, set.id, { weight: Math.max(0, set.weight - 2.5) })}
+                            onIncrease={() => updateSet(log.id, set.id, { weight: set.weight + 2.5 })}
+                            onChange={(v) => updateSet(log.id, set.id, { weight: v })}
+                          />
+                          <NumberInput
+                            value={set.reps}
+                            step={1}
+                            onDecrease={() => updateSet(log.id, set.id, { reps: Math.max(0, set.reps - 1) })}
+                            onIncrease={() => updateSet(log.id, set.id, { reps: set.reps + 1 })}
+                            onChange={(v) => updateSet(log.id, set.id, { reps: v })}
+                          />
+                          <button
+                            onClick={() => removeSet(log.id, set.id)}
+                            className="w-6 h-6 mx-auto flex items-center justify-center text-text-secondary hover:text-auxiliary transition-colors"
+                            aria-label="刪除組"
+                          >
+                            <Minus size={12} />
+                          </button>
+                        </div>
+                        {/* R6：遞減組 */}
+                        {(set.drops ?? []).length > 0 && (
+                          <div className="mt-1 ml-[1.5rem] flex flex-wrap items-center gap-1.5">
+                            <span className="text-[10px] text-text-secondary font-mono">→</span>
+                            {(set.drops ?? []).map((drop, di) => (
+                              <div key={di} className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  value={drop.weight}
+                                  step={2.5}
+                                  onChange={(e) => updateDropSet(log.id, set.id, di, { weight: parseFloat(e.target.value) || 0 })}
+                                  className="w-11 h-6 bg-bg-secondary rounded-button text-center font-mono text-[11px] text-text-primary border border-border/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                />
+                                <span className="text-[10px] text-text-secondary">×</span>
+                                <input
+                                  type="number"
+                                  value={drop.reps}
+                                  step={1}
+                                  onChange={(e) => updateDropSet(log.id, set.id, di, { reps: parseInt(e.target.value) || 0 })}
+                                  className="w-9 h-6 bg-bg-secondary rounded-button text-center font-mono text-[11px] text-text-primary border border-border/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                />
+                                <button
+                                  onClick={() => removeDropSet(log.id, set.id, di)}
+                                  className="w-4 h-4 flex items-center justify-center text-text-secondary hover:text-auxiliary"
+                                  aria-label="刪除遞減組"
+                                >
+                                  <Trash2 size={10} />
+                                </button>
+                                {di < (set.drops ?? []).length - 1 && (
+                                  <span className="text-[10px] text-text-secondary font-mono">→</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         <button
-                          onClick={() => removeSet(log.id, set.id)}
-                          className="w-6 h-6 mx-auto flex items-center justify-center text-text-secondary hover:text-auxiliary transition-colors"
-                          aria-label="刪除組"
+                          onClick={() => addDropSet(log.id, set.id)}
+                          className="mt-1 ml-[1.5rem] text-[9px] uppercase tracking-wider text-accent hover:text-accent/70 transition-colors"
                         >
-                          <Minus size={12} />
+                          + 遞減
                         </button>
                       </div>
                     ))}

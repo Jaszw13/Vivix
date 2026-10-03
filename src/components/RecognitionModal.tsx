@@ -7,7 +7,7 @@ import { Trophy, Target, Flame, Calendar, Dumbbell, Award, ChevronRight } from '
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import type { WorkoutSession } from '@/types';
-import { estimate1RM } from '@/utils/workout';
+import { estimate1RM, setLoadKg } from '@/utils/workout';
 import { resolveCurrentTaxonomy } from '@/features/exercises/taxonomy';
 import type { CustomExercise } from '@/store/workoutStore';
 import { sessionDayKey } from '@/utils/time';
@@ -51,7 +51,7 @@ export function computeBatchRecognitionStats(
       const completed = ex.sets.filter((x) => x.completed && x.weight >= 0 && x.reps > 0);
       let bestRm = 0;
       for (const set of completed) {
-        volume += set.weight * set.reps;
+        volume += setLoadKg(set);
         const rm = estimate1RM(set.weight, set.reps);
         if (rm > bestRm) bestRm = rm;
       }

@@ -362,6 +362,8 @@ export interface SetLog {
   reps: number;
   rpe?: number;
   completed: boolean;
+  /** R6：遞減組（drop sets）；每個 drop 的 weight×reps 計入體積，不計 1RM */
+  drops?: { weight: number; reps: number }[];
 }
 
 export interface ExerciseLog {

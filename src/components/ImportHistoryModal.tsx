@@ -18,7 +18,7 @@ import { useProfileStore } from '@/store/profileStore';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import type { Exercise, EquipmentType, MuscleGroup, WorkoutSession, ExerciseLog, SetLog } from '@/types';
 import { MUSCLE_GROUP_LABELS, EQUIPMENT_TYPE_LABELS, EQUIPMENT_TYPE_OPTIONS } from '@/types';
-import { generateId, estimate1RM } from '@/utils/workout';
+import { generateId, estimate1RM, setLoadKg } from '@/utils/workout';
 import {
   detectMatrixMode, detectTableMode, parseMatrixTSV,
   type ParsedSession as MatrixParsedSession, type MatrixContextOverride, type MatrixLoadWarning,
@@ -268,7 +268,7 @@ export default function ImportHistoryModal({
             reps: x.reps,
             completed: true,
           }));
-          for (const s of sets) vol += s.weight * s.reps;
+          for (const s of sets) vol += setLoadKg(s);
           exercises.push({
             id: generateId('ex'),
             exerciseId: tx.exerciseId,
@@ -350,7 +350,7 @@ export default function ImportHistoryModal({
       : mode === 'table' ? Array.from(new Set((tableOut?.rows ?? []).map((r) => r.dateISO))) : [];
     const sorted = [...dates].sort();
     const totalVol = mode === 'matrix'
-      ? (matrixOut?.sessions ?? []).reduce((a, s) => a + s.exercises.reduce((b, e) => b + e.sets.reduce((c, x) => c + x.weight * x.reps, 0), 0), 0)
+      ? (matrixOut?.sessions ?? []).reduce((a, s) => a + s.exercises.reduce((b, e) => b + e.sets.reduce((c, x) => c + setLoadKg(x), 0), 0), 0)
       : (tableOut?.rows ?? []).reduce((a, r) => a + r.weightKg * r.reps * r.sets, 0);
     return {
       sessionCount: mode === 'matrix' ? (matrixOut?.sessions.length ?? 0) : new Set((tableOut?.rows ?? []).map((r) => r.dateISO)).size,
@@ -987,7 +987,7 @@ function buildSessionFromMatrix(
         // 這裡不重複附，依解析規則 weight = 0 表示 BW；caller 需理解 BW 時 0×reps 體積 0，但 PR 估算會 0
         // 為保險：若 weight 為 0 且 isBodyweight，仍保留 completed=true
       }
-      if (s.weight > 0 && s.reps > 0) volume += s.weight * s.reps;
+      if (s.weight > 0 && s.reps > 0) volume += setLoadKg(s);
       return s;
     });
     // 為 BW 動作：PR 估以體重估算 1RM 須體重資訊，這裡不計入 volume，但紀錄仍成立

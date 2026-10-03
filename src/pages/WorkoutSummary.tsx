@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Trophy, TrendingUp, Flame, Check, Sparkles, Star, Info, Zap, CalendarPlus } from 'lucide-react';
 import type { WorkoutSession } from '@/types';
-import { estimate1RM, formatDateFull, getSessionPRs } from '@/utils/workout';
+import { estimate1RM, formatDateFull, getSessionPRs, setLoadKg } from '@/utils/workout';
 import { Card, SectionHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PageShell } from '@/components/layout/PageShell';
@@ -299,7 +299,7 @@ export default function WorkoutSummary() {
                 (m, s) => (s.weight > m.weight ? s : m),
                 completed[0] ?? { weight: 0, reps: 0 }
               );
-              const volume = completed.reduce((s, set) => s + set.weight * set.reps, 0);
+              const volume = completed.reduce((s, set) => s + setLoadKg(set), 0);
               return (
                 <div key={ex.id} className="p-3 flex items-center gap-3">
                   <Trophy size={14} className="text-text-secondary flex-shrink-0" />
