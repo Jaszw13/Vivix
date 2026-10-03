@@ -34,8 +34,8 @@ export default {
       },
       fontFamily: {
         display: "var(--font-display)",
-        mono: ['"JetBrains Mono"', "monospace"],
-        body: ['"Noto Sans TC"', "sans-serif"],
+        mono: "var(--font-numbers)",
+        body: "var(--font-body)",
       },
       boxShadow: {
         card: "var(--shadow-card)",

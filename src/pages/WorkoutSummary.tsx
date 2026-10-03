@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Trophy, TrendingUp, Flame, Check, Sparkles, Star, Info, Zap, CalendarPlus } from 'lucide-react';
+import { Trophy, TrendingUp, Flame, Check, Sparkles, Star, Info, Zap, CalendarPlus, Share2 } from 'lucide-react';
 import type { WorkoutSession } from '@/types';
 import { estimate1RM, formatDateFull, getSessionPRs, setLoadKg } from '@/utils/workout';
 import { Card, SectionHeader } from '@/components/ui/Card';
@@ -13,6 +13,7 @@ import { usePartnerStore } from '@/features/partner/stores/partnerStore';
 import { useFeatureFlags } from '@/features/partner/stores/featureFlags';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { settleAll } from '@/features/stats/settleAll';
+import { sharePRCard } from '@/features/sharing/sharePR';
 import { PARTNER_FORMS } from '@/features/partner/data/forms';
 import { COSMETIC_MAP } from '@/features/partner/data/cosmetics';
 import type { RewardResult } from '@/features/partner/types';
@@ -256,7 +257,14 @@ export default function WorkoutSummary() {
                           : '首次記錄'}
                       </div>
                     </div>
-                    <div className="text-right flex-shrink-0 ml-2">
+                    <div className="text-right flex-shrink-0 ml-2 flex items-center gap-2">
+                      <button
+                        onClick={() => sharePRCard(pr)}
+                        className="p-1.5 rounded-full bg-bg-secondary text-text-secondary hover:text-accent transition-colors"
+                        aria-label="分享 PR 球員卡"
+                      >
+                        <Share2 size={14} />
+                      </button>
                       {pr.repPR !== undefined ? (
                         <>
                           <div className="font-mono text-lg font-bold text-accent">

@@ -2,6 +2,9 @@
 
 export type Theme = 'dark' | 'light';
 
+// 風格系統（S1）
+export type { StylePack, PackLicense, PackShadow, PackDeco } from './theme';
+
 // §5.1 部位分類（與既有 ExerciseCategory 值一致，別名保留）
 export type MuscleGroup =
   | 'chest'

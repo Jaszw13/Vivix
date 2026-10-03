@@ -1,26 +1,24 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Moon, Sun, User, Trash2, Dumbbell, Clock, Shield, Smartphone, Copy, RotateCcw, FastForward, AlertTriangle, Bug, Download, Eraser, Cat, RefreshCw, Upload as UploadIcon } from 'lucide-react';
+import { User, Trash2, Dumbbell, Clock, Shield, Smartphone, Copy, RotateCcw, FastForward, AlertTriangle, Bug, Download, Eraser, Cat, RefreshCw, Upload as UploadIcon } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { Card, SectionHeader, Badge } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { useThemeStore } from '@/store/themeStore';
 import { useProfileStore } from '@/store/profileStore';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { useTrialStore, STANDARD_STAGES, DEV_STAGES } from '@/store/trialStore';
 import { DAY_MS } from '@/utils/time';
-import { THEME_DEFINITIONS } from '@/data/theme';
 import { getEquipmentByCategory } from '@/data/equipment';
 import { EQUIPMENT_TYPE_LABELS } from '@/types';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { usePartnerStore } from '@/features/partner/stores/partnerStore';
 import ImportHistoryModal from '@/components/ImportHistoryModal';
+import { StyleGallery } from '@/components/settings/StyleGallery';
 import { cn } from '@/lib/utils';
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { theme, toggleTheme } = useThemeStore();
   const { profile, updateProfile, resetAllData, gymEquipmentIds, toggleGymEquipment } = useProfileStore();
   const { getTotalSessions, getTotalVolume, personalRecords } = useWorkoutStore();
   const [importOpen, setImportOpen] = useState(false);
@@ -133,55 +131,10 @@ export default function Settings() {
 
   return (
     <PageShell title="設定">
-      {/* 主題切換 */}
+      {/* 風格畫廊 */}
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-        <SectionHeader title="外觀主題" subtitle="選擇你的風格" />
-        <div className="grid grid-cols-2 gap-3">
-          <ThemeCard
-            active={theme === 'dark'}
-            onClick={() => theme !== 'dark' && toggleTheme()}
-            name="工業電力"
-            description="深黑 · 電力綠"
-            preview={
-              <div className="h-full flex flex-col p-3" style={{ background: THEME_DEFINITIONS.dark.bg }}>
-                <div
-                  className="font-bold text-xs mb-2"
-                  style={{ fontFamily: 'Bebas Neue', color: THEME_DEFINITIONS.dark.text }}
-                >
-                  VIVIX
-                </div>
-                <div className="flex-1 rounded-sm p-2 flex flex-col gap-1" style={{ background: THEME_DEFINITIONS.dark.card }}>
-                  <div className="h-1.5 w-8 rounded-sm" style={{ background: THEME_DEFINITIONS.dark.accent }} />
-                  <div className="h-1 w-6 rounded-sm" style={{ background: THEME_DEFINITIONS.dark.muted }} />
-                </div>
-                <div className="mt-2 h-3 rounded-sm" style={{ background: THEME_DEFINITIONS.dark.accent }} />
-              </div>
-            }
-            icon={<Moon size={16} />}
-          />
-          <ThemeCard
-            active={theme === 'light'}
-            onClick={() => theme !== 'light' && toggleTheme()}
-            name="高雅米白"
-            description="米白 · 香檳金"
-            preview={
-              <div className="h-full flex flex-col p-3" style={{ background: THEME_DEFINITIONS.light.bg }}>
-                <div
-                  className="font-bold text-xs mb-2"
-                  style={{ fontFamily: 'Playfair Display', color: THEME_DEFINITIONS.light.text }}
-                >
-                  VIVIX
-                </div>
-                <div className="flex-1 rounded-lg p-2 flex flex-col gap-1 shadow-sm" style={{ background: THEME_DEFINITIONS.light.card }}>
-                  <div className="h-1.5 w-8 rounded-sm" style={{ background: THEME_DEFINITIONS.light.accent }} />
-                  <div className="h-1 w-6 rounded-sm" style={{ background: THEME_DEFINITIONS.light.muted }} />
-                </div>
-                <div className="mt-2 h-3 rounded-md" style={{ background: THEME_DEFINITIONS.light.accent }} />
-              </div>
-            }
-            icon={<Sun size={16} />}
-          />
-        </div>
+        <SectionHeader title="風格畫廊" subtitle="選擇你的 StylePack" />
+        <StyleGallery />
       </motion.div>
 
       {/* 個人資料 */}
@@ -685,43 +638,3 @@ function MessageSquare({ size }: { size: number }) {
   );
 }
 
-interface ThemeCardProps {
-  active: boolean;
-  onClick: () => void;
-  name: string;
-  description: string;
-  preview: React.ReactNode;
-  icon: React.ReactNode;
-}
-
-function ThemeCard({ active, onClick, name, description, preview, icon }: ThemeCardProps) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'rounded-card border-2 overflow-hidden transition-all',
-        active ? 'border-accent shadow-button' : 'border-border hover:border-accent/50'
-      )}
-    >
-      <div className="h-28 p-1">
-        <div className="w-full h-full overflow-hidden rounded-card">{preview}</div>
-      </div>
-      <div className="p-3 flex items-center gap-2 bg-bg-card">
-        <div
-          className={cn(
-            'w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0',
-            active ? 'bg-accent text-bg-primary' : 'bg-bg-secondary text-text-secondary'
-          )}
-        >
-          {icon}
-        </div>
-        <div className="text-left flex-1">
-          <div className={cn('text-sm font-bold', active ? 'text-accent' : 'text-text-primary')}>
-            {name}
-          </div>
-          <div className="text-[10px] text-text-secondary">{description}</div>
-        </div>
-      </div>
-    </button>
-  );
-}

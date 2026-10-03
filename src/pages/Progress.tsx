@@ -16,7 +16,7 @@ import {
   Cell,
   Legend,
 } from 'recharts';
-import { Trophy, TrendingUp, BarChart3, AlertCircle, Dumbbell, Activity, Plus, X, Zap, Info, Trash2, Scale } from 'lucide-react';
+import { Trophy, TrendingUp, BarChart3, AlertCircle, Dumbbell, Activity, Plus, X, Zap, Info, Trash2, Scale, Share2 } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { Card, SectionHeader, Badge, StatTile } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -27,6 +27,7 @@ import { useProfileStore } from '@/store/profileStore';
 import { useCardioStore } from '@/store/cardioStore';
 import { useBodyMetricsStore } from '@/store/bodyMetricsStore';
 import { formatDate, formatDateFull } from '@/utils/workout';
+import { sharePRCard } from '@/features/sharing/sharePR';
 import {
   MUSCLE_GROUP_LABELS,
   EQUIPMENT_TYPE_LABELS,
@@ -619,7 +620,14 @@ export default function Progress() {
                           )}
                         </div>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right flex items-center gap-2">
+                        <button
+                          onClick={() => sharePRCard(pr)}
+                          className="p-1.5 rounded-full bg-bg-secondary text-text-secondary hover:text-accent transition-colors"
+                          aria-label="分享 PR 球員卡"
+                        >
+                          <Share2 size={13} />
+                        </button>
                         {pr.repPR !== undefined ? (
                           <>
                             <div className="font-mono text-lg font-bold text-accent">{pr.repPR}</div>

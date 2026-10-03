@@ -36,6 +36,8 @@
 
   /* 字體 */
   --font-display: "Bebas Neue", "Noto Sans TC", sans-serif;
+  --font-body: "Noto Sans TC", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-numbers: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 }
 
 /* ============ 高雅淺米白主題（淺色） ============ */
@@ -71,6 +73,8 @@
 
   /* 字體 */
   --font-display: "Playfair Display", "Noto Sans TC", serif;
+  --font-body: "Noto Sans TC", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-numbers: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
 }
 
 * {
@@ -88,7 +92,7 @@ body,
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
-  font-family: "Noto Sans TC", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-family: var(--font-body);
   font-weight: 400;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -147,7 +151,7 @@ select:focus {
 
 /* 數字字體 */
 .font-mono {
-  font-family: "JetBrains Mono", monospace;
+  font-family: var(--font-numbers);
   font-variant-numeric: tabular-nums;
 }
 

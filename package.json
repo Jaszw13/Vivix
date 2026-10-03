@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "description": "Vivix — 把每一次訓練，變成看得見的進步。",
   "type": "module",
+  "sideEffects": ["**/*.css"],
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
