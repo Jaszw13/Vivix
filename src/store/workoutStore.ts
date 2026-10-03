@@ -155,6 +155,8 @@ interface WorkoutState {
   removeExercise: (exerciseLogId: string) => void;
   finishSession: (finishedAt?: string) => WorkoutSession | null;
   clearActiveSession: () => void;
+  /** R3：強制重算 personalRecords（rehydrate 後填充；subscribe 仍保留） */
+  recomputePersonalRecords: () => void;
 
   // 匯入（Errata E12：單次 set() 批次寫入，不觸發 finishSession 路徑）
   importSessionsBatch: (incoming: WorkoutSession[]) => void;
@@ -495,6 +497,12 @@ export const useWorkoutStore = create<WorkoutState>()(
       },
 
       clearActiveSession: () => set({ activeSession: null }),
+
+      recomputePersonalRecords: () => {
+        const { sessions, customExercises } = get();
+        const prs = computePRsFromSessions(sessions, customExercises);
+        set({ personalRecords: prs });
+      },
 
       // I-2 / Errata E12：匯入 session 單次 set() 批次寫入；不 finishSession、不排序 caller 決定
       importSessionsBatch: (incoming) => {

@@ -229,5 +229,7 @@ export function settleTaxonomyChange(): string[] {
  * silent=true：不彈慶祝（補解锁僅更新 state）
  */
 export function settleOnLoad(): void {
+  // R3：rehydrate 後先填充 personalRecords（subscribe 在 rehydrate 時不一定觸發）
+  useWorkoutStore.getState().recomputePersonalRecords();
   settleAll(undefined, { silent: true });
 }

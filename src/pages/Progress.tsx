@@ -32,7 +32,7 @@ import {
   EQUIPMENT_TYPE_LABELS,
   MUSCLE_GROUP_OPTIONS,
 } from '@/types';
-import type { MuscleGroup, PersonalRecord, CardioSession, CardioMachine, BodyMetric } from '@/types';
+import type { MuscleGroup, PersonalRecord, CardioSession, CardioMachine, BodyMetric, Exercise } from '@/types';
 import { cn } from '@/lib/utils';
 import { CHART_WEEK_COLORS } from '@/data/theme';
 import { estimateStrengthKcal, estimateCardioKcal } from '@/features/stats/energy';
@@ -103,7 +103,39 @@ export default function Progress() {
   // ----- 全局數據 -----
   const globalWeeklyVolume = getWeeklyVolume();
   const allExercises = getAllExercises();
-  const defaultEx = allExercises[0]?.id ?? 'bench-press';
+  // R3：曲線選擇器改為「有紀錄的動作」列表（從 personalRecords 派生，date 降序、去重）
+  // PR 空但 sessions 有資料時 fallback 從 sessions 取動作
+  const curveExerciseList = useMemo<Exercise[]>(() => {
+    const byDateDesc = [...personalRecords].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+    );
+    const seen = new Set<string>();
+    const ids: string[] = [];
+    for (const pr of byDateDesc) {
+      if (!seen.has(pr.exerciseId)) {
+        seen.add(pr.exerciseId);
+        ids.push(pr.exerciseId);
+      }
+    }
+    // fallback：PR 空但有 sessions → 從 sessions 取動作（date 降序、去重）
+    if (ids.length === 0) {
+      const sortedSessions = [...sessions].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+      );
+      for (const s of sortedSessions) {
+        for (const ex of s.exercises) {
+          if (!seen.has(ex.exerciseId)) {
+            seen.add(ex.exerciseId);
+            ids.push(ex.exerciseId);
+          }
+        }
+      }
+    }
+    return ids
+      .map((id) => allExercises.find((e) => e.id === id))
+      .filter((e): e is Exercise => Boolean(e));
+  }, [personalRecords, sessions, allExercises]);
+  const defaultEx = curveExerciseList[0]?.id ?? allExercises[0]?.id ?? 'bench-press';
   const [selectedExerciseId, setSelectedExerciseId] = useState(defaultEx);
   // T12：曲線模式 auto/weight/reps
   const [curveMode, setCurveMode] = useState<'auto' | 'weight' | 'reps'>('auto');
@@ -620,7 +652,7 @@ export default function Progress() {
             {scope === 'all' && (
               <>
                 <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-4 px-4 mb-2 pb-1">
-                  {allExercises.slice(0, 10).map((ex) => {
+                  {curveExerciseList.map((ex) => {
                     const isBW = ex.equipmentType === 'bodyweight';
                     return (
                       <button
