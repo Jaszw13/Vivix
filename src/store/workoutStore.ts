@@ -151,6 +151,8 @@ interface WorkoutState {
   ) => void;
 
   toggleWarmupCompleted: (warmupId: string) => void;
+  /** 訓練中調整動作順序（順序會影響疲勞累積，僅動 activeSession） */
+  moveExercise: (exerciseLogId: string, direction: 'up' | 'down') => void;
   updateSet: (exerciseLogId: string, setId: string, patch: Partial<SetLog>) => void;
   addSet: (exerciseLogId: string) => void;
   removeSet: (exerciseLogId: string, setId: string) => void;
@@ -244,7 +246,6 @@ export const useWorkoutStore = create<WorkoutState>()(
           const log = _createExerciseLog(
             pe.exerciseId,
             tax.name,
-            pe.targetSets,
             pe.targetWeight
           );
           return {
@@ -321,7 +322,6 @@ export const useWorkoutStore = create<WorkoutState>()(
         const newEx = _createExerciseLog(
           pe.exerciseId,
           tax.name,
-          pe.targetSets || 3,
           pe.targetWeight
         );
         newEx.muscleGroup = tax.muscleGroup ?? pe.snapshot?.muscleGroup;
@@ -395,6 +395,18 @@ export const useWorkoutStore = create<WorkoutState>()(
             substitutedFrom: ex.exerciseId, // 記錄從哪個動作替換而來
           } as ExerciseLog;
         });
+        set({ activeSession: { ...active, lastActivityAt: new Date().toISOString(), exercises } });
+      },
+
+      moveExercise: (exerciseLogId, direction) => {
+        const active = get().activeSession;
+        if (!active) return;
+        const idx = active.exercises.findIndex((ex) => ex.id === exerciseLogId);
+        if (idx < 0) return;
+        const target = direction === 'up' ? idx - 1 : idx + 1;
+        if (target < 0 || target >= active.exercises.length) return;
+        const exercises = [...active.exercises];
+        [exercises[idx], exercises[target]] = [exercises[target], exercises[idx]];
         set({ activeSession: { ...active, lastActivityAt: new Date().toISOString(), exercises } });
       },
 

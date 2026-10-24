@@ -108,10 +108,12 @@ export function createEmptySet(setNumber: number, defaults?: Partial<SetLog>): S
   };
 }
 
-export function createExerciseLog(exerciseId: string, name: string, targetSets: number, targetWeight?: number): ExerciseLog {
-  const sets = Array.from({ length: targetSets }, (_, i) =>
-    createEmptySet(i + 1, { weight: targetWeight ?? 0 })
-  );
+/**
+ * 建立動作紀錄。預設只給 1 組：用戶確認第一組後再自行新增，
+ * 新增的組會繼承上一組的重量／次數（見 workoutStore.addSet）。
+ */
+export function createExerciseLog(exerciseId: string, name: string, targetWeight?: number): ExerciseLog {
+  const sets = [createEmptySet(1, { weight: targetWeight ?? 0 })];
   return {
     id: generateId('ex'),
     exerciseId,
