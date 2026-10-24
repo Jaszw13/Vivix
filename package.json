@@ -4,7 +4,9 @@
   "version": "0.0.0",
   "description": "Vivix — 把每一次訓練，變成看得見的進步。",
   "type": "module",
-  "sideEffects": ["**/*.css"],
+  "sideEffects": [
+    "**/*.css"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -14,6 +16,7 @@
     "check:release": "bash scripts/check-release-gate.sh"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
     "clsx": "^2.1.1",
     "framer-motion": "^11.15.0",
     "lucide-react": "^0.511.0",

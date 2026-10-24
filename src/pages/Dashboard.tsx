@@ -39,6 +39,7 @@ import {
 } from '@/features/retention/selectors';
 import { getPartnerLine } from '@/features/retention/partnerLines';
 import { WeeklyChallengeCard } from '@/features/retention/components/WeeklyChallengeCard';
+import { FriendsPresenceCard } from '@/features/social/FriendsPresenceCard';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -293,6 +294,9 @@ export default function Dashboard() {
 
       {/* P2A-2：每週挑戰 */}
       <WeeklyChallengeCard sessions={sessions} cardioDates={cardioSessions.map((c) => c.date)} />
+
+      {/* P2B：好友 presence */}
+      <FriendsPresenceCard />
 
       {/* Partner 夥伴卡片 */}
       {partnerEnabled && partner.name && (

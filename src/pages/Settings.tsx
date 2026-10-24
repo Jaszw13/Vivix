@@ -17,6 +17,7 @@ import ImportHistoryModal from '@/components/ImportHistoryModal';
 import { StyleGallery } from '@/components/settings/StyleGallery';
 import { useThemeStore } from '@/store/themeStore';
 import { cn } from '@/lib/utils';
+import { SocialSection } from '@/features/social/SocialSection';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -381,6 +382,17 @@ export default function Settings() {
             </button>
           </div>
         </Card>
+      </motion.div>
+
+      {/* P2B：好友 */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.14 }}
+        className="mt-6"
+      >
+        <SectionHeader title="好友" subtitle="互相看到本週有沒有練（不同步重量與照片）" />
+        <SocialSection />
       </motion.div>
 
       {/* 試用狀態 */}

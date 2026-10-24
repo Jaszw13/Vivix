@@ -34,6 +34,7 @@ import { getStreakDays as getStreakDaysSelector } from '@/features/stats/selecto
 import { getWeeklyTrainingDays } from '@/features/retention/selectors';
 import { getNewRecordsForSession } from '@/utils/workout';
 import { sessionDayKey, dayKey } from '@/utils/time';
+import { useSocialStore } from '@/features/social/socialStore';
 
 export interface SettleResult {
   partnerReward: RewardResult | null;
@@ -202,6 +203,18 @@ export function settleAll(
     );
     if (weeklyDays === goal) {
       telemetry.log('weekly_goal_hit', { goal });
+    }
+
+    // P2B：社交 presence 同步（fire-and-forget；僅上傳天數/目標/今日有練，不上傳重量）
+    const social = useSocialStore.getState();
+    if (social.enabled) {
+      const todayKey = dayKey(new Date());
+      const trainedToday =
+        useWorkoutStore.getState().sessions.some((s) => sessionDayKey(s.date) === todayKey) ||
+        useCardioStore.getState().sessions.some((c) => sessionDayKey(c.date) === todayKey);
+      void social.syncPresence(weeklyDays, goal, trainedToday).catch(() => {
+        /* 離線/失敗靜默，不影響結算 */
+      });
     }
   }
 
