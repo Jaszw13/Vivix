@@ -346,8 +346,6 @@ export default function Workout() {
                   >
                     <ExerciseSetList
                       exercise={ex}
-                      index={i}
-                      total={activeSession.exercises.length}
                       onSetCompleted={() => startRestTimer(90)}
                       onSubstitute={() => {
                         const found = getAllExercises().find((e) => e.id === ex.exerciseId);

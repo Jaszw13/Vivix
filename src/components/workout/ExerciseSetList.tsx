@@ -1,61 +1,41 @@
 import { useState, useMemo } from 'react';
-import { Check, Minus, Plus, Trash2, History, Repeat, ChevronUp, ChevronDown } from 'lucide-react';
+import { Check, Minus, Plus, Trash2, History, Repeat } from 'lucide-react';
 import type { ExerciseLog, SetLog } from '@/types';
 import { useWorkoutStore } from '@/store/workoutStore';
+import { bestCompletedSet, getProgressKind, setLoadKg } from '@/utils/workout';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
 
 interface SetRowProps {
   exercise: ExerciseLog;
-  /** 動作在本次訓練中的位置（用於上／下移） */
-  index: number;
-  total: number;
   onSetCompleted?: () => void;
   onSubstitute?: () => void;
 }
 
-export function ExerciseSetList({ exercise, index, total, onSetCompleted, onSubstitute }: SetRowProps) {
-  const {
-    updateSet, addSet, removeSet, toggleSetCompleted, removeExercise,
-    getLastSetsForExercise, addDropSet, updateDropSet, removeDropSet, moveExercise,
-  } = useWorkoutStore();
+export function ExerciseSetList({ exercise, onSetCompleted, onSubstitute }: SetRowProps) {
+  const { updateSet, addSet, removeSet, toggleSetCompleted, removeExercise, getLastSetsForExercise, addDropSet, updateDropSet, removeDropSet } =
+    useWorkoutStore();
+  // T4：新紀錄微慶祝（只跟上一次同動作的最佳組比較）
   const [recentPRSetIds, setRecentPRSetIds] = useState<string[]>([]);
+  const activeExercises = useWorkoutStore((s) => s.activeSession?.exercises ?? []);
 
   const lastSets = getLastSetsForExercise(exercise.exerciseId);
+  const previousBest = useMemo(() => bestCompletedSet(lastSets ?? []), [lastSets]);
 
-  /**
-   * 新紀錄定義（只與「上一次訓練」比較）：
-   * - 重量增加 → 新紀錄
-   * - 重量持平但次數增加 → 新紀錄
-   * - 重量下降 → 不算（即使總容量或 1RM 估算更高）
-   * 首次做該動作沒有比較基準，不觸發慶祝。
-   */
-  const checkPRBreakthrough = (set: SetLog): boolean => {
-    if (set.reps <= 0) return false;
-    const prev = (lastSets ?? []).filter((s) => s.completed);
-    if (prev.length === 0) return false;
+  // 實際執行順序：以「第一組完成」的時間排序
+  const performedRank = useMemo(() => {
+    const ordered = activeExercises
+      .filter((e) => e.firstCompletedAt)
+      .sort(
+        (a, b) =>
+          new Date(a.firstCompletedAt!).getTime() - new Date(b.firstCompletedAt!).getTime(),
+      );
+    const index = ordered.findIndex((e) => e.id === exercise.id);
+    return index >= 0 ? index + 1 : null;
+  }, [activeExercises, exercise.id]);
 
-    if (set.weight > 0) {
-      const prevWeighted = prev.filter((s) => s.weight > 0);
-      if (prevWeighted.length === 0) return false;
-      const prevMaxWeight = Math.max(...prevWeighted.map((s) => s.weight));
-      // 重量增加
-      if (set.weight > prevMaxWeight) return true;
-      // 重量持平但次數增加
-      if (set.weight === prevMaxWeight) {
-        const prevMaxReps = Math.max(
-          ...prevWeighted.filter((s) => s.weight === prevMaxWeight).map((s) => s.reps),
-        );
-        return set.reps > prevMaxReps;
-      }
-      return false;
-    }
-
-    // 徒手：比較次數
-    const prevBodyweight = prev.filter((s) => s.weight === 0);
-    if (prevBodyweight.length === 0) return false;
-    return set.reps > Math.max(...prevBodyweight.map((s) => s.reps));
-  };
+  const checkPRBreakthrough = (set: SetLog): boolean =>
+    getProgressKind({ weight: set.weight, reps: set.reps }, previousBest) !== null;
 
   const flashPRCelebration = (setId: string) => {
     setRecentPRSetIds((prev) => [...prev, setId]);
@@ -67,10 +47,7 @@ export function ExerciseSetList({ exercise, index, total, onSetCompleted, onSubs
   const completedCount = exercise.sets.filter((s) => s.completed).length;
   const totalVolume = exercise.sets
     .filter((s) => s.completed)
-    .reduce((sum, s) => sum + s.weight * s.reps + (s.drops ?? []).reduce((d, x) => d + x.weight * x.reps, 0), 0);
-
-  const lastSet = exercise.sets[exercise.sets.length - 1];
-  const canDeleteSet = exercise.sets.length > 1;
+    .reduce((sum, s) => sum + setLoadKg(s), 0);
 
   return (
     <Card className="p-4">
@@ -88,6 +65,11 @@ export function ExerciseSetList({ exercise, index, total, onSetCompleted, onSubs
             <span className="text-[10px] uppercase tracking-widest text-text-secondary">
               {completedCount}/{exercise.sets.length} 組完成
             </span>
+            {performedRank !== null && (
+              <span className="text-[10px] font-mono text-accent">
+                第 {performedRank} 個做
+              </span>
+            )}
             {totalVolume > 0 && (
               <span className="font-mono text-[10px] text-accent">
                 {totalVolume} kg
@@ -96,25 +78,6 @@ export function ExerciseSetList({ exercise, index, total, onSetCompleted, onSubs
           </div>
         </div>
         <div className="flex items-center gap-1">
-          {/* 動作排序：順序影響疲勞累積，讓「上次訓練」比較維持同一前提 */}
-          <button
-            onClick={() => moveExercise(exercise.id, 'up')}
-            disabled={index === 0}
-            className="w-7 h-8 flex items-center justify-center text-text-secondary hover:text-accent disabled:opacity-25 transition-colors"
-            aria-label="動作上移"
-            title="上移"
-          >
-            <ChevronUp size={16} />
-          </button>
-          <button
-            onClick={() => moveExercise(exercise.id, 'down')}
-            disabled={index === total - 1}
-            className="w-7 h-8 flex items-center justify-center text-text-secondary hover:text-accent disabled:opacity-25 transition-colors"
-            aria-label="動作下移"
-            title="下移"
-          >
-            <ChevronDown size={16} />
-          </button>
           {onSubstitute && (
             <button
               onClick={onSubstitute}
@@ -157,7 +120,7 @@ export function ExerciseSetList({ exercise, index, total, onSetCompleted, onSubs
       )}
 
       {/* 標題列 */}
-      <div className="grid grid-cols-[1.75rem_1fr_1fr_2.5rem_1.75rem] gap-1.5 px-1 mb-2 text-[9px] uppercase tracking-widest text-text-secondary">
+      <div className="grid grid-cols-[2rem_1fr_1fr_2.5rem_2rem] gap-2 px-1 mb-2 text-[9px] uppercase tracking-widest text-text-secondary">
         <div className="text-center">#</div>
         <div className="text-center">重量 kg</div>
         <div className="text-center">次數</div>
@@ -170,10 +133,11 @@ export function ExerciseSetList({ exercise, index, total, onSetCompleted, onSubs
           <div key={set.id}>
             <div
               className={cn(
-                'grid grid-cols-[1.75rem_1fr_1fr_2.5rem_1.75rem] gap-1.5 items-center transition-colors relative',
+                'grid grid-cols-[2rem_1fr_1fr_2.5rem_2rem] gap-2 items-center transition-colors relative',
                 set.completed && 'opacity-60'
               )}
             >
+              {/* T4：破 PR 即時微慶祝 overlay（L5；1.5s 非阻斷） */}
               {recentPRSetIds.includes(set.id) && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 animate-confetti">
                   <span className="text-xs font-bold text-accent bg-bg-card px-2 py-1 rounded-button border border-accent/40 shadow-card">
@@ -184,6 +148,7 @@ export function ExerciseSetList({ exercise, index, total, onSetCompleted, onSubs
               <div className="font-mono text-sm text-text-secondary text-center">
                 {set.setNumber}
               </div>
+              {/* 重量 */}
               <NumberInput
                 value={set.weight}
                 onDecrease={() =>
@@ -200,6 +165,7 @@ export function ExerciseSetList({ exercise, index, total, onSetCompleted, onSubs
                   updateSet(exercise.id, set.id, { weight: v })
                 }
               />
+              {/* 次數 */}
               <NumberInput
                 value={set.reps}
                 step={1}
@@ -213,8 +179,10 @@ export function ExerciseSetList({ exercise, index, total, onSetCompleted, onSubs
                 }
                 onChange={(v) => updateSet(exercise.id, set.id, { reps: v })}
               />
+              {/* 完成按鈕 */}
               <button
                 onClick={() => {
+                  // T4：完成前檢查是否破 PR（L5；純 UI 微慶祝，telemetry 走 settleAll）
                   if (!set.completed && checkPRBreakthrough(set)) {
                     flashPRCelebration(set.id);
                   }
@@ -231,82 +199,72 @@ export function ExerciseSetList({ exercise, index, total, onSetCompleted, onSubs
               >
                 <Check size={18} strokeWidth={3} />
               </button>
-              {/* 刪除這一組（至少保留 1 組） */}
-              {canDeleteSet ? (
-                <button
-                  onClick={() => removeSet(exercise.id, set.id)}
-                  className="w-7 h-8 flex items-center justify-center text-text-secondary hover:text-auxiliary transition-colors"
-                  aria-label={`刪除第 ${set.setNumber} 組`}
-                  title="刪除這一組"
-                >
-                  <Trash2 size={13} />
-                </button>
-              ) : (
-                <span />
-              )}
+              {/* 刪除這一組 */}
+              <button
+                onClick={() => removeSet(exercise.id, set.id)}
+                className="w-8 h-8 mx-auto flex items-center justify-center text-text-secondary hover:text-auxiliary transition-colors"
+                aria-label="刪除這一組"
+              >
+                <Trash2 size={14} />
+              </button>
             </div>
 
-            {/* 遞減組（附屬於上一組，只在有資料時顯示） */}
-            {(set.drops ?? []).map((drop, di) => (
-              <div
-                key={di}
-                className="mt-1 grid grid-cols-[1.75rem_1fr_1fr_2.5rem_1.75rem] gap-1.5 items-center"
-              >
-                <div className="text-center">
-                  <span className="text-[10px] text-accent font-mono">↳</span>
-                </div>
-                <NumberInput
-                  value={drop.weight}
-                  onDecrease={() =>
-                    updateDropSet(exercise.id, set.id, di, { weight: Math.max(0, drop.weight - 2.5) })
-                  }
-                  onIncrease={() =>
-                    updateDropSet(exercise.id, set.id, di, { weight: drop.weight + 2.5 })
-                  }
-                  onChange={(v) => updateDropSet(exercise.id, set.id, di, { weight: v })}
-                />
-                <NumberInput
-                  value={drop.reps}
-                  step={1}
-                  onDecrease={() =>
-                    updateDropSet(exercise.id, set.id, di, { reps: Math.max(0, drop.reps - 1) })
-                  }
-                  onIncrease={() =>
-                    updateDropSet(exercise.id, set.id, di, { reps: drop.reps + 1 })
-                  }
-                  onChange={(v) => updateDropSet(exercise.id, set.id, di, { reps: v })}
-                />
-                <div className="text-center text-[9px] uppercase tracking-wider text-accent">
-                  遞減
-                </div>
-                <button
-                  onClick={() => removeDropSet(exercise.id, set.id, di)}
-                  className="w-7 h-8 flex items-center justify-center text-text-secondary hover:text-auxiliary transition-colors"
-                  aria-label="刪除遞減組"
-                  title="刪除遞減組"
-                >
-                  <Trash2 size={13} />
-                </button>
+            {/* R6：遞減組（drops） */}
+            {(set.drops ?? []).length > 0 && (
+              <div className="mt-1 ml-[2rem] flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] text-text-secondary font-mono">→</span>
+                {(set.drops ?? []).map((drop, di) => (
+                  <div key={di} className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      value={drop.weight}
+                      step={2.5}
+                      onChange={(e) => updateDropSet(exercise.id, set.id, di, { weight: parseFloat(e.target.value) || 0 })}
+                      className="w-12 h-7 bg-bg-secondary rounded-button text-center font-mono text-xs text-text-primary border border-border/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                    <span className="text-[10px] text-text-secondary">×</span>
+                    <input
+                      type="number"
+                      value={drop.reps}
+                      step={1}
+                      onChange={(e) => updateDropSet(exercise.id, set.id, di, { reps: parseInt(e.target.value) || 0 })}
+                      className="w-10 h-7 bg-bg-secondary rounded-button text-center font-mono text-xs text-text-primary border border-border/40 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                    <button
+                      onClick={() => removeDropSet(exercise.id, set.id, di)}
+                      className="w-5 h-5 flex items-center justify-center text-text-secondary hover:text-auxiliary"
+                      aria-label="刪除遞減組"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                    {di < (set.drops ?? []).length - 1 && (
+                      <span className="text-[10px] text-text-secondary font-mono">→</span>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
         ))}
       </div>
 
-      {/* 新增列：一般組 / 遞減組 */}
-      <div className="mt-3 flex gap-2">
+      {/* 新增組 / 新增遞減組（遞減組掛在最後一組底下） */}
+      <div className="grid grid-cols-2 gap-2 mt-3">
         <button
           onClick={() => addSet(exercise.id)}
-          className="flex-1 py-2 text-xs uppercase tracking-wider text-text-secondary hover:text-accent border border-dashed border-border rounded-button transition-colors"
+          className="py-2 text-xs uppercase tracking-wider text-text-secondary hover:text-accent border border-dashed border-border rounded-button transition-colors"
         >
           + 新增組
         </button>
         <button
-          onClick={() => lastSet && addDropSet(exercise.id, lastSet.id)}
-          className="px-3 py-2 text-xs uppercase tracking-wider text-accent/80 hover:text-accent border border-dashed border-accent/40 rounded-button transition-colors whitespace-nowrap"
-          title="在最後一組下面加一組遞減"
+          onClick={() => {
+            const lastSet = exercise.sets[exercise.sets.length - 1];
+            if (lastSet) addDropSet(exercise.id, lastSet.id);
+          }}
+          disabled={exercise.sets.length === 0}
+          className="py-2 text-xs uppercase tracking-wider text-text-secondary hover:text-accent border border-dashed border-border rounded-button transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          + 遞減組
+          + 新增遞減組
         </button>
       </div>
     </Card>

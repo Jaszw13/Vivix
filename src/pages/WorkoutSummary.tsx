@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Trophy, TrendingUp, Flame, Check, Sparkles, Star, Info, Zap, CalendarPlus, Share2 } from 'lucide-react';
 import type { WorkoutSession } from '@/types';
-import { estimate1RM, formatDateFull, getSessionPRs, setLoadKg } from '@/utils/workout';
+import { estimate1RM, formatDateFull, getNewRecordsForSession, setLoadKg } from '@/utils/workout';
 import { Card, SectionHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PageShell } from '@/components/layout/PageShell';
@@ -104,20 +104,11 @@ export default function WorkoutSummary() {
   // E-01 力量熱量估算卡：衍生，不 persist（L1）
   const profile = useProfileStore((s) => s.profile);
   const customExercises = useWorkoutStore((s) => s.customExercises);
-  const personalRecords = useWorkoutStore((s) => s.personalRecords);
+  const sessions = useWorkoutStore((s) => s.sessions);
   const strengthEnergy = estimateStrengthKcal(session, customExercises, profile.bodyWeight);
 
-  // T4：新紀錄卡 — 本次 session 刷新的 PR（old → new）
-  const sessionPRs = getSessionPRs(session);
-  const prevPRs = personalRecords.filter((pr) => pr.date !== session.date);
-  const newRecords = sessionPRs.filter((pr) => {
-    const prev = prevPRs.find((p) => p.exerciseId === pr.exerciseId);
-    if (!prev) return true; // 首次記錄
-    if (pr.repPR !== undefined) {
-      return (prev.repPR ?? 0) < pr.repPR; // bodyweight：次數進步
-    }
-    return pr.estimated1RM > prev.estimated1RM; // weighted：1RM 進步
-  });
+  // T4：新紀錄卡 — 只跟上一次同動作比較（重量↑ 或 同重量次數↑）
+  const newRecords = getNewRecordsForSession(session, sessions);
   // telemetry：首次展示時 log；strength_ee_locked_prompt_shown 鎖定態顯示時 log
   const eeTelemetryRef = useRef(false);
   useEffect(() => {
@@ -228,7 +219,7 @@ export default function WorkoutSummary() {
           </motion.div>
         )}
 
-        {/* T4：新紀錄卡（L5 總結慶祝；old → new） */}
+        {/* T4：新紀錄卡（L5 總結慶祝；只與上次同動作比較） */}
         {newRecords.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -236,58 +227,55 @@ export default function WorkoutSummary() {
             transition={{ delay: 0.45 }}
             className="mt-6"
           >
-            <SectionHeader title="新紀錄" subtitle="本次訓練刷新的個人紀錄" />
+            <SectionHeader title="新紀錄" subtitle="比上次同一動作進步" />
             <Card className="p-3 border-accent/40 bg-accent/5">
-              {newRecords.map((pr) => {
-                const prev = prevPRs.find((p) => p.exerciseId === pr.exerciseId);
-                return (
-                  <div
-                    key={pr.exerciseId}
-                    className="flex items-center justify-between py-2.5 border-b last:border-0 border-border/40"
-                  >
-                    <div className="min-w-0">
-                      <div className="text-sm font-bold text-text-primary truncate">
-                        {pr.exerciseName}
-                      </div>
-                      <div className="font-mono text-[10px] text-text-secondary mt-0.5">
-                        {prev
-                          ? (pr.repPR !== undefined
-                              ? `舊紀錄 BW × ${prev.repPR ?? 0}`
-                              : `舊紀錄 ${prev.weight}kg × ${prev.reps}`)
-                          : '首次記錄'}
-                      </div>
+              {newRecords.map((record) => (
+                <div
+                  key={record.exerciseId}
+                  className="flex items-center justify-between py-2.5 border-b last:border-0 border-border/40"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold text-text-primary truncate">
+                      {record.exerciseName}
                     </div>
-                    <div className="text-right flex-shrink-0 ml-2 flex items-center gap-2">
-                      <button
-                        onClick={() => sharePRCard(pr)}
-                        className="p-1.5 rounded-full bg-bg-secondary text-text-secondary hover:text-accent transition-colors"
-                        aria-label="分享 PR 球員卡"
-                      >
-                        <Share2 size={14} />
-                      </button>
-                      {pr.repPR !== undefined ? (
-                        <>
-                          <div className="font-mono text-lg font-bold text-accent">
-                            BW × {pr.repPR}
-                          </div>
-                          <div className="text-[9px] uppercase tracking-widest text-text-secondary">
-                            reps
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="font-mono text-lg font-bold text-accent">
-                            {pr.weight}kg × {pr.reps}
-                          </div>
-                          <div className="text-[9px] uppercase tracking-widest text-text-secondary">
-                            1RM {pr.estimated1RM}kg
-                          </div>
-                        </>
-                      )}
+                    <div className="font-mono text-[10px] text-text-secondary mt-0.5">
+                      {record.previous
+                        ? `上次 ${record.previous.weight === 0
+                            ? `BW × ${record.previous.reps}`
+                            : `${record.previous.weight}kg × ${record.previous.reps}`}`
+                        : '上次未記錄'}
                     </div>
                   </div>
-                );
-              })}
+                  <div className="text-right flex-shrink-0 ml-2 flex items-center gap-2">
+                    <button
+                      onClick={() =>
+                        sharePRCard({
+                          exerciseId: record.exerciseId,
+                          exerciseName: record.exerciseName,
+                          weight: record.current.weight,
+                          reps: record.current.reps,
+                          date: session.date,
+                          estimated1RM: estimate1RM(record.current.weight, record.current.reps),
+                          repPR:
+                            record.current.weight === 0 ? record.current.reps : undefined,
+                        })
+                      }
+                      className="p-1.5 rounded-full bg-bg-secondary text-text-secondary hover:text-accent transition-colors"
+                      aria-label="分享 PR 球員卡"
+                    >
+                      <Share2 size={14} />
+                    </button>
+                    <div className="font-mono text-lg font-bold text-accent">
+                      {record.current.weight === 0
+                        ? `BW × ${record.current.reps}`
+                        : `${record.current.weight}kg × ${record.current.reps}`}
+                    </div>
+                    <div className="text-[9px] uppercase tracking-widest text-text-secondary">
+                      {record.progress === 'weight' ? '重量進步' : '次數進步'}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </Card>
           </motion.div>
         )}

@@ -151,8 +151,6 @@ interface WorkoutState {
   ) => void;
 
   toggleWarmupCompleted: (warmupId: string) => void;
-  /** 訓練中調整動作順序（順序會影響疲勞累積，僅動 activeSession） */
-  moveExercise: (exerciseLogId: string, direction: 'up' | 'down') => void;
   updateSet: (exerciseLogId: string, setId: string, patch: Partial<SetLog>) => void;
   addSet: (exerciseLogId: string) => void;
   removeSet: (exerciseLogId: string, setId: string) => void;
@@ -398,18 +396,6 @@ export const useWorkoutStore = create<WorkoutState>()(
         set({ activeSession: { ...active, lastActivityAt: new Date().toISOString(), exercises } });
       },
 
-      moveExercise: (exerciseLogId, direction) => {
-        const active = get().activeSession;
-        if (!active) return;
-        const idx = active.exercises.findIndex((ex) => ex.id === exerciseLogId);
-        if (idx < 0) return;
-        const target = direction === 'up' ? idx - 1 : idx + 1;
-        if (target < 0 || target >= active.exercises.length) return;
-        const exercises = [...active.exercises];
-        [exercises[idx], exercises[target]] = [exercises[target], exercises[idx]];
-        set({ activeSession: { ...active, lastActivityAt: new Date().toISOString(), exercises } });
-      },
-
       updateSet: (exerciseLogId, setId, patch) => {
         const active = get().activeSession;
         if (!active) return;
@@ -428,12 +414,14 @@ export const useWorkoutStore = create<WorkoutState>()(
         if (!active) return;
         const exercises = active.exercises.map((ex) => {
           if (ex.id !== exerciseLogId) return ex;
-          const lastSet = ex.sets[ex.sets.length - 1];
+          // 新增組繼承「剛才輸入/完成的那一組」；若最後一列是空白則往前找有值的組
+          const withValues = [...ex.sets].reverse().find((s) => s.weight > 0 || s.reps > 0);
+          const source = withValues ?? ex.sets[ex.sets.length - 1];
           const newSet: SetLog = {
             id: generateId('set'),
             setNumber: ex.sets.length + 1,
-            weight: lastSet?.weight ?? 0,
-            reps: lastSet?.reps ?? 0,
+            weight: source?.weight ?? 0,
+            reps: source?.reps ?? 0,
             completed: false,
           };
           return { ...ex, sets: [...ex.sets, newSet] };
@@ -519,16 +507,19 @@ export const useWorkoutStore = create<WorkoutState>()(
       toggleSetCompleted: (exerciseLogId, setId) => {
         const active = get().activeSession;
         if (!active) return;
+        const nowIso = new Date().toISOString();
         const exercises = active.exercises.map((ex) => {
           if (ex.id !== exerciseLogId) return ex;
-          return {
-            ...ex,
-            sets: ex.sets.map((s) =>
-              s.id === setId ? { ...s, completed: !s.completed } : s
-            ),
-          };
+          const sets = ex.sets.map((s) =>
+            s.id === setId ? { ...s, completed: !s.completed } : s
+          );
+          // 記錄實際執行順序：第一次完成任一組時蓋章；全部取消完成則清除
+          const firstCompletedAt = sets.some((s) => s.completed)
+            ? ex.firstCompletedAt ?? nowIso
+            : undefined;
+          return { ...ex, sets, firstCompletedAt };
         });
-        set({ activeSession: { ...active, lastActivityAt: new Date().toISOString(), exercises } });
+        set({ activeSession: { ...active, lastActivityAt: nowIso, exercises } });
       },
 
       removeExercise: (exerciseLogId) => {

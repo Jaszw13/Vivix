@@ -31,7 +31,7 @@ import { usePlansStore } from '@/store/plansStore';
 import { handleWorkoutCompleted } from '@/features/partner/engine/rewardEngine';
 import type { RewardContext, RewardResult } from '@/features/partner/types';
 import { getStreakDays as getStreakDaysSelector } from '@/features/stats/selectors';
-import { getSessionPRs } from '@/utils/workout';
+import { getNewRecordsForSession } from '@/utils/workout';
 import { sessionDayKey, dayKey } from '@/utils/time';
 
 export interface SettleResult {
@@ -176,28 +176,18 @@ export function settleAll(
     }
   }
 
-  // 5. T4：PR 破紀錄 telemetry（L5 慶祝律；finishSession 後統一 log，不經 UI）
+  // 5. T4：新紀錄 telemetry（只跟上一次同動作比較；finishSession 後統一 log，不經 UI）
   if (!silent && rewardCtx) {
     const workoutState = useWorkoutStore.getState();
     const todaySessions = workoutState.sessions.filter((s) => s.date === rewardCtx.date);
     const lastSession = todaySessions[todaySessions.length - 1];
     if (lastSession) {
-      const sessionPRs = getSessionPRs(lastSession);
-      const prevPRs = workoutState.personalRecords.filter(
-        (pr) => pr.date !== rewardCtx.date,
-      );
-      for (const pr of sessionPRs) {
-        const prev = prevPRs.find((p) => p.exerciseId === pr.exerciseId);
-        const isBreakthrough = !prev
-          || (pr.repPR !== undefined
-            ? (prev.repPR ?? 0) < pr.repPR
-            : pr.estimated1RM > prev.estimated1RM);
-        if (isBreakthrough) {
-          telemetry.log('pr_celebrated', {
-            exerciseId: pr.exerciseId,
-            isBodyweight: pr.repPR !== undefined,
-          });
-        }
+      const newRecords = getNewRecordsForSession(lastSession, workoutState.sessions);
+      for (const record of newRecords) {
+        telemetry.log('pr_celebrated', {
+          exerciseId: record.exerciseId,
+          isBodyweight: record.current.weight === 0,
+        });
       }
     }
   }

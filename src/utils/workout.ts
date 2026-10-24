@@ -71,6 +71,91 @@ export function getSessionPRs(session: WorkoutSession): PersonalRecord[] {
   });
 }
 
+/** 單一動作的最佳完成組：先比重量，重量相同再比次數（不含遞減組） */
+export interface BestSet {
+  weight: number;
+  reps: number;
+}
+
+export function bestCompletedSet(sets: SetLog[]): BestSet | null {
+  const completed = sets.filter((s) => s.completed);
+  if (completed.length === 0) return null;
+  let best = completed[0];
+  for (const s of completed) {
+    if (s.weight > best.weight || (s.weight === best.weight && s.reps > best.reps)) {
+      best = s;
+    }
+  }
+  return { weight: best.weight, reps: best.reps };
+}
+
+/** 取「上一次同動作」的最佳完成組；沒有上次紀錄則回 null */
+export function getPreviousBestForExercise(
+  sessions: WorkoutSession[],
+  current: WorkoutSession,
+  exerciseId: string,
+): BestSet | null {
+  const currentKey = new Date(current.startedAt ?? current.date).getTime();
+  const previous = sessions
+    .filter((s) => s.id !== current.id)
+    .filter((s) => new Date(s.startedAt ?? s.date).getTime() < currentKey)
+    .sort(
+      (a, b) =>
+        new Date(b.startedAt ?? b.date).getTime() - new Date(a.startedAt ?? a.date).getTime(),
+    );
+  for (const session of previous) {
+    const ex = session.exercises.find((e) => e.exerciseId === exerciseId);
+    if (!ex) continue;
+    const best = bestCompletedSet(ex.sets);
+    if (best) return best;
+  }
+  return null;
+}
+
+/**
+ * 新紀錄判定（只跟上一次訓練比較）：
+ * - 重量增加 → 'weight'
+ * - 重量不變但次數增加 → 'reps'
+ * - 其餘（含首次紀錄、退步）→ null
+ */
+export function getProgressKind(
+  current: BestSet,
+  previous: BestSet | null,
+): 'weight' | 'reps' | null {
+  if (!previous) return null;
+  if (current.weight > previous.weight) return 'weight';
+  if (current.weight === previous.weight && current.reps > previous.reps) return 'reps';
+  return null;
+}
+
+export interface SessionNewRecord {
+  exerciseId: string;
+  exerciseName: string;
+  current: BestSet;
+  previous: BestSet | null;
+  progress: 'weight' | 'reps';
+}
+
+export function getNewRecordsForSession(
+  session: WorkoutSession,
+  sessions: WorkoutSession[],
+): SessionNewRecord[] {
+  return session.exercises.flatMap((ex) => {
+    const current = bestCompletedSet(ex.sets);
+    if (!current) return [];
+    const previous = getPreviousBestForExercise(sessions, session, ex.exerciseId);
+    const progress = getProgressKind(current, previous);
+    if (!progress) return [];
+    return [{
+      exerciseId: ex.exerciseId,
+      exerciseName: ex.name,
+      current,
+      previous,
+      progress,
+    }];
+  });
+}
+
 export function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
   const mm = (d.getMonth() + 1).toString().padStart(2, '0');
@@ -109,15 +194,18 @@ export function createEmptySet(setNumber: number, defaults?: Partial<SetLog>): S
 }
 
 /**
- * 建立動作紀錄。預設只給 1 組：用戶確認第一組後再自行新增，
- * 新增的組會繼承上一組的重量／次數（見 workoutStore.addSet）。
+ * 建立動作紀錄。預設只給 1 組（其餘由使用者按「新增組」逐步長出來），
+ * 新增組時會繼承上一組的重量/次數。
  */
-export function createExerciseLog(exerciseId: string, name: string, targetWeight?: number): ExerciseLog {
-  const sets = [createEmptySet(1, { weight: targetWeight ?? 0 })];
+export function createExerciseLog(
+  exerciseId: string,
+  name: string,
+  initialWeight?: number,
+): ExerciseLog {
   return {
     id: generateId('ex'),
     exerciseId,
     name,
-    sets,
+    sets: [createEmptySet(1, { weight: initialWeight ?? 0 })],
   };
 }

@@ -379,6 +379,8 @@ export interface ExerciseLog {
   equipmentType?: EquipmentType;
   /** v2：若為替換動作，記錄原本 exerciseId */
   substitutedFrom?: string;
+  /** 實際執行順序：此動作第一組被標記完成的時間；未完成任何組則無此欄 */
+  firstCompletedAt?: string;
   sets: SetLog[];
 }
 
