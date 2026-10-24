@@ -128,6 +128,34 @@ export function getProgressKind(
   return null;
 }
 
+/** 單組 vs 上次最佳組的即時差距（P1-1） */
+export type SetDeltaKind = 'weight_up' | 'reps_up' | 'same';
+
+export interface SetDelta {
+  kind: SetDeltaKind;
+  weightDiff: number;
+  repsDiff: number;
+  /** 直接可顯示的簡短文字，例如 "+2.5kg"、"+1 次" */
+  label: string;
+}
+
+/** 退步時回 null（不顯示負面比較，避免挫折文案） */
+export function getSetDelta(current: BestSet, previous: BestSet | null): SetDelta | null {
+  if (!previous) return null;
+  const weightDiff = Math.round((current.weight - previous.weight) * 10) / 10;
+  const repsDiff = current.reps - previous.reps;
+  if (weightDiff > 0) {
+    return { kind: 'weight_up', weightDiff, repsDiff, label: `+${weightDiff}kg` };
+  }
+  if (weightDiff === 0 && repsDiff > 0) {
+    return { kind: 'reps_up', weightDiff, repsDiff, label: `+${repsDiff} 次` };
+  }
+  if (weightDiff === 0 && repsDiff === 0) {
+    return { kind: 'same', weightDiff, repsDiff, label: '與上次相同' };
+  }
+  return null;
+}
+
 export interface SessionNewRecord {
   exerciseId: string;
   exerciseName: string;

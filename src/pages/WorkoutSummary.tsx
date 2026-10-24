@@ -10,6 +10,9 @@ import { PageShell } from '@/components/layout/PageShell';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { useProfileStore } from '@/store/profileStore';
 import { usePartnerStore } from '@/features/partner/stores/partnerStore';
+import { useCardioStore } from '@/store/cardioStore';
+import { buildSessionHighlight } from '@/features/retention/highlight';
+import { HighlightCard } from '@/features/retention/components/HighlightCard';
 import { useFeatureFlags } from '@/features/partner/stores/featureFlags';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { settleAll } from '@/features/stats/settleAll';
@@ -109,6 +112,16 @@ export default function WorkoutSummary() {
 
   // T4：新紀錄卡 — 只跟上一次同動作比較（重量↑ 或 同重量次數↑）
   const newRecords = getNewRecordsForSession(session, sessions);
+  // P1-3：訓練高光卡（純衍生）
+  const cardioSessions = useCardioStore((s) => s.sessions);
+  const weeklyGoal = useProfileStore((s) => s.weeklyGoal);
+  const highlight = buildSessionHighlight(
+    session,
+    sessions,
+    cardioSessions,
+    weeklyGoal,
+    newRecords.length,
+  );
   // telemetry：首次展示時 log；strength_ee_locked_prompt_shown 鎖定態顯示時 log
   const eeTelemetryRef = useRef(false);
   useEffect(() => {
@@ -279,6 +292,17 @@ export default function WorkoutSummary() {
             </Card>
           </motion.div>
         )}
+
+        {/* P1-3：訓練高光卡 */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.47 }}
+          className="mt-6"
+        >
+          <SectionHeader title="今天的高光" subtitle="一頁看完今天的進步" />
+          <HighlightCard highlight={highlight} />
+        </motion.div>
 
         {/* 動作摘要 */}
         <motion.div

@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { profile, updateProfile, resetAllData, gymEquipmentIds, toggleGymEquipment, weeklyGoal, setWeeklyGoal } = useProfileStore();
+  const { profile, updateProfile, resetAllData, gymEquipmentIds, toggleGymEquipment, weeklyGoal, setWeeklyGoal, autoNextSet, setAutoNextSet } = useProfileStore();
   const { getTotalSessions, getTotalVolume, personalRecords } = useWorkoutStore();
   const [importOpen, setImportOpen] = useState(false);
   const {
@@ -355,6 +355,31 @@ export default function Settings() {
           <p className="text-[11px] text-text-secondary mt-3 leading-snug">
             建議從 3 天開始。目標訂太高反而容易放棄，先養成節奏再往上加。
           </p>
+          <div className="flex items-center justify-between mt-4 pt-4 border-t border-border/40">
+            <div className="pr-3">
+              <div className="text-sm font-bold text-text-primary">自動跳到下一組</div>
+              <p className="text-[11px] text-text-secondary mt-0.5 leading-snug">
+                完成一組後自動捲到下一組，並啟動休息計時。
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={autoNextSet}
+              onClick={() => setAutoNextSet(!autoNextSet)}
+              className={cn(
+                'w-12 h-7 rounded-full flex-shrink-0 p-1 transition-colors',
+                autoNextSet ? 'bg-accent' : 'bg-bg-secondary border border-border/60',
+              )}
+            >
+              <span
+                className={cn(
+                  'block w-5 h-5 rounded-full bg-bg-primary transition-transform',
+                  autoNextSet && 'translate-x-5',
+                )}
+              />
+            </button>
+          </div>
         </Card>
       </motion.div>
 

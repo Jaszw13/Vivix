@@ -1,8 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { Check, Minus, Plus, Trash2, History, Repeat } from 'lucide-react';
 import type { ExerciseLog, SetLog } from '@/types';
 import { useWorkoutStore } from '@/store/workoutStore';
-import { bestCompletedSet, getProgressKind, setLoadKg } from '@/utils/workout';
+import { useProfileStore } from '@/store/profileStore';
+import { bestCompletedSet, getProgressKind, getSetDelta, setLoadKg } from '@/utils/workout';
+import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
 
@@ -18,6 +20,25 @@ export function ExerciseSetList({ exercise, onSetCompleted, onSubstitute }: SetR
   // T4：新紀錄微慶祝（只跟上一次同動作的最佳組比較）
   const [recentPRSetIds, setRecentPRSetIds] = useState<string[]>([]);
   const activeExercises = useWorkoutStore((s) => s.activeSession?.exercises ?? []);
+  // P1-2：完成一組後自動跳到下一組（可在設定關閉）
+  const autoNextSet = useProfileStore((s) => s.autoNextSet);
+  const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const addSetRef = useRef<HTMLButtonElement | null>(null);
+
+  const focusNextSet = (currentSetId: string) => {
+    if (!autoNextSet) return;
+    const idx = exercise.sets.findIndex((s) => s.id === currentSetId);
+    const next = exercise.sets.slice(idx + 1).find((s) => !s.completed);
+    if (next) {
+      const row = rowRefs.current[next.id];
+      row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      row?.querySelector<HTMLInputElement>('input')?.focus();
+      return;
+    }
+    if (exercise.sets.every((s) => s.completed)) {
+      addSetRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  };
 
   const lastSets = getLastSetsForExercise(exercise.exerciseId);
   const previousBest = useMemo(() => bestCompletedSet(lastSets ?? []), [lastSets]);
@@ -98,6 +119,13 @@ export function ExerciseSetList({ exercise, onSetCompleted, onSubstitute }: SetR
         </div>
       </div>
 
+      {/* 第一次做這個動作：標示為基準組，不做假慶祝 */}
+      {!lastSets && (
+        <div className="mb-3 text-[10px] text-text-secondary leading-snug">
+          首次記錄這個動作，這次就是你的基準組。
+        </div>
+      )}
+
       {/* 上一次訓練參考 */}
       {lastSets && lastSets.length > 0 && (
         <div className="mb-3 p-2.5 rounded-button bg-bg-secondary border border-border/40">
@@ -132,6 +160,7 @@ export function ExerciseSetList({ exercise, onSetCompleted, onSubstitute }: SetR
         {exercise.sets.map((set) => (
           <div key={set.id}>
             <div
+              ref={(el) => { rowRefs.current[set.id] = el; }}
               className={cn(
                 'grid grid-cols-[2rem_1fr_1fr_2.5rem_2rem] gap-2 items-center transition-colors relative',
                 set.completed && 'opacity-60'
@@ -183,11 +212,25 @@ export function ExerciseSetList({ exercise, onSetCompleted, onSubstitute }: SetR
               <button
                 onClick={() => {
                   // T4：完成前檢查是否破 PR（L5；純 UI 微慶祝，telemetry 走 settleAll）
-                  if (!set.completed && checkPRBreakthrough(set)) {
-                    flashPRCelebration(set.id);
+                  if (!set.completed) {
+                    if (checkPRBreakthrough(set)) flashPRCelebration(set.id);
+                    // P1-1：每組即時差距（只記錄正向差距，避免噪音）
+                    const delta = getSetDelta(
+                      { weight: set.weight, reps: set.reps },
+                      previousBest,
+                    );
+                    if (delta && delta.kind !== 'same') {
+                      useTelemetryStore.getState().log('set_delta_shown', {
+                        exerciseId: exercise.exerciseId,
+                        kind: delta.kind,
+                      });
+                    }
                   }
                   toggleSetCompleted(exercise.id, set.id);
-                  if (!set.completed) onSetCompleted?.();
+                  if (!set.completed) {
+                    onSetCompleted?.();
+                    focusNextSet(set.id);
+                  }
                 }}
                 className={cn(
                   'w-10 h-10 mx-auto rounded-button border-2 flex items-center justify-center transition-all',
@@ -208,6 +251,29 @@ export function ExerciseSetList({ exercise, onSetCompleted, onSubstitute }: SetR
                 <Trash2 size={14} />
               </button>
             </div>
+
+            {/* P1-1：完成後顯示與上次最佳組的即時差距 */}
+            {set.completed && (() => {
+              const delta = getSetDelta(
+                { weight: set.weight, reps: set.reps },
+                previousBest,
+              );
+              if (!delta) return null;
+              return (
+                <div className="mt-1 ml-[2rem]">
+                  <span
+                    className={cn(
+                      'inline-block font-mono text-[10px] px-1.5 py-0.5 rounded-button border',
+                      delta.kind === 'same'
+                        ? 'text-text-secondary border-border/40'
+                        : 'text-accent border-accent/40 bg-accent/5',
+                    )}
+                  >
+                    {delta.kind === 'same' ? delta.label : `比上次 ${delta.label}`}
+                  </span>
+                </div>
+              );
+            })()}
 
             {/* R6：遞減組（drops） */}
             {(set.drops ?? []).length > 0 && (
@@ -251,6 +317,7 @@ export function ExerciseSetList({ exercise, onSetCompleted, onSubstitute }: SetR
       {/* 新增組 / 新增遞減組（遞減組掛在最後一組底下） */}
       <div className="grid grid-cols-2 gap-2 mt-3">
         <button
+          ref={addSetRef}
           onClick={() => addSet(exercise.id)}
           className="py-2 text-xs uppercase tracking-wider text-text-secondary hover:text-accent border border-dashed border-border rounded-button transition-colors"
         >

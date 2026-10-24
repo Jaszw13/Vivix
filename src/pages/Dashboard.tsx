@@ -37,6 +37,7 @@ import {
   getWeeklyGoalState,
   shouldShowComeback,
 } from '@/features/retention/selectors';
+import { getPartnerLine } from '@/features/retention/partnerLines';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -122,6 +123,9 @@ export default function Dashboard() {
     useTelemetryStore.getState().log('comeback_started');
     handleStartToday();
   };
+
+  // P1-4：夥伴陪伴台詞（依回歸／週目標／micro 狀態）
+  const partnerLine = getPartnerLine({ daysSinceLast, weekly, microDone });
 
   // 成就 v1.3：派生 context 並 recompute
   // P-01：傳遞 raw data 讓 engine 從當前分類派生所有 metric
@@ -337,6 +341,10 @@ export default function Dashboard() {
                     {milestone}
                   </p>
                 )}
+                {/* P1-4：夥伴台詞 */}
+                <p className="text-[11px] text-accent mt-1.5 leading-snug line-clamp-2">
+                  「{partnerLine}」
+                </p>
               </div>
               <ChevronRight size={18} className="text-text-secondary/60 flex-shrink-0" />
             </button>

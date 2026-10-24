@@ -33,6 +33,8 @@ interface ProfileState {
   weeklyGoal: number;
   /** P-RETENTION：上次顯示「歡迎回來」卡的時間（ISO）；null = 從未 */
   comebackWelcomedAt: string | null;
+  /** P-RETENTION P1-2：完成一組後自動跳到下一組 */
+  autoNextSet: boolean;
   updateProfile: (patch: Partial<UserProfile>) => void;
   completeOnboarding: (goal: TrainingGoalValue) => void;
   resetOnboarding: () => void;
@@ -47,6 +49,8 @@ interface ProfileState {
   setWeeklyGoal: (n: number) => void;
   /** P-RETENTION：標記回歸卡已顯示，避免短期內重複彈出 */
   markComebackWelcomed: () => void;
+  /** P-RETENTION P1-2：切換自動跳到下一組 */
+  setAutoNextSet: (on: boolean) => void;
 }
 
 const defaultProfile: UserProfile = {
@@ -68,6 +72,7 @@ export const useProfileStore = create<ProfileState>()(
       gymEquipmentIds: [],
       weeklyGoal: 3,
       comebackWelcomedAt: null,
+      autoNextSet: true,
       updateProfile: (patch) =>
         set((state) => ({ profile: { ...state.profile, ...patch } })),
       markWeeklyReportSeen: (weekKey) => set({ weeklyReportSeenWeek: weekKey }),
@@ -84,6 +89,7 @@ export const useProfileStore = create<ProfileState>()(
       setWeeklyGoal: (n) =>
         set({ weeklyGoal: Math.min(5, Math.max(2, Math.round(n))) }),
       markComebackWelcomed: () => set({ comebackWelcomedAt: new Date().toISOString() }),
+      setAutoNextSet: (on) => set({ autoNextSet: on }),
       completeOnboarding: (goal) => {
         // onboarding 完成後，順便把名字更新得更個人化
         const stored = localStorage.getItem('ironpulse-profile');
@@ -111,6 +117,7 @@ export const useProfileStore = create<ProfileState>()(
           gymEquipmentIds: [],
           weeklyGoal: 3,
           comebackWelcomedAt: null,
+          autoNextSet: true,
         });
         // 重新載入以重置所有 store
         window.location.reload();
@@ -118,7 +125,7 @@ export const useProfileStore = create<ProfileState>()(
     }),
     {
       name: 'ironpulse-profile',
-      version: 6,
+      version: 7,
       partialize: (state) => ({
         profile: state.profile,
         onboardingCompleted: state.onboardingCompleted,
@@ -127,6 +134,7 @@ export const useProfileStore = create<ProfileState>()(
         gymEquipmentIds: state.gymEquipmentIds,
         weeklyGoal: state.weeklyGoal,
         comebackWelcomedAt: state.comebackWelcomedAt,
+        autoNextSet: state.autoNextSet,
       }),
       // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
       onRehydrateStorage: () => {
@@ -189,6 +197,8 @@ export const useProfileStore = create<ProfileState>()(
             : 3;
         const comebackWelcomedAt =
           typeof raw.comebackWelcomedAt === 'string' ? raw.comebackWelcomedAt : null;
+        // P1-2 v6→v7：自動跳到下一組，預設開啟
+        const autoNextSet = typeof raw.autoNextSet === 'boolean' ? raw.autoNextSet : true;
         return {
           profile: migratedProfile,
           onboardingCompleted,
@@ -197,6 +207,7 @@ export const useProfileStore = create<ProfileState>()(
           gymEquipmentIds,
           weeklyGoal,
           comebackWelcomedAt,
+          autoNextSet,
         };
       },
     }

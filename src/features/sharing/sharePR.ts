@@ -90,14 +90,14 @@ function buildCardSVG(pr: PersonalRecord, pack: StylePack): string {
 </svg>`;
 }
 
-function escapeXml(s: string): string {
+export function escapeXml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /**
  * SVG 字串 → PNG Blob（scale 控制輸出解析度）
  */
-async function svgToPngBlob(svg: string, scale = 2): Promise<Blob | null> {
+export async function svgToPngBlob(svg: string, scale = 2): Promise<Blob | null> {
   const svgBlob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
   const url = URL.createObjectURL(svgBlob);
   try {
