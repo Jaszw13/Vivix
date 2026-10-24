@@ -29,6 +29,10 @@ interface ProfileState {
   weeklyReportSeenWeek: string | null;
   /** T7-3：我的健身房器材 ID 列表（equipmentLibrary 中的 eq-* id） */
   gymEquipmentIds: string[];
+  /** P-RETENTION：每週訓練目標（2–5 次，預設 3） */
+  weeklyGoal: number;
+  /** P-RETENTION：上次顯示「歡迎回來」卡的時間（ISO）；null = 從未 */
+  comebackWelcomedAt: string | null;
   updateProfile: (patch: Partial<UserProfile>) => void;
   completeOnboarding: (goal: TrainingGoalValue) => void;
   resetOnboarding: () => void;
@@ -39,6 +43,10 @@ interface ProfileState {
   toggleGymEquipment: (equipmentId: string) => void;
   /** T7-3：批量設定我的器材 */
   setGymEquipmentIds: (ids: string[]) => void;
+  /** P-RETENTION：設定每週訓練目標（自動夾在 2–5） */
+  setWeeklyGoal: (n: number) => void;
+  /** P-RETENTION：標記回歸卡已顯示，避免短期內重複彈出 */
+  markComebackWelcomed: () => void;
 }
 
 const defaultProfile: UserProfile = {
@@ -58,6 +66,8 @@ export const useProfileStore = create<ProfileState>()(
       goal: null,
       weeklyReportSeenWeek: null,
       gymEquipmentIds: [],
+      weeklyGoal: 3,
+      comebackWelcomedAt: null,
       updateProfile: (patch) =>
         set((state) => ({ profile: { ...state.profile, ...patch } })),
       markWeeklyReportSeen: (weekKey) => set({ weeklyReportSeenWeek: weekKey }),
@@ -71,6 +81,9 @@ export const useProfileStore = create<ProfileState>()(
           };
         }),
       setGymEquipmentIds: (ids) => set({ gymEquipmentIds: ids }),
+      setWeeklyGoal: (n) =>
+        set({ weeklyGoal: Math.min(5, Math.max(2, Math.round(n))) }),
+      markComebackWelcomed: () => set({ comebackWelcomedAt: new Date().toISOString() }),
       completeOnboarding: (goal) => {
         // onboarding 完成後，順便把名字更新得更個人化
         const stored = localStorage.getItem('ironpulse-profile');
@@ -96,6 +109,8 @@ export const useProfileStore = create<ProfileState>()(
           goal: null,
           weeklyReportSeenWeek: null,
           gymEquipmentIds: [],
+          weeklyGoal: 3,
+          comebackWelcomedAt: null,
         });
         // 重新載入以重置所有 store
         window.location.reload();
@@ -103,13 +118,15 @@ export const useProfileStore = create<ProfileState>()(
     }),
     {
       name: 'ironpulse-profile',
-      version: 5,
+      version: 6,
       partialize: (state) => ({
         profile: state.profile,
         onboardingCompleted: state.onboardingCompleted,
         goal: state.goal,
         weeklyReportSeenWeek: state.weeklyReportSeenWeek,
         gymEquipmentIds: state.gymEquipmentIds,
+        weeklyGoal: state.weeklyGoal,
+        comebackWelcomedAt: state.comebackWelcomedAt,
       }),
       // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
       onRehydrateStorage: () => {
@@ -165,12 +182,21 @@ export const useProfileStore = create<ProfileState>()(
         const gymEquipmentIds: string[] = Array.isArray(raw.gymEquipmentIds)
           ? raw.gymEquipmentIds.filter((id): id is string => typeof id === 'string')
           : [];
+        // P-RETENTION v5→v6：週目標預設 3；回歸卡從未顯示
+        const weeklyGoal =
+          typeof raw.weeklyGoal === 'number'
+            ? Math.min(5, Math.max(2, Math.round(raw.weeklyGoal)))
+            : 3;
+        const comebackWelcomedAt =
+          typeof raw.comebackWelcomedAt === 'string' ? raw.comebackWelcomedAt : null;
         return {
           profile: migratedProfile,
           onboardingCompleted,
           goal,
           weeklyReportSeenWeek,
           gymEquipmentIds,
+          weeklyGoal,
+          comebackWelcomedAt,
         };
       },
     }

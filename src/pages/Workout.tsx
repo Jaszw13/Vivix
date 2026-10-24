@@ -17,6 +17,12 @@ import {
 } from '@/store/workoutStore';
 import { useRestTimerStore } from '@/store/restTimerStore';
 import { useEquipmentMemoryStore } from '@/store/equipmentMemoryStore';
+import { useCardioStore } from '@/store/cardioStore';
+import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
+import {
+  getDaysSinceLastTraining,
+  isComebackWindow,
+} from '@/features/retention/selectors';
 import { useProfileStore } from '@/store/profileStore';
 import { getEquipmentTypesForIds } from '@/data/equipment';
 import {
@@ -50,7 +56,12 @@ export default function Workout() {
     addExerciseToActive,
     toggleWarmupCompleted,
     substituteExerciseInActive,
+    applyDeload,
   } = useWorkoutStore();
+
+  // P-RETENTION：回歸窗口內提供一鍵降載
+  const cardioSessions = useCardioStore((s) => s.sessions);
+  const [deloadDismissed, setDeloadDismissed] = useState(false);
 
   const [elapsed, setElapsed] = useState(0);
   const [showAddExercise, setShowAddExercise] = useState(false);
@@ -102,6 +113,18 @@ export default function Workout() {
   const warmupDoneCount = warmupItems.filter((w) => warmupDoneIds.includes(w.id)).length;
   const warmupAllDone = warmupItems.length > 0 && warmupDoneCount === warmupItems.length;
   const showWorkSection = warmupItems.length === 0 || warmupAllDone;
+
+  // P-RETENTION：回歸（>=14 天未訓練）時提供一鍵降載
+  const daysSinceLast = getDaysSinceLastTraining(
+    useWorkoutStore.getState().sessions,
+    cardioSessions,
+  );
+  const showDeload =
+    isComebackWindow(daysSinceLast) &&
+    !deloadDismissed &&
+    !!activeSession &&
+    activeSession.exercises.length > 0 &&
+    !activeSession.deloadApplied;
 
   if (!activeSession) {
     return (
@@ -205,6 +228,44 @@ export default function Workout() {
             {activeSession.dayName ?? '今日訓練'}
           </h1>
         </motion.div>
+
+        {/* P-RETENTION：回歸降載提示 */}
+        {showDeload && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4"
+          >
+            <Card className="p-3 border-auxiliary/40 bg-auxiliary/5">
+              <div className="text-[10px] uppercase tracking-widest text-auxiliary font-bold">
+                剛回歸，建議降載
+              </div>
+              <p className="text-[11px] text-text-secondary mt-1 leading-snug">
+                距上次訓練 {daysSinceLast} 天。先把重量降 10%，把動作做回來比追重量重要。
+              </p>
+              <div className="flex gap-2 mt-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => {
+                    applyDeload();
+                    useTelemetryStore.getState().log('deload_applied');
+                  }}
+                >
+                  套用降載
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setDeloadDismissed(true)}
+                >
+                  不用
+                </Button>
+              </div>
+            </Card>
+          </motion.div>
+        )}
 
         {/* 熱身區塊（N1） */}
         {warmupItems.length > 0 && (

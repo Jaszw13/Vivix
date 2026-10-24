@@ -127,7 +127,7 @@ interface WorkoutState {
   setActivePlan: (planId: string) => void;
   incrementDayIndex: () => void;
   startSession: (planId: string, planName: string, day: PlanDay) => void;
-  startEmptySession: () => void;
+  startEmptySession: (kind?: 'standard' | 'micro') => void;
   addExerciseToActive: (pe: PlannedExercise) => void;
   addCustomExerciseV2: (args: {
     name: string;
@@ -162,6 +162,8 @@ interface WorkoutState {
   removeExercise: (exerciseLogId: string) => void;
   finishSession: (finishedAt?: string) => WorkoutSession | null;
   clearActiveSession: () => void;
+  /** P-RETENTION：回歸第一練降載 10%（只動未完成組的重量，可重複呼叫但只生效一次） */
+  applyDeload: () => void;
   /** R3：強制重算 personalRecords（rehydrate 後填充；subscribe 仍保留） */
   recomputePersonalRecords: () => void;
 
@@ -273,11 +275,12 @@ export const useWorkoutStore = create<WorkoutState>()(
         set({ activeSession: session });
       },
 
-      startEmptySession: () => {
+      startEmptySession: (kind = 'standard') => {
         const nowIso = new Date().toISOString();
         const session: WorkoutSession = {
           id: generateId('session'),
           date: localNoonISO(new Date()),
+          kind,
           warmupCompletedIds: [],
           duration: 0,
           totalVolume: 0,
@@ -570,6 +573,29 @@ export const useWorkoutStore = create<WorkoutState>()(
       },
 
       clearActiveSession: () => set({ activeSession: null }),
+
+      applyDeload: () => {
+        const active = get().activeSession;
+        if (!active || active.deloadApplied) return;
+        const deload = (w: number) =>
+          w > 0 ? Math.max(0, Math.round((w * 0.9) / 2.5) * 2.5) : w;
+        const exercises = active.exercises.map((ex) => ({
+          ...ex,
+          sets: ex.sets.map((s) => ({
+            ...s,
+            weight: deload(s.weight),
+            drops: s.drops?.map((d) => ({ ...d, weight: deload(d.weight) })),
+          })),
+        }));
+        set({
+          activeSession: {
+            ...active,
+            exercises,
+            deloadApplied: true,
+            lastActivityAt: new Date().toISOString(),
+          },
+        });
+      },
 
       recomputePersonalRecords: () => {
         const { sessions, customExercises } = get();

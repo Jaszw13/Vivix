@@ -411,6 +411,10 @@ export interface WorkoutSession {
     dayId: string;
     dayName: string;
   } | null;
+  /** P-RETENTION：micro = 首頁「今天只做一組」的 30 秒微訓練；舊資料 → standard */
+  kind?: 'standard' | 'micro';
+  /** P-RETENTION：本次訓練是否套用回歸降載（僅記錄，不改原始資料語義） */
+  deloadApplied?: boolean;
 }
 
 // ============ 用戶資料 ============

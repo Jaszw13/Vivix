@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { profile, updateProfile, resetAllData, gymEquipmentIds, toggleGymEquipment } = useProfileStore();
+  const { profile, updateProfile, resetAllData, gymEquipmentIds, toggleGymEquipment, weeklyGoal, setWeeklyGoal } = useProfileStore();
   const { getTotalSessions, getTotalVolume, personalRecords } = useWorkoutStore();
   const [importOpen, setImportOpen] = useState(false);
   const {
@@ -323,6 +323,38 @@ export default function Settings() {
               </div>
             </div>
           </div>
+        </Card>
+      </motion.div>
+
+      {/* P-RETENTION：每週目標 */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.12 }}
+        className="mt-6"
+      >
+        <SectionHeader title="每週目標" subtitle="設定一週想練幾天，首頁會顯示進度" />
+        <Card className="p-4">
+          <div className="grid grid-cols-4 gap-2">
+            {[2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setWeeklyGoal(n)}
+                className={cn(
+                  'h-11 rounded-button border text-sm font-bold transition-colors',
+                  weeklyGoal === n
+                    ? 'bg-accent text-bg-primary border-accent'
+                    : 'bg-bg-secondary text-text-secondary border-border/40 hover:text-text-primary',
+                )}
+              >
+                {n} 天
+              </button>
+            ))}
+          </div>
+          <p className="text-[11px] text-text-secondary mt-3 leading-snug">
+            建議從 3 天開始。目標訂太高反而容易放棄，先養成節奏再往上加。
+          </p>
         </Card>
       </motion.div>
 

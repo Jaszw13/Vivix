@@ -31,6 +31,7 @@ import { usePlansStore } from '@/store/plansStore';
 import { handleWorkoutCompleted } from '@/features/partner/engine/rewardEngine';
 import type { RewardContext, RewardResult } from '@/features/partner/types';
 import { getStreakDays as getStreakDaysSelector } from '@/features/stats/selectors';
+import { getWeeklyTrainingDays } from '@/features/retention/selectors';
 import { getNewRecordsForSession } from '@/utils/workout';
 import { sessionDayKey, dayKey } from '@/utils/time';
 
@@ -189,6 +190,18 @@ export function settleAll(
           isBodyweight: record.current.weight === 0,
         });
       }
+    }
+  }
+
+  // 6. P-RETENTION：每週目標剛達標的那一次 log（只在跨越門檻時觸發）
+  if (!silent && rewardCtx) {
+    const goal = useProfileStore.getState().weeklyGoal;
+    const weeklyDays = getWeeklyTrainingDays(
+      useWorkoutStore.getState().sessions,
+      useCardioStore.getState().sessions,
+    );
+    if (weeklyDays === goal) {
+      telemetry.log('weekly_goal_hit', { goal });
     }
   }
 

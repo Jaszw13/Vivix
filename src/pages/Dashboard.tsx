@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Flame, TrendingUp, Trophy, Zap, Award, Cat, Dog, ChevronRight, Gift, Activity, Coffee } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { PackAvatar } from '@/components/deco/PersonalDecor';
@@ -31,6 +31,12 @@ import { PartnerSetupModal } from '@/features/partner/components/PartnerSetupMod
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { settleTaxonomyChange } from '@/features/stats/settleAll';
 import { formatWeekdayShort } from '@/utils/format';
+import { MicroSessionSheet } from '@/components/workout/MicroSessionSheet';
+import {
+  getDaysSinceLastTraining,
+  getWeeklyGoalState,
+  shouldShowComeback,
+} from '@/features/retention/selectors';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -45,11 +51,15 @@ export default function Dashboard() {
     nextDayIndex,
     setActivePlan,
   } = useWorkoutStore();
-  const { profile } = useProfileStore();
+  const { profile, weeklyGoal, comebackWelcomedAt, markComebackWelcomed } = useProfileStore();
   const cardioSessions = useCardioStore((s) => s.sessions);
   const addCardio = useCardioStore((s) => s.addCardio);
 
   const [cardioModalOpen, setCardioModalOpen] = useState(false);
+  // P-RETENTION：micro session
+  const [microOpen, setMicroOpen] = useState(false);
+  const [microDone, setMicroDone] = useState(false);
+  const comebackLoggedRef = useRef(false);
 
   // R5：休息日
   const addRestDay = useRestDayStore((s) => s.addRestDay);
@@ -94,6 +104,24 @@ export default function Dashboard() {
   const totalSessions = getTotalSessions();
   const totalVolume = getTotalVolume(); // 噸
   const streak = getStreakDays();
+
+  // P-RETENTION：回歸窗口 + 每週目標
+  const daysSinceLast = getDaysSinceLastTraining(sessions, cardioSessions);
+  const showComeback = shouldShowComeback(comebackWelcomedAt, sessions, cardioSessions);
+  const weekly = getWeeklyGoalState(weeklyGoal, sessions, cardioSessions);
+
+  useEffect(() => {
+    if (showComeback && !comebackLoggedRef.current) {
+      comebackLoggedRef.current = true;
+      useTelemetryStore.getState().log('comeback_card_shown', { days: daysSinceLast ?? 0 });
+    }
+  }, [showComeback, daysSinceLast]);
+
+  const handleComebackStart = () => {
+    markComebackWelcomed();
+    useTelemetryStore.getState().log('comeback_started');
+    handleStartToday();
+  };
 
   // 成就 v1.3：派生 context 並 recompute
   // P-01：傳遞 raw data 讓 engine 從當前分類派生所有 metric
@@ -188,8 +216,8 @@ export default function Dashboard() {
         </h1>
       </motion.div>
 
-      {/* 連續天數強化（N2）：連續 > 0 就有大 banner */}
-      {streak >= 1 && (
+      {/* P-RETENTION：回歸卡（優先）或本週目標卡 */}
+      {showComeback ? (
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -198,24 +226,59 @@ export default function Dashboard() {
         >
           <Card className="relative overflow-hidden p-4 border-accent/40">
             <div className="absolute inset-0 bg-gradient-to-br from-accent/15 via-accent/5 to-transparent pointer-events-none" />
+            <div className="relative">
+              <div className="text-[10px] uppercase tracking-widest text-accent font-bold">
+                歡迎回來
+              </div>
+              <div className="font-display text-2xl tracking-wide uppercase text-text-primary mt-1">
+                很久不見，{profile.name}
+              </div>
+              <p className="text-[11px] text-text-secondary mt-1 leading-snug">
+                {daysSinceLast !== null
+                  ? `距離上次訓練已 ${daysSinceLast} 天。不用補進度，今天只要比昨天動一點。`
+                  : '不用補進度，今天只要比昨天動一點。'}
+              </p>
+              <Button fullWidth size="sm" className="mt-3" onClick={handleComebackStart}>
+                <TrendingUp size={16} /> 回來第一練
+              </Button>
+            </div>
+          </Card>
+        </motion.div>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.02 }}
+          className="mb-4"
+        >
+          <Card className="relative overflow-hidden p-4 border-accent/40">
+            <div className="absolute inset-0 bg-gradient-to-br from-accent/12 via-accent/5 to-transparent pointer-events-none" />
             <div className="relative flex items-center gap-4">
               <div className="w-14 h-14 rounded-2xl bg-accent text-bg-primary flex items-center justify-center flex-shrink-0 shadow-[0_4px_20px_rgba(0,0,0,0.25)]">
                 <Flame size={26} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-[10px] uppercase tracking-widest text-accent font-bold">
-                  連續訓練中 🔥
+                  本週目標
                 </div>
                 <div className="font-display text-3xl tracking-wide uppercase text-text-primary leading-none mt-1">
-                  {streak}
-                  <span className="text-lg ml-1 text-text-secondary">天</span>
+                  {weekly.days}
+                  <span className="text-lg ml-1 text-text-secondary">/ {weekly.goal} 天</span>
                 </div>
-                <p className="text-[11px] text-text-secondary mt-1 leading-snug">
-                  {streak < 3
-                    ? '再堅持一下，3 天就拿到你的第一個銅牌成就！'
-                    : streak < 7
-                      ? '一週快到手，保持節奏不要斷～'
-                      : '7 天連續達成！自律就是最好的教練。'}
+                <div className="w-full h-1.5 bg-bg-secondary rounded-full overflow-hidden mt-2">
+                  <div
+                    className="h-full bg-accent rounded-full transition-all"
+                    style={{
+                      width: `${Math.min(100, Math.round((weekly.days / Math.max(1, weekly.goal)) * 100))}%`,
+                    }}
+                  />
+                </div>
+                <p className="text-[11px] text-text-secondary mt-1.5 leading-snug">
+                  {weekly.hit
+                    ? '本週目標達成，剩下的都是加分。'
+                    : weekly.remaining === 1
+                      ? '再 1 次就達標，今天動一動就夠。'
+                      : `還差 ${weekly.remaining} 次，分散在這週完成就好。`}
                 </p>
               </div>
             </div>
@@ -356,6 +419,22 @@ export default function Dashboard() {
           <Button fullWidth size="lg" onClick={handleStartToday}>
             <TrendingUp size={18} /> 開始訓練
           </Button>
+          {/* P-RETENTION：micro session（降低開始門檻） */}
+          {microDone ? (
+            <div className="mt-2 rounded-button border border-accent/40 bg-accent/10 px-3 py-2 text-center text-[11px] font-bold text-accent">
+              已記錄今天的一組，這週的目標又靠近一步。
+            </div>
+          ) : (
+            <Button
+              fullWidth
+              size="sm"
+              variant="ghost"
+              className="mt-2 border border-border/40"
+              onClick={() => setMicroOpen(true)}
+            >
+              <Zap size={16} /> 今天只做一組（30 秒）
+            </Button>
+          )}
           <Button
             fullWidth
             size="sm"
@@ -610,6 +689,16 @@ export default function Dashboard() {
         open={restModalOpen}
         onClose={() => setRestModalOpen(false)}
         onSubmit={handleAddRestDay}
+      />
+
+      {/* P-RETENTION：micro session sheet */}
+      <MicroSessionSheet
+        open={microOpen}
+        onClose={() => setMicroOpen(false)}
+        onCompleted={() => {
+          setMicroDone(true);
+          window.setTimeout(() => setMicroDone(false), 4000);
+        }}
       />
     </PageShell>
   );
