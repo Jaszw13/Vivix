@@ -5,6 +5,7 @@ import { useWorkoutStore } from '@/store/workoutStore';
 import { useProfileStore } from '@/store/profileStore';
 import { bestCompletedSet, getProgressKind, getSetDelta, setLoadKg } from '@/utils/workout';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
+import { getFatigueSuggestion } from '@/features/retention/fatigue';
 import { Card } from '@/components/ui/Card';
 import { cn } from '@/lib/utils';
 
@@ -20,6 +21,8 @@ export function ExerciseSetList({ exercise, onSetCompleted, onSubstitute }: SetR
   // T4：新紀錄微慶祝（只跟上一次同動作的最佳組比較）
   const [recentPRSetIds, setRecentPRSetIds] = useState<string[]>([]);
   const activeExercises = useWorkoutStore((s) => s.activeSession?.exercises ?? []);
+  const activeSession = useWorkoutStore((s) => s.activeSession);
+  const sessions = useWorkoutStore((s) => s.sessions);
   // P1-2：完成一組後自動跳到下一組（可在設定關閉）
   const autoNextSet = useProfileStore((s) => s.autoNextSet);
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -146,6 +149,24 @@ export function ExerciseSetList({ exercise, onSetCompleted, onSubstitute }: SetR
           </div>
         </div>
       )}
+
+      {/* P2A-1：疲勞感知建議（僅提示，不自動填入） */}
+      {(() => {
+        const suggestion = getFatigueSuggestion(sessions, activeSession, exercise.exerciseId);
+        if (!suggestion) return null;
+        return (
+          <div className="mb-3 px-3 py-2 rounded-button bg-accent/5 border border-accent/20">
+            <div className="flex items-start gap-1.5">
+              <span className="text-[10px] uppercase tracking-widest text-accent font-bold mt-px">
+                建議重量
+              </span>
+              <span className="text-[11px] text-text-secondary leading-snug">
+                {suggestion.reason}
+              </span>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 標題列 */}
       <div className="grid grid-cols-[2rem_1fr_1fr_2.5rem_2rem] gap-2 px-1 mb-2 text-[9px] uppercase tracking-widest text-text-secondary">

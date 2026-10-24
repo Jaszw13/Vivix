@@ -35,6 +35,8 @@ interface ProfileState {
   comebackWelcomedAt: string | null;
   /** P-RETENTION P1-2：完成一組後自動跳到下一組 */
   autoNextSet: boolean;
+  /** P2A-2：已領取獎勵的每週挑戰 id 清單（避免重複發獎） */
+  claimedWeeklyChallengeIds: string[];
   updateProfile: (patch: Partial<UserProfile>) => void;
   completeOnboarding: (goal: TrainingGoalValue) => void;
   resetOnboarding: () => void;
@@ -51,6 +53,8 @@ interface ProfileState {
   markComebackWelcomed: () => void;
   /** P-RETENTION P1-2：切換自動跳到下一組 */
   setAutoNextSet: (on: boolean) => void;
+  /** P2A-2：標記每週挑戰已領獎 */
+  markWeeklyChallengeClaimed: (id: string) => void;
 }
 
 const defaultProfile: UserProfile = {
@@ -73,6 +77,7 @@ export const useProfileStore = create<ProfileState>()(
       weeklyGoal: 3,
       comebackWelcomedAt: null,
       autoNextSet: true,
+      claimedWeeklyChallengeIds: [],
       updateProfile: (patch) =>
         set((state) => ({ profile: { ...state.profile, ...patch } })),
       markWeeklyReportSeen: (weekKey) => set({ weeklyReportSeenWeek: weekKey }),
@@ -90,6 +95,12 @@ export const useProfileStore = create<ProfileState>()(
         set({ weeklyGoal: Math.min(5, Math.max(2, Math.round(n))) }),
       markComebackWelcomed: () => set({ comebackWelcomedAt: new Date().toISOString() }),
       setAutoNextSet: (on) => set({ autoNextSet: on }),
+      markWeeklyChallengeClaimed: (id) =>
+        set((state) => ({
+          claimedWeeklyChallengeIds: state.claimedWeeklyChallengeIds.includes(id)
+            ? state.claimedWeeklyChallengeIds
+            : [...state.claimedWeeklyChallengeIds, id],
+        })),
       completeOnboarding: (goal) => {
         // onboarding 完成後，順便把名字更新得更個人化
         const stored = localStorage.getItem('ironpulse-profile');
@@ -118,6 +129,7 @@ export const useProfileStore = create<ProfileState>()(
           weeklyGoal: 3,
           comebackWelcomedAt: null,
           autoNextSet: true,
+          claimedWeeklyChallengeIds: [],
         });
         // 重新載入以重置所有 store
         window.location.reload();
@@ -125,7 +137,7 @@ export const useProfileStore = create<ProfileState>()(
     }),
     {
       name: 'ironpulse-profile',
-      version: 7,
+      version: 8,
       partialize: (state) => ({
         profile: state.profile,
         onboardingCompleted: state.onboardingCompleted,
@@ -135,6 +147,7 @@ export const useProfileStore = create<ProfileState>()(
         weeklyGoal: state.weeklyGoal,
         comebackWelcomedAt: state.comebackWelcomedAt,
         autoNextSet: state.autoNextSet,
+        claimedWeeklyChallengeIds: state.claimedWeeklyChallengeIds,
       }),
       // ⚠️ 容錯兜底：LocalStorage 損壞時優雅重置為預設值，唔會白屏崩潰
       onRehydrateStorage: () => {
@@ -199,6 +212,10 @@ export const useProfileStore = create<ProfileState>()(
           typeof raw.comebackWelcomedAt === 'string' ? raw.comebackWelcomedAt : null;
         // P1-2 v6→v7：自動跳到下一組，預設開啟
         const autoNextSet = typeof raw.autoNextSet === 'boolean' ? raw.autoNextSet : true;
+        // P2A v7→v8：每週挑戰已領獎清單
+        const claimedWeeklyChallengeIds = Array.isArray(raw.claimedWeeklyChallengeIds)
+          ? raw.claimedWeeklyChallengeIds
+          : [];
         return {
           profile: migratedProfile,
           onboardingCompleted,
@@ -208,6 +225,7 @@ export const useProfileStore = create<ProfileState>()(
           weeklyGoal,
           comebackWelcomedAt,
           autoNextSet,
+          claimedWeeklyChallengeIds,
         };
       },
     }
