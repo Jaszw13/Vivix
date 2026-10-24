@@ -438,6 +438,8 @@ export const useWorkoutStore = create<WorkoutState>()(
           return {
             ...ex,
             sets: filtered.map((s, i) => ({ ...s, setNumber: i + 1 })),
+            // 刪到沒有完成組時，執行順序戳記一併清除
+            firstCompletedAt: filtered.some((s) => s.completed) ? ex.firstCompletedAt : undefined,
           };
         });
         set({ activeSession: { ...active, lastActivityAt: new Date().toISOString(), exercises } });
