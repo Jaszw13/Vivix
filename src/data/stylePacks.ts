@@ -1,8 +1,16 @@
 /**
- * Vivix 8 款 Core StylePack 定義（S1 + S2）
+ * Vivix 6 款 Core StylePack。
+ *
+ * 高雅米白、工業電力維持不變。其餘四款是日常可穿的記錄器，
+ * 不是戲服：素白紙本、清晨水岸、舊式鐵館、深夜銅燈。
+ * 已移除的 id（retro-card、aurora-glass、neobrutal-pop、muji-calm、
+ * y2k-chrome、wpa-trail）由 themeStore 落回高雅米白。
  *
  * 色碼僅存在於此檔與 stylePacksPersonal.ts，透過 themeStore.setPack() 動態注入 CSS Variables。
  * components/pages 內禁止出現 hex（Hex Gate = 0）。
+ *
+ * 強調色同時當文字和小按鈕底。淺色包用深色強調，深色包用亮色強調，
+ * 這樣「字在底上」和「底色字在按鈕上」才讀得清楚。
  *
  * S5 Release gate：personal-only packs 放在 stylePacksPersonal.ts，
  * production build 下三元表達式 false branch 被消除，Rollup tree-shake 整個模組。
@@ -13,19 +21,14 @@ import {
   shadowFor,
   SYSTEM_SANS,
   SYSTEM_SERIF,
-  SYSTEM_SLAB,
   SYSTEM_MONO,
-  SYSTEM_ROUNDED,
-  SYSTEM_GEOMETRIC,
-  SYSTEM_BUBBLE,
   SYSTEM_STENCIL,
-  SYSTEM_CHROME,
 } from './stylePacksShared';
 import { PERSONAL_PACKS } from './stylePacksPersonal';
 
 const isProduction = import.meta.env.VITE_RELEASE_MODE === 'production';
 
-// 8 款 Core（恆常打包，release-safe）
+// 6 款 Core（恆常打包，release-safe）
 export const CORE_PACKS: StylePack[] = [
   // 1. Elegant Beige — 高雅米白
   {
@@ -51,78 +54,53 @@ export const CORE_PACKS: StylePack[] = [
     deco: ['grid'],
     motion: { transition: 'snappy', hover: 'glow', clickFx: 'glitch' },
   },
-  // 3. Retro Card — 90s 復古球員卡
+  // 3. Plain Paper — 素白紙本。冷白、墨藍，給不想要風格的人。
   {
-    id: 'retro-card',
-    label: '復古球員卡',
+    id: 'plain-paper',
+    label: '素白紙本',
     license: 'core',
     mode: 'light',
-    vars: buildVars('#F2EBD9', '#E8DFC8', '#FBF6E6', '#1A1A1A', '#5A4A3A', '#8A7A6A', '#C99A2E', '#7C2D12', '#1A1A1A'),
-    shape: { radiusCard: '2px', radiusBtn: '2px', borderWidth: '3px', shadow: 'hard' },
-    typo: { display: SYSTEM_SLAB, body: SYSTEM_SANS, numbers: SYSTEM_CHROME },
-    deco: ['halftone', 'starburst'],
-    motion: { transition: 'flip', hover: 'emboss', clickFx: 'holo' },
+    vars: buildVars('#F7F8FA', '#ECEEF2', '#FFFFFF', '#1B1E23', '#4A5160', '#626A78', '#1E3A5F', '#8A5A44', '#D5D9E0'),
+    shape: { radiusCard: '12px', radiusBtn: '10px', borderWidth: '1px', shadow: 'soft' },
+    typo: { display: SYSTEM_SANS, body: SYSTEM_SANS, numbers: SYSTEM_MONO },
+    deco: ['none'],
+    motion: { transition: 'smooth', hover: 'lift', clickFx: 'shimmer' },
   },
-  // 4. Aurora Glass — 極光玻璃（Apple HIG）
+  // 4. Dawn Shore — 清晨水岸。冷綠紙、深水綠，給健康／恢復那條路。
   {
-    id: 'aurora-glass',
-    label: '極光玻璃',
+    id: 'dawn-shore',
+    label: '清晨水岸',
+    license: 'core',
+    mode: 'light',
+    vars: buildVars('#F3F7F6', '#E5EFEC', '#FFFFFF', '#1A2C2A', '#3E5C56', '#547068', '#0E5C4A', '#C46B3A', '#D3E2DC'),
+    shape: { radiusCard: '16px', radiusBtn: '12px', borderWidth: '1px', shadow: 'soft' },
+    typo: { display: SYSTEM_SANS, body: SYSTEM_SANS, numbers: SYSTEM_MONO },
+    deco: ['none'],
+    motion: { transition: 'slow-fade', hover: 'opacity', clickFx: 'ripple' },
+  },
+  // 5. Iron Hall — 舊式鐵館。石膏牆、鐵紅，白天的健身房，不是螢光。
+  {
+    id: 'iron-hall',
+    label: '舊式鐵館',
+    license: 'core',
+    mode: 'light',
+    vars: buildVars('#F4F0E8', '#E8E0D2', '#FFFCF7', '#241C18', '#5A4C44', '#746658', '#7A1A16', '#C4A574', '#D9CFC2'),
+    shape: { radiusCard: '8px', radiusBtn: '6px', borderWidth: '1px', shadow: 'none' },
+    typo: { display: SYSTEM_SANS, body: SYSTEM_SANS, numbers: SYSTEM_MONO },
+    deco: ['none'],
+    motion: { transition: 'snappy', hover: 'lift', clickFx: 'shimmer' },
+  },
+  // 6. Night Copper — 深夜銅燈。暖黑、亮銅，高雅米白的夜版。
+  {
+    id: 'night-copper',
+    label: '深夜銅燈',
     license: 'core',
     mode: 'dark',
-    vars: buildVars('#0B1026', '#131A3A', '#1A2247', '#E8ECFF', '#9AA3C7', '#6B7399', '#4FD1C5', '#A78BFA', '#2A3566'),
-    shape: { radiusCard: '20px', radiusBtn: '16px', borderWidth: '1px', shadow: 'glass' },
-    typo: { display: SYSTEM_SANS, body: SYSTEM_SANS, numbers: SYSTEM_MONO },
+    vars: buildVars('#161311', '#241F1B', '#2E2823', '#F7F1E8', '#D2C4B4', '#A89886', '#F0B56B', '#E07A4C', '#4A4038'),
+    shape: { radiusCard: '14px', radiusBtn: '12px', borderWidth: '1px', shadow: 'soft' },
+    typo: { display: SYSTEM_SERIF, body: SYSTEM_SANS, numbers: SYSTEM_MONO },
     deco: ['none'],
-    glass: true,
-    motion: { transition: 'spring', hover: 'scale', clickFx: 'ripple' },
-  },
-  // 5. Neobrutal Pop — 新野蠻普普
-  {
-    id: 'neobrutal-pop',
-    label: '新野蠻普普',
-    license: 'core',
-    mode: 'light',
-    vars: buildVars('#FFFFFF', '#F5F5F0', '#FFFFFF', '#1A1A1A', '#555555', '#999999', '#FFD02E', '#FF7AC3', '#1A1A1A'),
-    shape: { radiusCard: '0px', radiusBtn: '0px', borderWidth: '2px', shadow: 'hard' },
-    typo: { display: SYSTEM_SANS, body: SYSTEM_SANS, numbers: SYSTEM_MONO },
-    deco: ['none'],
-    motion: { transition: 'instant', hover: 'shadow-collapse', clickFx: 'confetti' },
-  },
-  // 6. Muji Calm — 無印靜謐
-  {
-    id: 'muji-calm',
-    label: '無印靜謐',
-    license: 'core',
-    mode: 'light',
-    vars: buildVars('#F7F5F1', '#EFEAE2', '#FFFFFF', '#3A3A38', '#7A7A76', '#A8A8A2', '#B0653F', '#8A9A7A', '#E0DCD4'),
-    shape: { radiusCard: '4px', radiusBtn: '4px', borderWidth: '1px', shadow: 'none' },
-    typo: { display: SYSTEM_SANS, body: SYSTEM_SANS, numbers: SYSTEM_MONO },
-    deco: ['none'],
-    motion: { transition: 'slow-fade', hover: 'opacity', clickFx: 'none' },
-  },
-  // 7. Y2K Chrome — Y2K 鉻金
-  {
-    id: 'y2k-chrome',
-    label: 'Y2K 鉻金',
-    license: 'core',
-    mode: 'light',
-    vars: buildVars('#E8EEF5', '#D8E2F0', '#F0F4FA', '#2A3A5A', '#6A7A9A', '#9AA8C0', '#6EC1FF', '#FF6EC7', '#B8C8E0'),
-    shape: { radiusCard: '999px', radiusBtn: '999px', borderWidth: '1px', shadow: 'soft' },
-    typo: { display: SYSTEM_BUBBLE, body: SYSTEM_SANS, numbers: SYSTEM_CHROME },
-    deco: ['starburst'],
-    motion: { transition: 'elastic', hover: 'inflation', clickFx: 'sparkle' },
-  },
-  // 8. WPA Trail — 山徑戶外
-  {
-    id: 'wpa-trail',
-    label: '山徑戶外',
-    license: 'core',
-    mode: 'light',
-    vars: buildVars('#EAE0CC', '#DDD2B8', '#F5EFE0', '#2A2A28', '#6A6458', '#9A9488', '#24493A', '#D96F32', '#C8BCA0'),
-    shape: { radiusCard: '12px', radiusBtn: '8px', borderWidth: '2px', shadow: 'soft' },
-    typo: { display: SYSTEM_GEOMETRIC, body: SYSTEM_SANS, numbers: SYSTEM_MONO },
-    deco: ['none'],
-    motion: { transition: 'stamp', hover: 'stamp-press', clickFx: 'stamp' },
+    motion: { transition: 'smooth', hover: 'glow', clickFx: 'shimmer' },
   },
 ];
 

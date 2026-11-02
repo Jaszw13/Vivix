@@ -9,27 +9,23 @@ interface PRCardProps {
 }
 
 /**
- * PR 球員卡（S4）
- * - retro-card：復古球員卡版面（粗黑邊、金箔、Slab Serif、偽 3D 傾斜）
- * - 其他風格：套用對應 shape 與 vars
+ * PR 卡。版面跟目前的 StylePack：圓角、字、顏色都從 pack 來。
  * 所有色碼來自 pack.vars，元件內不出現 hex。
  */
 export function PRCard({ pr, pack }: PRCardProps) {
   const activePackId = useThemeStore((s) => s.activePackId);
   const effectivePack = pack ?? getStylePack(activePackId) ?? getStylePack('elegant-beige')!;
   const shadows = packShadows(effectivePack.shape.shadow);
-  const is90s = effectivePack.id === 'retro-card';
 
   const value = pr.repPR !== undefined ? `BW × ${pr.repPR}` : `${pr.weight}kg × ${pr.reps}`;
   const sub = pr.repPR !== undefined ? 'REPS' : `1RM ${pr.estimated1RM}kg`;
 
   const cardStyle: React.CSSProperties = {
     background: effectivePack.vars['bg-card'],
-    border: is90s ? '3px solid' : '2px solid',
+    border: '2px solid',
     borderColor: effectivePack.vars['border-color'],
     borderRadius: effectivePack.shape.radiusCard,
     boxShadow: shadows.card,
-    transform: is90s ? 'perspective(600px) rotateY(-4deg) rotateX(2deg)' : undefined,
     fontFamily: effectivePack.typo.display,
     color: effectivePack.vars['text-primary'],
   };
@@ -51,7 +47,6 @@ export function PRCard({ pr, pack }: PRCardProps) {
           style={{
             color: effectivePack.vars['accent'],
             fontFamily: effectivePack.typo.numbers,
-            textShadow: is90s ? `2px 2px 0 ${effectivePack.vars['border-color']}` : undefined,
           }}
         >
           {value}
