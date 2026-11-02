@@ -61,7 +61,7 @@ export function TodayDecisionCard({
           </h2>
           <p className="text-xs text-text-secondary mt-1">
             {locked
-              ? '建議先鎖住。進度同舊訓練還在。'
+              ? '建議先鎖住。進度和舊訓練還在。'
               : `每週 ${weeklyDays} 天 · 約 ${sessionMinutes} 分鐘 · ${exerciseCount} 個動作 · ${setCount} 組`}
           </p>
         </div>

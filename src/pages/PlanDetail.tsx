@@ -112,7 +112,7 @@ export default function PlanDetail() {
 
   const handleStart = (dayId: string) => {
     if (useTrialStore.getState().isExpired()) {
-      setToast('今日點練已鎖。進度同舊紀錄仍可睇。');
+      setToast('今日點練已鎖。進度和舊紀錄仍然可以看。');
       return;
     }
     if (!plan) return;
