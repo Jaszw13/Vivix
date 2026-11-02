@@ -277,7 +277,7 @@ metric 擴充：`cardioMinutesTotal` / `cardioSessionsTotal` / `cardioWeeklyRhyt
 | equipmentMemoryStore | — | （改讀取時派生，不 persist） | memories |
 | cardioStore | v1 | CardioSession 原始事實（durationMin/kcal 輸入/avgHr/distanceKm/...） | fallback kcal、kcal low/high、任何 MET 計算結果 |
 | restDayStore | v1 | RestDayEntry[]{ id, date, activity?, note?, createdAt } | — |
-| profileStore | v5 | profile, onboardingCompleted, goal, gymEquipmentIds | — |
+| profileStore | v9 | profile, onboardingCompleted, goal, gymEquipmentIds, weeklyGoal, sessionMinutes, avoidList | — |
 
 **D2 語義**：`unlockedAt` 永久保存；進度條 live 反映真實數據（手造刪 sessions 後進度即時下降，但已 unlocked 成就不消失）。
 
@@ -304,7 +304,9 @@ metric 擴充：`cardioMinutesTotal` / `cardioSessionsTotal` / `cardioWeeklyRhyt
 
 - 試用：4 階段漸進解鎖（1/7/30/永久天數），數字碼驗證；stage 0 免碼直接升級（T1）
 - `trialStore` v6；persist key `ironpulse-trial`
-- Onboarding：首次啟動流程，完成後 `profileStore.onboardingCompleted = true`
+- 到期不再整頁換掉。進度、舊訓練、設定、匯出仍可進。鎖住的是首頁「今日點練」這張建議，不是紀錄本身。
+- Onboarding：完成後 `onboardingCompleted = true`。目標會影響推薦的既有預設課表，Lane B 的頻率寫進 `weeklyGoal`（1–5）。
+- 教練建議是純函式（`src/domain/coach/`），不呼叫模型。`LogRepository` 與事實鍵登記在 `src/domain/storage/`。
 - 試用續用碼本期保留；商業化前移 env（D6，寫入 DEV_RULES，本期不動）
 
 ## 11. mobile-app（D4）

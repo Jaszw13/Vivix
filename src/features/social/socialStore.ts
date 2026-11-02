@@ -98,12 +98,24 @@ export const useSocialStore = create<SocialState>()(
         if (!sb || !userId) return 'error';
         const normalized = code.trim().toUpperCase();
         if (!normalized) return 'not_found';
-        const { data: target, error } = await sb
-          .from('profiles')
-          .select('id')
-          .eq('friend_code', normalized)
-          .maybeSingle();
-        if (error || !target) return 'not_found';
+        // 新政策不能 select 全表。函式只回一列 id。
+        // 還沒跑過這段 SQL 的專案沒有函式，退回精確 friend_code 查詢，避免加好友直接壞掉。
+        const rpc = await sb.rpc('lookup_profile_by_friend_code', { code: normalized });
+        let targetId: string | undefined;
+        if (!rpc.error) {
+          const rows = (Array.isArray(rpc.data) ? rpc.data : rpc.data ? [rpc.data] : []) as { id?: string }[];
+          targetId = rows[0]?.id;
+          if (!targetId) return 'not_found';
+        } else {
+          const { data: target, error } = await sb
+            .from('profiles')
+            .select('id')
+            .eq('friend_code', normalized)
+            .maybeSingle();
+          if (error || !target) return error ? 'error' : 'not_found';
+          targetId = target.id;
+        }
+        const target = { id: targetId };
         if (target.id === userId) return 'self';
         // 檢查是否已存在（任一方向）
         const { data: existing } = await sb

@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Flame, TrendingUp, Trophy, Zap, Award, Cat, Dog, ChevronRight, Gift, Activity, Coffee } from 'lucide-react';
+import { Flame, TrendingUp, Trophy, Cat, Dog, ChevronRight, Gift } from 'lucide-react';
 import { PageShell } from '@/components/layout/PageShell';
 import { PackAvatar } from '@/components/deco/PersonalDecor';
 import { Button } from '@/components/ui/Button';
@@ -9,7 +9,7 @@ import { Card, SectionHeader, StatTile, Badge } from '@/components/ui/Card';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { useProfileStore } from '@/store/profileStore';
 import { useCardioStore } from '@/store/cardioStore';
-import { useRestDayStore, ACTIVITY_LABEL } from '@/store/restDayStore';
+import { useRestDayStore } from '@/store/restDayStore';
 import { dayKey } from '@/utils/time';
 import type { CardioMachine, RestDayEntry } from '@/types';
 import {
@@ -20,6 +20,12 @@ import {
 import { ACHIEVEMENTS, TIER_COLORS, type AchievementDef } from '@/data/achievements';
 import { CelebrationModal, type CelebrationItem } from '@/features/achievements/components/CelebrationModal';
 import { trainingPlans, DEFAULT_BEGINNER_PLAN_ID } from '@/data/plans';
+import { exercises as builtinExercises } from '@/data/exercises';
+import { getEquipmentTypesForIds } from '@/data/equipment';
+import { buildCoachContext } from '@/domain/coach/buildCoachContext';
+import { proposeSession } from '@/domain/coach/proposeSession';
+import { TodayDecisionCard } from '@/components/dashboard/TodayDecisionCard';
+import { useTrialStore } from '@/store/trialStore';
 import { usePlansStore } from '@/store/plansStore';
 import { formatDate } from '@/utils/workout';
 import { cn } from '@/lib/utils';
@@ -54,7 +60,18 @@ export default function Dashboard() {
     nextDayIndex,
     setActivePlan,
   } = useWorkoutStore();
-  const { profile, weeklyGoal, comebackWelcomedAt, markComebackWelcomed } = useProfileStore();
+  const {
+    profile,
+    weeklyGoal,
+    goal,
+    sessionMinutes,
+    avoidList,
+    gymEquipmentIds,
+    comebackWelcomedAt,
+    markComebackWelcomed,
+  } = useProfileStore();
+  const isExpired = useTrialStore((s) => s.isExpired);
+  const coachLocked = isExpired();
   const cardioSessions = useCardioStore((s) => s.sessions);
   const addCardio = useCardioStore((s) => s.addCardio);
 
@@ -123,6 +140,10 @@ export default function Dashboard() {
   const handleComebackStart = () => {
     markComebackWelcomed();
     useTelemetryStore.getState().log('comeback_started');
+    if (isExpired()) {
+      navigate('/progress');
+      return;
+    }
     handleStartToday();
   };
 
@@ -196,10 +217,51 @@ export default function Dashboard() {
     todayPlan.days.length - 1
   );
   const todayWorkout = todayPlan.days[todayDayIndex];
+  const allowedEquipmentTypes = gymEquipmentIds.length > 0
+    ? getEquipmentTypesForIds(gymEquipmentIds)
+    : null;
+  const coach = useMemo(
+    () =>
+      buildCoachContext({
+        goal,
+        weeklyDays: weeklyGoal,
+        sessionMinutes,
+        equipmentIds: gymEquipmentIds,
+        avoid: avoidList,
+        sessions,
+      }),
+    [goal, weeklyGoal, sessionMinutes, gymEquipmentIds, avoidList, sessions],
+  );
+  const proposal = useMemo(
+    () =>
+      proposeSession({
+        planned: todayWorkout.exercises.map((exercise) => ({
+          exerciseId: exercise.exerciseId,
+          targetWeight: exercise.targetWeight,
+          alternativeIds: exercise.alternativeIds,
+        })),
+        taxonomy: builtinExercises.map((exercise) => ({
+          id: exercise.id,
+          muscleGroup: exercise.muscleGroup,
+          equipmentType: exercise.equipmentType,
+        })),
+        allowedEquipmentTypes,
+        avoid: avoidList,
+        sessions,
+      }),
+    [todayWorkout, allowedEquipmentTypes, avoidList, sessions],
+  );
+  const proposalNames = useMemo(() => {
+    const names: Record<string, string> = {};
+    for (const exercise of builtinExercises) names[exercise.id] = exercise.name;
+    for (const exercise of todayWorkout.exercises) names[exercise.exerciseId] = exercise.name;
+    return names;
+  }, [todayWorkout]);
 
-  // 開始今日訓練：自動填入計畫
+  // 開始今日訓練：計畫預設重量仍由既有 startSession 處理。
+  // 疲勞區間只顯示，不寫進組數。
   const handleStartToday = () => {
-    // 新用戶未設置 activePlan，先預設 5x5
+    if (isExpired()) return;
     if (!activePlanId) setActivePlan(DEFAULT_BEGINNER_PLAN_ID);
     const store = useWorkoutStore.getState();
     store.startSession(todayPlan.id, todayPlan.name, todayWorkout);
@@ -221,6 +283,27 @@ export default function Dashboard() {
           {profile.name}
         </h1>
       </motion.div>
+
+      <TodayDecisionCard
+        planName={todayPlan.name}
+        dayName={todayWorkout.dayName}
+        exerciseCount={proposal.status === 'ready' ? proposal.exercises.length : todayWorkout.exercises.length}
+        setCount={todayWorkout.exercises.reduce((sum, exercise) => sum + exercise.targetSets, 0)}
+        dateLabel={`${today.getMonth() + 1}.${today.getDate()}`}
+        weekdayLabel={formatWeekdayShort(today)}
+        sessionMinutes={coach.sessionMinutes}
+        weeklyDays={coach.weeklyDays}
+        proposal={proposal}
+        names={proposalNames}
+        locked={coachLocked}
+        onStart={handleStartToday}
+        microDone={microDone}
+        onMicro={() => setMicroOpen(true)}
+        onCardio={() => setCardioModalOpen(true)}
+        onRest={() => setRestModalOpen(true)}
+        todayRest={todayRestDay}
+        onDeleteRest={handleDeleteRestDay}
+      />
 
       {/* P-RETENTION：回歸卡（優先）或本週目標卡 */}
       {showComeback ? (
@@ -245,7 +328,7 @@ export default function Dashboard() {
                   : '不用補進度，今天只要比昨天動一點。'}
               </p>
               <Button fullWidth size="sm" className="mt-3" onClick={handleComebackStart}>
-                <TrendingUp size={16} /> 回來第一練
+                <TrendingUp size={16} /> {coachLocked ? '查看上次紀錄' : '回來第一練'}
               </Button>
             </div>
           </Card>
@@ -358,9 +441,11 @@ export default function Dashboard() {
             </button>
 
             {/* CTA */}
-            <Button fullWidth size="sm" className="mt-3" onClick={handleStartToday}>
-              <TrendingUp size={16} /> 開始今日訓練
-            </Button>
+            {!coachLocked && (
+              <Button fullWidth size="sm" className="mt-3" onClick={handleStartToday}>
+                <TrendingUp size={16} /> 開始今日訓練
+              </Button>
+            )}
           </Card>
         </motion.div>
       )}
@@ -399,100 +484,6 @@ export default function Dashboard() {
           </Card>
         </motion.div>
       )}
-
-      {/* 今日訓練卡片 */}
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.05 }}
-      >
-        <Card className="relative overflow-hidden p-5">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-accent via-accent to-auxiliary" />
-          <div className="flex items-start justify-between mb-4">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <Zap size={14} className="text-accent" />
-                <span className="text-[10px] uppercase tracking-widest text-text-secondary">
-                  今日訓練 · {todayPlan.name}
-                </span>
-              </div>
-              <h2 className="font-display text-3xl tracking-wide uppercase text-text-primary">
-                {todayWorkout.dayName}
-              </h2>
-              <p className="text-xs text-text-secondary mt-1">
-                {todayWorkout.exercises.length} 個動作 · {todayWorkout.exercises.reduce((s, e) => s + e.targetSets, 0)} 組
-              </p>
-            </div>
-            <div className="text-right">
-              <div className="font-mono text-xs text-text-secondary">
-                {today.getMonth() + 1}.{today.getDate()}
-              </div>
-              <div className="font-display text-2xl text-accent mt-1">
-                {formatWeekdayShort(today)}
-              </div>
-            </div>
-          </div>
-          <Button fullWidth size="lg" onClick={handleStartToday}>
-            <TrendingUp size={18} /> 開始訓練
-          </Button>
-          {/* P-RETENTION：micro session（降低開始門檻） */}
-          {microDone ? (
-            <div className="mt-2 rounded-button border border-accent/40 bg-accent/10 px-3 py-2 text-center text-[11px] font-bold text-accent">
-              已記錄今天的一組，這週的目標又靠近一步。
-            </div>
-          ) : (
-            <Button
-              fullWidth
-              size="sm"
-              variant="ghost"
-              className="mt-2 border border-border/40"
-              onClick={() => setMicroOpen(true)}
-            >
-              <Zap size={16} /> 今天只做一組（30 秒）
-            </Button>
-          )}
-          <Button
-            fullWidth
-            size="sm"
-            variant="ghost"
-            className="mt-2 border border-border/40"
-            onClick={() => setCardioModalOpen(true)}
-          >
-            <Activity size={16} /> 記錄有氧
-          </Button>
-
-          {/* R5：休息日 */}
-          {todayRestDay ? (
-            <div className="mt-2 flex items-center justify-between rounded-button border border-accent/30 bg-accent/10 px-3 py-2">
-              <div className="flex items-center gap-2">
-                <Coffee size={16} className="text-accent" />
-                <span className="text-sm font-bold text-accent">今天：休息日</span>
-                {todayRestDay.activity && (
-                  <span className="text-[10px] text-text-secondary">
-                    {ACTIVITY_LABEL[todayRestDay.activity]}
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={handleDeleteRestDay}
-                className="text-[10px] text-text-secondary hover:text-accent transition-colors"
-              >
-                刪除
-              </button>
-            </div>
-          ) : (
-            <Button
-              fullWidth
-              size="sm"
-              variant="ghost"
-              className="mt-2 border border-border/40"
-              onClick={() => setRestModalOpen(true)}
-            >
-              <Coffee size={16} /> 記錄休息日
-            </Button>
-          )}
-        </Card>
-      </motion.div>
 
       {/* 累積數據 */}
       <motion.div

@@ -1,8 +1,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { UserProfile } from '@/types';
+import type { MuscleGroup, UserProfile } from '@/types';
+import type { AvoidEntry, TrainingGoal } from '@/domain/coach/types';
+import { sanitizeAvoid } from '@/domain/coach/buildCoachContext';
+import { clearFactKeys } from '@/domain/storage/logRepository';
+import { createBrowserLogRepository } from '@/services/browserLogRepository';
 
-export type TrainingGoalValue = 'muscle' | 'fatloss' | 'health';
+export type TrainingGoalValue = TrainingGoal;
 
 export const TRAINING_GOAL_LABELS: Record<TrainingGoalValue, { title: string; desc: string }> = {
   muscle: {
@@ -29,8 +33,12 @@ interface ProfileState {
   weeklyReportSeenWeek: string | null;
   /** T7-3：我的健身房器材 ID 列表（equipmentLibrary 中的 eq-* id） */
   gymEquipmentIds: string[];
-  /** P-RETENTION：每週訓練目標（2–5 次，預設 3） */
+  /** P-RETENTION：每週訓練目標（1–5 次，預設 3） */
   weeklyGoal: number;
+  /** 典型一次練幾分鐘。沒答過就是 45。 */
+  sessionMinutes: number;
+  /** 自己勾的少練部位或動作。空陣列有效。不是病歷。 */
+  avoidList: AvoidEntry[];
   /** P-RETENTION：上次顯示「歡迎回來」卡的時間（ISO）；null = 從未 */
   comebackWelcomedAt: string | null;
   /** P-RETENTION P1-2：完成一組後自動跳到下一組 */
@@ -47,8 +55,12 @@ interface ProfileState {
   toggleGymEquipment: (equipmentId: string) => void;
   /** T7-3：批量設定我的器材 */
   setGymEquipmentIds: (ids: string[]) => void;
-  /** P-RETENTION：設定每週訓練目標（自動夾在 2–5） */
+  /** 設定每週訓練目標（夾在 1–5，與設定頁同一組數字） */
   setWeeklyGoal: (n: number) => void;
+  setSessionMinutes: (n: number) => void;
+  setAvoidList: (list: AvoidEntry[]) => void;
+  toggleAvoidRegion: (region: MuscleGroup) => void;
+  toggleAvoidExercise: (exerciseId: string) => void;
   /** P-RETENTION：標記回歸卡已顯示，避免短期內重複彈出 */
   markComebackWelcomed: () => void;
   /** P-RETENTION P1-2：切換自動跳到下一組 */
@@ -75,6 +87,8 @@ export const useProfileStore = create<ProfileState>()(
       weeklyReportSeenWeek: null,
       gymEquipmentIds: [],
       weeklyGoal: 3,
+      sessionMinutes: 45,
+      avoidList: [],
       comebackWelcomedAt: null,
       autoNextSet: true,
       claimedWeeklyChallengeIds: [],
@@ -92,7 +106,32 @@ export const useProfileStore = create<ProfileState>()(
         }),
       setGymEquipmentIds: (ids) => set({ gymEquipmentIds: ids }),
       setWeeklyGoal: (n) =>
-        set({ weeklyGoal: Math.min(5, Math.max(2, Math.round(n))) }),
+        set({ weeklyGoal: Math.min(5, Math.max(1, Math.round(n))) }),
+      setSessionMinutes: (n) =>
+        set({ sessionMinutes: Math.min(120, Math.max(20, Math.round(n))) }),
+      setAvoidList: (list) => set({ avoidList: sanitizeAvoid(list) }),
+      toggleAvoidRegion: (region) =>
+        set((state) => {
+          const has = state.avoidList.some((item) => item.kind === 'region' && item.region === region);
+          return {
+            avoidList: has
+              ? state.avoidList.filter((item) => !(item.kind === 'region' && item.region === region))
+              : [...state.avoidList, { kind: 'region', region }],
+          };
+        }),
+      toggleAvoidExercise: (exerciseId) =>
+        set((state) => {
+          const has = state.avoidList.some(
+            (item) => item.kind === 'exercise' && item.exerciseId === exerciseId,
+          );
+          return {
+            avoidList: has
+              ? state.avoidList.filter(
+                  (item) => !(item.kind === 'exercise' && item.exerciseId === exerciseId),
+                )
+              : [...state.avoidList, { kind: 'exercise', exerciseId }],
+          };
+        }),
       markComebackWelcomed: () => set({ comebackWelcomedAt: new Date().toISOString() }),
       setAutoNextSet: (on) => set({ autoNextSet: on }),
       markWeeklyChallengeClaimed: (id) =>
@@ -116,28 +155,14 @@ export const useProfileStore = create<ProfileState>()(
       },
       resetOnboarding: () => set({ onboardingCompleted: false, goal: null }),
       resetAllData: () => {
-        localStorage.removeItem('ironpulse-workouts');
-        localStorage.removeItem('ironpulse-profile');
-        localStorage.removeItem('ironpulse-theme');
-        localStorage.removeItem('ironpulse-achievements');
-        set({
-          profile: { ...defaultProfile, createdAt: new Date().toISOString() },
-          onboardingCompleted: false,
-          goal: null,
-          weeklyReportSeenWeek: null,
-          gymEquipmentIds: [],
-          weeklyGoal: 3,
-          comebackWelcomedAt: null,
-          autoNextSet: true,
-          claimedWeeklyChallengeIds: [],
-        });
-        // 重新載入以重置所有 store
+        // 先清儲存再重新載入。不要在清除後 set()，否則 persist 會把 profile 寫回去。
+        clearFactKeys(createBrowserLogRepository());
         window.location.reload();
       },
     }),
     {
       name: 'ironpulse-profile',
-      version: 8,
+      version: 9,
       partialize: (state) => ({
         profile: state.profile,
         onboardingCompleted: state.onboardingCompleted,
@@ -145,6 +170,8 @@ export const useProfileStore = create<ProfileState>()(
         weeklyReportSeenWeek: state.weeklyReportSeenWeek,
         gymEquipmentIds: state.gymEquipmentIds,
         weeklyGoal: state.weeklyGoal,
+        sessionMinutes: state.sessionMinutes,
+        avoidList: state.avoidList,
         comebackWelcomedAt: state.comebackWelcomedAt,
         autoNextSet: state.autoNextSet,
         claimedWeeklyChallengeIds: state.claimedWeeklyChallengeIds,
@@ -206,8 +233,13 @@ export const useProfileStore = create<ProfileState>()(
         // P-RETENTION v5→v6：週目標預設 3；回歸卡從未顯示
         const weeklyGoal =
           typeof raw.weeklyGoal === 'number'
-            ? Math.min(5, Math.max(2, Math.round(raw.weeklyGoal)))
+            ? Math.min(5, Math.max(1, Math.round(raw.weeklyGoal)))
             : 3;
+        const sessionMinutes =
+          typeof raw.sessionMinutes === 'number'
+            ? Math.min(120, Math.max(20, Math.round(raw.sessionMinutes)))
+            : 45;
+        const avoidList = sanitizeAvoid(raw.avoidList as AvoidEntry[] | undefined);
         const comebackWelcomedAt =
           typeof raw.comebackWelcomedAt === 'string' ? raw.comebackWelcomedAt : null;
         // P1-2 v6→v7：自動跳到下一組，預設開啟
@@ -223,6 +255,8 @@ export const useProfileStore = create<ProfileState>()(
           weeklyReportSeenWeek,
           gymEquipmentIds,
           weeklyGoal,
+          sessionMinutes,
+          avoidList,
           comebackWelcomedAt,
           autoNextSet,
           claimedWeeklyChallengeIds,

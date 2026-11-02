@@ -8,6 +8,7 @@ import { Card, Badge, SectionHeader } from '@/components/ui/Card';
 import { usePlansStore } from '@/store/plansStore';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { useProfileStore } from '@/store/profileStore';
+import { useTrialStore } from '@/store/trialStore';
 import { exercises as builtinExercisesList } from '@/data/exercises';
 import { getEquipmentTypesForIds } from '@/data/equipment';
 import { DIFFICULTY_LABELS, MUSCLE_GROUP_LABELS, EQUIPMENT_TYPE_LABELS } from '@/types';
@@ -110,6 +111,10 @@ export default function PlanDetail() {
   }, [searchParams, planId, canReset, resetToPreset, setSearchParams]);
 
   const handleStart = (dayId: string) => {
+    if (useTrialStore.getState().isExpired()) {
+      setToast('今日點練已鎖。進度同舊紀錄仍可睇。');
+      return;
+    }
     if (!plan) return;
     const day = plan.days.find((d) => d.id === dayId);
     if (!day) return;

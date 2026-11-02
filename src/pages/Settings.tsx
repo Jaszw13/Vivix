@@ -18,10 +18,30 @@ import { StyleGallery } from '@/components/settings/StyleGallery';
 import { useThemeStore } from '@/store/themeStore';
 import { cn } from '@/lib/utils';
 import { SocialSection } from '@/features/social/SocialSection';
+import { TrainingPreferences } from '@/components/training/TrainingPreferences';
+import { TrialRedeemPanel } from '@/components/TrialLock';
+import { exportSnapshot, importSnapshot } from '@/domain/storage/logRepository';
+import { createBrowserLogRepository } from '@/services/browserLogRepository';
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { profile, updateProfile, resetAllData, gymEquipmentIds, toggleGymEquipment, weeklyGoal, setWeeklyGoal, autoNextSet, setAutoNextSet } = useProfileStore();
+  const {
+    profile,
+    updateProfile,
+    resetAllData,
+    gymEquipmentIds,
+    toggleGymEquipment,
+    weeklyGoal,
+    setWeeklyGoal,
+    sessionMinutes,
+    setSessionMinutes,
+    avoidList,
+    toggleAvoidRegion,
+    toggleAvoidExercise,
+    autoNextSet,
+    setAutoNextSet,
+  } = useProfileStore();
+  const importSnapshotRef = useRef<HTMLInputElement | null>(null);
   const { getTotalSessions, getTotalVolume, personalRecords } = useWorkoutStore();
   const [importOpen, setImportOpen] = useState(false);
   const {
@@ -38,7 +58,9 @@ export default function Settings() {
     devForceFeedbackNow,
     devResetTrial,
     devAdvanceStage,
+    isExpired,
   } = useTrialStore();
+  const coachLocked = isExpired();
   const telemetryEvents = useTelemetryStore((s) => s.events);
   const telemetryClear = useTelemetryStore((s) => s.clear);
   const telemetryExportJSON = useTelemetryStore((s) => s.exportJSON);
@@ -90,21 +112,9 @@ export default function Settings() {
     URL.revokeObjectURL(url);
   };
 
-  // 匯出全部本地資料（vivix-* + ironpulse-* localStorage keys）
+  // 匯出全部事實鍵。新版有版本號；匯入仍接受舊的扁平檔。
   const handleExportAll = () => {
-    const dump: Record<string, unknown> = {};
-    try {
-      for (const key of Object.keys(localStorage)) {
-        if (!key.startsWith('vivix-') && !key.startsWith('ironpulse-')) continue;
-        const raw = localStorage.getItem(key);
-        if (!raw) continue;
-        try {
-          dump[key] = JSON.parse(raw);
-        } catch {
-          dump[key] = raw;
-        }
-      }
-    } catch {}
+    const dump = exportSnapshot(createBrowserLogRepository());
     const blob = new Blob([JSON.stringify(dump, null, 2)], {
       type: 'application/json',
     });
@@ -114,6 +124,22 @@ export default function Settings() {
     a.download = `vivix-data-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleImportSnapshot = async (file: File) => {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch {
+      window.alert('這個檔案不是有效的 JSON。');
+      return;
+    }
+    const result = importSnapshot(createBrowserLogRepository(), parsed);
+    if (!result.ok) {
+      window.alert('error' in result ? result.error : '無法讀取備份');
+      return;
+    }
+    window.location.reload();
   };
 
   const handleClearTelemetry = () => {
@@ -336,8 +362,8 @@ export default function Settings() {
       >
         <SectionHeader title="每週目標" subtitle="設定一週想練幾天，首頁會顯示進度" />
         <Card className="p-4">
-          <div className="grid grid-cols-4 gap-2">
-            {[2, 3, 4, 5].map((n) => (
+          <div className="grid grid-cols-5 gap-2">
+            {[1, 2, 3, 4, 5].map((n) => (
               <button
                 key={n}
                 type="button"
@@ -354,8 +380,15 @@ export default function Settings() {
             ))}
           </div>
           <p className="text-[11px] text-text-secondary mt-3 leading-snug">
-            建議從 3 天開始。目標訂太高反而容易放棄，先養成節奏再往上加。
+            建議從 3 天開始。一週只練 1 天也可以，先有節奏再往上加。
           </p>
+          <TrainingPreferences
+            sessionMinutes={sessionMinutes}
+            onSessionMinutes={setSessionMinutes}
+            avoidList={avoidList}
+            onToggleRegion={toggleAvoidRegion}
+            onToggleExercise={toggleAvoidExercise}
+          />
           <div className="flex items-center justify-between mt-4 pt-4 border-t border-border/40">
             <div className="pr-3">
               <div className="text-sm font-bold text-text-primary">自動跳到下一組</div>
@@ -381,6 +414,11 @@ export default function Settings() {
               />
             </button>
           </div>
+          {coachLocked && (
+            <div className="mt-4 pt-4 border-t border-border/40">
+              <TrialRedeemPanel />
+            </div>
+          )}
         </Card>
       </motion.div>
 
@@ -658,6 +696,25 @@ export default function Settings() {
             <Download size={16} />
             <span className="text-[10px] uppercase tracking-wider font-bold">匯出全部資料</span>
           </Button>
+          <Button
+            variant="secondary"
+            onClick={() => importSnapshotRef.current?.click()}
+            className="flex flex-col items-center gap-1 p-3 rounded-button border border-border text-text-secondary hover:bg-bg-secondary transition-colors"
+          >
+            <UploadIcon size={16} />
+            <span className="text-[10px] uppercase tracking-wider font-bold">匯入備份</span>
+          </Button>
+          <input
+            ref={importSnapshotRef}
+            type="file"
+            accept="application/json"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              if (file) void handleImportSnapshot(file);
+            }}
+          />
         </div>
         <div className="mt-4">
           <Button variant="danger" fullWidth onClick={handleReset}>

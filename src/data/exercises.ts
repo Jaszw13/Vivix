@@ -1,8 +1,9 @@
-import type { Exercise, ExerciseCategory, MuscleGroup, EquipmentType, MediaRef } from '@/types';
+import type { Exercise, MuscleGroup, EquipmentType, MediaRef } from '@/types';
 import { DEFAULT_MEDIA, resolveEquipmentType } from '@/types';
+import { extraExercises } from './exerciseCatalog';
 
 /**
- * 15 個內建動作（Vivix MVP 基礎動作庫）。
+ * 內建動作（原有 15 個 id 穩定，其餘見 exerciseCatalog.ts）。
  * 每個動作皆已補齊：
  *   - muscleGroup / category（統一必填，語義一致，值相同）
  *   - equipmentType（結構化值）
@@ -11,7 +12,7 @@ import { DEFAULT_MEDIA, resolveEquipmentType } from '@/types';
  *   - steps / tips（步驟與提示）
  *   - media（預設合規插圖 metadata，無品牌、無人臉）
  */
-export const exercises: Exercise[] = [
+const coreExercises: Exercise[] = [
   // ============ 胸部 chest ============
   {
     id: 'bench-press',
@@ -422,15 +423,8 @@ export const exercises: Exercise[] = [
   },
 ];
 
-/**
- * 合計：15 個內建動作，全部皆有 muscleGroup + equipmentType
- *   chest: 3
- *   back: 3
- *   legs: 3
- *   shoulders: 2
- *   arms: 2
- *   core: 2
- */
+/** 內建動作：原有 15 個 id 不變，其後接 exerciseCatalog 的新名稱。 */
+export const exercises: Exercise[] = [...coreExercises, ...extraExercises];
 
 export function getExerciseById(id: string): Exercise | undefined {
   return exercises.find((e) => e.id === id);

@@ -13,6 +13,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "check": "tsc -b --noEmit",
+    "test": "vitest run",
     "check:release": "bash scripts/check-release-gate.sh"
   },
   "dependencies": {
@@ -45,6 +46,7 @@
     "typescript-eslint": "^8.30.1",
     "vite": "^6.3.5",
     "vite-plugin-pwa": "^1.3.0",
-    "vite-tsconfig-paths": "^5.1.4"
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.2.7"
   }
 }

@@ -2,6 +2,9 @@ import { StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import App from './App'
 import './index.css'
+import { FACT_KEY_PREFIXES } from '@/domain/storage/factKeys'
+
+const resetFactKeysOnClick = `(function(){try{var prefixes=[${FACT_KEY_PREFIXES.map((prefix) => `'${prefix}'`).join(',')}];var i=localStorage.length;while(i--){var k=localStorage.key(i);if(!k)continue;for(var j=0;j<prefixes.length;j++){if(k.indexOf(prefixes[j])===0){localStorage.removeItem(k);break;}}}if(navigator.serviceWorker){navigator.serviceWorker.getRegistrations().then(function(rs){rs.forEach(function(r){r.unregister();});});}location.reload();}catch(e){location.reload();}})()`
 
 /**
  * 入口級最後防線：連 ErrorBoundary 都冇機會執行嘅級別錯誤（例如 bundle 加載失敗 /
@@ -30,7 +33,7 @@ function renderFallback(message: string, error?: unknown) {
       ${errName ? `<div style="margin-top:16px;padding:12px;border-radius:12px;background:var(--bg-secondary,#F5F2EC);border:1px solid rgba(0,0,0,0.06);"><div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--text-secondary,#666);margin-bottom:4px;">錯誤摘要</div><pre style="font-size:11.5px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--text-primary,#111);white-space:pre-wrap;word-break:break-word;margin:0;line-height:1.5;">${errName}</pre></div>` : ''}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px;">
         <button onclick="location.reload()" style="height:48px;border:none;border-radius:12px;background:var(--accent,#B8895A);color:var(--bg-primary,#fff);font-size:14px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;cursor:pointer;">重新載入</button>
-        <button onclick="(function(){try{for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);if(k&&k.startsWith('ironpulse-'))localStorage.removeItem(k);}if(navigator.serviceWorker){navigator.serviceWorker.getRegistrations().then(function(rs){rs.forEach(function(r){r.unregister();});});}location.reload();}catch(e){location.reload();}})()" style="height:48px;border-radius:12px;border:2px solid var(--border,#E5DCCA);background:var(--bg-secondary,#F5F2EC);font-size:14px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-primary,#111);cursor:pointer;">重置所有資料</button>
+        <button onclick="${resetFactKeysOnClick}" style="height:48px;border-radius:12px;border:2px solid var(--border,#E5DCCA);background:var(--bg-secondary,#F5F2EC);font-size:14px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--text-primary,#111);cursor:pointer;">重置所有資料</button>
       </div>
       <p style="margin-top:16px;text-align:center;font-size:10px;color:color-mix(in srgb, var(--text-secondary,#666) 60%, transparent);line-height:1.6;">如果重新載入後仍然出現，請截圖回饋俾開發團隊。</p>
     </div>

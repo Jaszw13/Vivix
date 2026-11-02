@@ -25,6 +25,8 @@ import { useRestTimerStore } from '@/store/restTimerStore';
 import { settleOnLoad } from '@/features/stats/settleAll';
 import { getISOWeek, getWeekStart, addDays } from '@/utils/time';
 import { installClickFxListener } from '@/utils/clickFxListener';
+import { clearFactKeys } from '@/domain/storage/logRepository';
+import { createBrowserLogRepository } from '@/services/browserLogRepository';
 
 /**
  * App 級 ErrorBoundary：
@@ -54,10 +56,10 @@ class AppErrorBoundary extends Component<
   handleClearAll = () => {
     // 全部清 store（last resort，例如 migrate 壞咗）
     try {
-      for (const k of Object.keys(localStorage)) {
-        if (k.startsWith('ironpulse-')) localStorage.removeItem(k);
-      }
-    } catch {}
+      clearFactKeys(createBrowserLogRepository());
+    } catch {
+      /* storage unavailable */
+    }
     window.location.reload();
   };
   render() {

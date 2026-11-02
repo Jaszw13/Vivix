@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -25,6 +25,10 @@ import { Card, Badge } from '@/components/ui/Card';
 import { useProfileStore, TRAINING_GOAL_LABELS, type TrainingGoalValue } from '@/store/profileStore';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { trainingPlans, getPlanById, DEFAULT_BEGINNER_PLAN_ID } from '@/data/plans';
+import { explainPlan, recommendPlanId, weeklyDaysForOnboarding } from '@/domain/coach/recommendPlan';
+import type { AvoidEntry, FreqBucket as DomainFreq } from '@/domain/coach/types';
+import { TrainingPreferences } from '@/components/training/TrainingPreferences';
+import type { MuscleGroup } from '@/types';
 import { usePartnerStore } from '@/features/partner/stores/partnerStore';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { CAT_DEFAULT_NAMES, DOG_DEFAULT_NAMES } from '@/features/partner/data/partnerNames';
@@ -36,27 +40,17 @@ import { WEEK_MS } from '@/utils/time';
 // Errata E7：Lane A 以現有序列為準（partner→goal→recommend→tutorial），**僅前置 experience**
 // STEPS 陣列成員對兩 lane 相同，goal 頁內部依 lane 切換「選目標」或「選頻率」
 const STEPS = ['welcome', 'experience', 'partner', 'goal', 'recommend', 'tutorial'] as const;
-type StepId = (typeof STEPS)[number];
 
 type ExperienceChoice = 'beginner' | 'experienced' | 'excel';
-type FreqBucket = '1' | '2' | '3-4' | '5+';
-const FREQ_PLAN_MAP: Record<FreqBucket, string> = {
-  '1': DEFAULT_BEGINNER_PLAN_ID,          // 5×5
-  '2': 'upper-lower',                      // 上下分裂
-  '3-4': 'push-pull-legs',                 // PPL
-  '5+': 'push-pull-legs',                  // PPL（E5）
-};
-const PLAN_FREQ_RATIONALE: Record<FreqBucket, string> = {
-  '1': '每週 1 次先培養規律，5×5 全身入門是最穩的起步。',
-  '2': '每週 2 次以上可用上下分裂，上下半身輪流恢復。',
-  '3-4': '每週 3–4 次節奏適合推拉腿 PPL，部位刺激更聚焦。',
-  '5+': '每週 5 次以上同樣建議 PPL，把恢復日排在訓練日之間。',
-};
+type FreqBucket = DomainFreq;
 
 export default function Onboarding() {
   const navigate = useNavigate();
   const completeOnboarding = useProfileStore((s) => s.completeOnboarding);
   const updateProfile = useProfileStore((s) => s.updateProfile);
+  const persistWeeklyGoal = useProfileStore((s) => s.setWeeklyGoal);
+  const persistSessionMinutes = useProfileStore((s) => s.setSessionMinutes);
+  const persistAvoidList = useProfileStore((s) => s.setAvoidList);
   const setActivePlan = useWorkoutStore((s) => s.setActivePlan);
   const createPartner = usePartnerStore((s) => s.createPartner);
   const telemetryLog = useTelemetryStore((s) => s.log);
@@ -75,6 +69,8 @@ export default function Onboarding() {
   const [freqBucket, setFreqBucket] = useState<FreqBucket | null>(null);
   // Lane B excel 用戶的 inline 匯入 wizard
   const [importOpen, setImportOpen] = useState(false);
+  const [sessionMinutes, setSessionMinutes] = useState(45);
+  const [avoidList, setAvoidList] = useState<AvoidEntry[]>([]);
 
   const step = STEPS[stepIdx];
   const next = () => setStepIdx((i) => Math.min(STEPS.length - 1, i + 1));
@@ -110,11 +106,20 @@ export default function Onboarding() {
 
   // Lane B：優先自動推斷，否則用戶手選 chips
   const resolvedFreq: FreqBucket | null = autoFreq ?? freqBucket;
+  const goalForPlan: TrainingGoalValue = goal ?? 'health';
   const recommendedPlanId: string = useMemo(() => {
-    if (isLaneA) return DEFAULT_BEGINNER_PLAN_ID;
-    if (resolvedFreq) return FREQ_PLAN_MAP[resolvedFreq];
-    return DEFAULT_BEGINNER_PLAN_ID; // fallback
-  }, [isLaneA, resolvedFreq]);
+    return recommendPlanId({
+      goal: goalForPlan,
+      experience: isLaneA ? 'beginner' : 'experienced',
+      freq: isLaneA ? null : resolvedFreq,
+    });
+  }, [goalForPlan, isLaneA, resolvedFreq]);
+  const planRationale = explainPlan({
+    goal: goalForPlan,
+    experience: isLaneA ? 'beginner' : 'experienced',
+    freq: isLaneA ? null : resolvedFreq,
+    planId: recommendedPlanId,
+  });
 
   const plan = getPlanById(recommendedPlanId) ?? getPlanById(DEFAULT_BEGINNER_PLAN_ID) ?? trainingPlans[0];
   const firstDay = plan?.days?.[0];
@@ -131,6 +136,23 @@ export default function Onboarding() {
       try { updateProfile({ experienceLevel: persistLevel }); } catch { /* noop */ }
     }
     setTimeout(next, 200);
+  }
+
+  function toggleRegion(region: MuscleGroup) {
+    setAvoidList((list) => {
+      const has = list.some((item) => item.kind === 'region' && item.region === region);
+      return has
+        ? list.filter((item) => !(item.kind === 'region' && item.region === region))
+        : [...list, { kind: 'region', region }];
+    });
+  }
+  function toggleExercise(exerciseId: string) {
+    setAvoidList((list) => {
+      const has = list.some((item) => item.kind === 'exercise' && item.exerciseId === exerciseId);
+      return has
+        ? list.filter((item) => !(item.kind === 'exercise' && item.exerciseId === exerciseId))
+        : [...list, { kind: 'exercise', exerciseId }];
+    });
   }
 
   const finish = () => {
@@ -157,7 +179,15 @@ export default function Onboarding() {
       }
     }
     if (typeof completeOnboarding === 'function') completeOnboarding(finalGoal);
-    // 設定 active plan（Lane A = 5×5；Lane B = 依 E5 頻率推斷）
+    const weeklyDays = weeklyDaysForOnboarding({
+      experience: isLaneA ? 'beginner' : 'experienced',
+      freq: isLaneA ? null : resolvedFreq,
+      planId: recommendedPlanId,
+    });
+    try { persistWeeklyGoal(weeklyDays); } catch { /* noop */ }
+    try { persistSessionMinutes(sessionMinutes); } catch { /* noop */ }
+    try { persistAvoidList(avoidList); } catch { /* noop */ }
+    // 設定 active plan（目標 + 頻率，見 recommendPlanId）
     if (typeof setActivePlan === 'function') {
       try {
         setActivePlan(recommendedPlanId);
@@ -242,10 +272,13 @@ export default function Onboarding() {
             <StepGoal
               key="goal-beginner"
               selected={goal}
-              setSelected={(g) => {
-                setGoal(g);
-                setTimeout(next, 180);
-              }}
+              setSelected={setGoal}
+              sessionMinutes={sessionMinutes}
+              onSessionMinutes={setSessionMinutes}
+              avoidList={avoidList}
+              onToggleRegion={toggleRegion}
+              onToggleExercise={toggleExercise}
+              onNext={next}
             />
           )}
           {step === 'goal' && isLaneB && (
@@ -254,12 +287,23 @@ export default function Onboarding() {
               autoFreq={autoFreq}
               bucket={freqBucket}
               setBucket={setFreqBucket}
+              goal={goal}
+              setGoal={setGoal}
+              previewName={plan?.name ?? ''}
+              previewRationale={planRationale}
+              sessionMinutes={sessionMinutes}
+              onSessionMinutes={setSessionMinutes}
+              avoidList={avoidList}
+              onToggleRegion={toggleRegion}
+              onToggleExercise={toggleExercise}
               isExcelUser={experience === 'excel'}
               onOpenImport={() => setImportOpen(true)}
-              onNext={() => next()}
+              onNext={() => {
+                if (!goal) setGoal('health');
+                next();
+              }}
               canProceed={resolvedFreq !== null}
               existingCount={existingSessions.length}
-              onSkipGoal={(g) => setGoal(g)}
             />
           )}
           {step === 'recommend' && plan && firstDay && (
@@ -268,11 +312,7 @@ export default function Onboarding() {
               plan={plan}
               dayName={firstDay.dayName ?? 'Day 1'}
               lane={isLaneA ? 'A' : 'B'}
-              rationale={
-                isLaneA
-                  ? '因為三大項（深蹲/臥推/划船/硬舉）是新手入門最快建立力量的路徑，5 組 × 5 次不會太難跟隨，每完成一次都有清晰進步感。'
-                  : (resolvedFreq ? PLAN_FREQ_RATIONALE[resolvedFreq] : '從你的過去節奏出發，為你選擇最適合的計畫密度。')
-              }
+              rationale={planRationale}
               onNext={next}
             />
           )}
@@ -623,9 +663,21 @@ const GOAL_ICONS: Record<TrainingGoalValue, typeof Flame> = {
 function StepGoal({
   selected,
   setSelected,
+  sessionMinutes,
+  onSessionMinutes,
+  avoidList,
+  onToggleRegion,
+  onToggleExercise,
+  onNext,
 }: {
   selected: TrainingGoalValue | null;
   setSelected: (g: TrainingGoalValue) => void;
+  sessionMinutes: number;
+  onSessionMinutes: (minutes: number) => void;
+  avoidList: AvoidEntry[];
+  onToggleRegion: (region: MuscleGroup) => void;
+  onToggleExercise: (exerciseId: string) => void;
+  onNext: () => void;
 }) {
   const goals: TrainingGoalValue[] = ['muscle', 'fatloss', 'health'];
   return (
@@ -692,9 +744,22 @@ function StepGoal({
         })}
       </div>
 
-      <p className="mt-6 text-center text-[11px] text-text-secondary">
-        💡 新手不建議太急，先培養規律，目標後續都可以改。
-      </p>
+      <TrainingPreferences
+        sessionMinutes={sessionMinutes}
+        onSessionMinutes={onSessionMinutes}
+        avoidList={avoidList}
+        onToggleRegion={onToggleRegion}
+        onToggleExercise={onToggleExercise}
+      />
+
+      <div className="mt-auto pt-6">
+        <Button fullWidth size="lg" onClick={onNext} disabled={!selected}>
+          <ArrowRight size={18} /> 看推薦計畫
+        </Button>
+        <p className="mt-3 text-center text-[11px] text-text-secondary">
+          新手不急，先培養規律。目標之後都可以改。
+        </p>
+      </div>
     </motion.div>
   );
 }
@@ -705,27 +770,39 @@ function StepFrequencyLaneB({
   autoFreq,
   bucket,
   setBucket,
+  goal,
+  setGoal,
+  previewName,
+  previewRationale,
+  sessionMinutes,
+  onSessionMinutes,
+  avoidList,
+  onToggleRegion,
+  onToggleExercise,
   isExcelUser,
   onOpenImport,
   onNext,
   canProceed,
   existingCount,
-  onSkipGoal,
 }: {
   autoFreq: FreqBucket | null;
   bucket: FreqBucket | null;
   setBucket: (b: FreqBucket) => void;
+  goal: TrainingGoalValue | null;
+  setGoal: (g: TrainingGoalValue) => void;
+  previewName: string;
+  previewRationale: string;
+  sessionMinutes: number;
+  onSessionMinutes: (minutes: number) => void;
+  avoidList: AvoidEntry[];
+  onToggleRegion: (region: MuscleGroup) => void;
+  onToggleExercise: (exerciseId: string) => void;
   isExcelUser: boolean;
   onOpenImport: () => void;
   onNext: () => void;
   canProceed: boolean;
   existingCount: number;
-  onSkipGoal: (g: TrainingGoalValue) => void;
 }) {
-  // Lane B 不強迫選目標，預設 'health'（React StrictMode：mount 階段 setState 需在 effect 內）
-  useEffect(() => {
-    if (typeof onSkipGoal === 'function') onSkipGoal('health');
-  }, [onSkipGoal]);
   const chipOptions: { id: FreqBucket; label: string }[] = [
     { id: '1', label: '1 次 / 週' },
     { id: '2', label: '2 次 / 週' },
@@ -746,8 +823,27 @@ function StepFrequencyLaneB({
         你一週練幾天？
       </h1>
       <p className="text-sm text-text-secondary mt-2 leading-relaxed">
-        計畫密度要對上現實節奏，才能長久跟隨。
+        計畫密度要對上現實節奏，也會看你想增肌、減脂還是保持健康。
       </p>
+
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {(['muscle', 'fatloss', 'health'] as TrainingGoalValue[]).map((item) => (
+          <button
+            key={item}
+            type="button"
+            onClick={() => setGoal(item)}
+            className={cn(
+              'h-14 rounded-card border-2 text-[11px] font-bold leading-tight px-1',
+              goal === item
+                ? 'border-accent bg-accent/10 text-accent'
+                : 'border-border/60 bg-bg-card text-text-secondary',
+            )}
+          >
+            {TRAINING_GOAL_LABELS[item].title}
+          </button>
+        ))}
+      </div>
+      <p className="text-[11px] text-text-secondary mt-2">沒選的話，會先用健康運動。</p>
 
       {/* Excel 用戶：快速匯入 CTA */}
       {isExcelUser && existingCount === 0 && (
@@ -816,20 +912,25 @@ function StepFrequencyLaneB({
         })}
       </div>
 
-      {/* 選擇預告 */}
-      {(autoFreq ?? bucket) && (
+      {(autoFreq ?? bucket) && previewName && (
         <div className="mt-5 p-3.5 rounded-card bg-bg-card border border-border/40">
           <div className="text-[10px] uppercase tracking-widest text-text-secondary mb-1">預估推薦</div>
           <div className="font-display text-lg tracking-wide uppercase text-text-primary">
-            {FREQ_PLAN_MAP[(autoFreq ?? bucket) as FreqBucket] === DEFAULT_BEGINNER_PLAN_ID && '5×5 力量基礎'}
-            {FREQ_PLAN_MAP[(autoFreq ?? bucket) as FreqBucket] === 'upper-lower' && '上下分裂'}
-            {FREQ_PLAN_MAP[(autoFreq ?? bucket) as FreqBucket] === 'push-pull-legs' && '推拉腿 PPL'}
+            {previewName}
           </div>
           <div className="text-[11px] text-text-secondary mt-1 leading-relaxed">
-            {PLAN_FREQ_RATIONALE[(autoFreq ?? bucket) as FreqBucket]}
+            {previewRationale}
           </div>
         </div>
       )}
+
+      <TrainingPreferences
+        sessionMinutes={sessionMinutes}
+        onSessionMinutes={onSessionMinutes}
+        avoidList={avoidList}
+        onToggleRegion={onToggleRegion}
+        onToggleExercise={onToggleExercise}
+      />
 
       <div className="mt-auto pt-6 space-y-3">
         <Button
