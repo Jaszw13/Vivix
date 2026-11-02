@@ -429,7 +429,7 @@ const Y_AXIS_PROPS = { stroke: 'var(--text-secondary)', tick: { fontSize: 10 }, 
 
 - `src/types/theme.ts`：`StylePack` 介面（id/label/license/mode/vars/shape/typo/deco/glass/motion）。
 - `src/data/stylePacksShared.ts`：`buildVars()`、`hexToRgba()`、`shadowFor()`、系統字體棧。
-- `src/data/stylePacks.ts`：6 款 `CORE_PACKS`（高雅米白、工業電力，加上素白紙本、清晨水岸、舊式鐵館、深夜銅燈）；`STYLE_PACKS` 依 `VITE_RELEASE_MODE` 條件合併 personal。
+- `src/data/stylePacks.ts`：8 款 `CORE_PACKS`；`STYLE_PACKS` 依 `VITE_RELEASE_MODE` 條件合併 personal。
 - `src/data/stylePacksPersonal.ts`：1 款 `PERSONAL_PACKS`（kawaii-pastel）；唯一引用 personal 資產的模組。
 
 ### 風格畫廊

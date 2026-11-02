@@ -1,6 +1,7 @@
 import { getStylePack } from '@/data/stylePacks';
 import type { StylePack } from '@/types/theme';
 import type { SessionHighlight } from '@/features/retention/highlight';
+import { formatSetWithReps } from '@/utils/workout';
 import { escapeXml, svgToPngBlob } from './sharePR';
 
 interface ShareHighlightOptions {
@@ -65,16 +66,13 @@ function buildHighlightSVG(
 ): string {
   const W = 540;
   const H = 960;
+  const is90s = pack.id === 'retro-card';
   const radius = parseFloat(pack.shape.radiusCard) || 0;
   const hasPhoto = !!photoDataUrl;
   const photoH = 300;
   const top = hasPhoto ? 20 + photoH + 32 : 60;
 
-  const bestValue = h.bestSet
-    ? h.bestSet.weight === 0
-      ? `BW × ${h.bestSet.reps}`
-      : `${h.bestSet.weight}kg × ${h.bestSet.reps}`
-    : '—';
+  const bestValue = h.bestSet ? formatSetWithReps(h.bestSet) : '—';
 
   const volumeLine =
     h.volumeDeltaPct === null
@@ -96,7 +94,7 @@ function buildHighlightSVG(
   <rect x="0" y="0" width="${W}" height="${H}" fill="${pack.vars['bg-primary']}"/>
   <rect x="20" y="20" width="${W - 40}" height="${H - 40}" rx="${radius}"
     fill="${pack.vars['bg-card']}" stroke="${pack.vars['border-color']}"
-    stroke-width="2" filter="url(#cardShadow)"/>
+    stroke-width="${is90s ? 4 : 2}" filter="url(#cardShadow)"/>
   ${
     hasPhoto
       ? `<image href="${photoDataUrl}" x="40" y="20" width="${W - 80}" height="${photoH}"
@@ -115,7 +113,8 @@ function buildHighlightSVG(
 
   <text x="${W / 2}" y="${top + 200}" text-anchor="middle"
     font-family="${pack.typo.numbers}" font-size="64" font-weight="900"
-    fill="${pack.vars['accent']}">${escapeXml(bestValue)}</text>
+    fill="${pack.vars['accent']}"
+    ${is90s ? `stroke="${pack.vars['border-color']}" stroke-width="1.5"` : ''}>${escapeXml(bestValue)}</text>
   <text x="${W / 2}" y="${top + 234}" text-anchor="middle"
     font-family="${pack.typo.body}" font-size="14" letter-spacing="2"
     fill="${pack.vars['text-secondary']}">${escapeXml(h.bestSet?.exerciseName ?? '今日最佳組')}</text>

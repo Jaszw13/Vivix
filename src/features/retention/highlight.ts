@@ -9,6 +9,8 @@ export interface HighlightBestSet {
   exerciseName: string;
   weight: number;
   reps: number;
+  /** 最佳組若是自重加額外負荷，顯示時要用 BW+n，而不是把額外公斤當成絕對重量。 */
+  load?: 'kg' | 'bw';
 }
 
 export interface SessionHighlight {
@@ -45,12 +47,13 @@ export function buildSessionHighlight(
         exerciseName: ex.name,
         weight: s.weight,
         reps: s.reps,
-        load: setLoadKg(s),
+        loadMode: s.load,
+        volumeKg: setLoadKg(s),
       })),
   );
 
   const best = completedSets.reduce<typeof completedSets[number] | null>(
-    (acc, cur) => (acc === null || cur.load > acc.load ? cur : acc),
+    (acc, cur) => (acc === null || cur.volumeKg > acc.volumeKg ? cur : acc),
     null,
   );
 
@@ -78,7 +81,12 @@ export function buildSessionHighlight(
     totalVolume: session.totalVolume,
     volumeDeltaPct,
     bestSet: best
-      ? { exerciseName: best.exerciseName, weight: best.weight, reps: best.reps }
+      ? {
+          exerciseName: best.exerciseName,
+          weight: best.weight,
+          reps: best.reps,
+          ...(best.loadMode === 'bw' || best.loadMode === 'kg' ? { load: best.loadMode } : {}),
+        }
       : null,
     newRecordCount,
     weekly: getWeeklyGoalState(weeklyGoal, sessions, cardioSessions),

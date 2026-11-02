@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Trophy, TrendingUp, Flame, Check, Sparkles, Star, Info, Zap, CalendarPlus, Share2 } from 'lucide-react';
 import type { WorkoutSession } from '@/types';
-import { estimate1RM, formatDateFull, getNewRecordsForSession, setLoadKg } from '@/utils/workout';
+import { estimate1RM, formatDateFull, formatSetLoadLabel, formatSetWithReps, getNewRecordsForSession, setLoadKg } from '@/utils/workout';
 import { Card, SectionHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { PageShell } from '@/components/layout/PageShell';
@@ -98,6 +98,7 @@ export default function WorkoutSummary() {
           name: ex.name,
           weight: s.weight,
           reps: s.reps,
+          load: s.load,
           e1rm: estimate1RM(s.weight, s.reps),
         }))
     )
@@ -215,16 +216,29 @@ export default function WorkoutSummary() {
                   <div className="flex-1">
                     <div className="text-sm font-bold text-text-primary">{lift.name}</div>
                     <div className="font-mono text-xs text-text-secondary">
-                      {lift.weight} kg × {lift.reps} reps
+                      {formatSetWithReps(lift)} reps
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-mono text-lg font-bold text-accent">
-                      {lift.e1rm}
-                    </div>
-                    <div className="text-[9px] uppercase tracking-widest text-text-secondary">
-                      1RM kg
-                    </div>
+                    {lift.weight === 0 ? (
+                      <>
+                        <div className="font-mono text-lg font-bold text-accent">
+                          {lift.reps}
+                        </div>
+                        <div className="text-[9px] uppercase tracking-widest text-text-secondary">
+                          次數
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="font-mono text-lg font-bold text-accent">
+                          {lift.e1rm}
+                        </div>
+                        <div className="text-[9px] uppercase tracking-widest text-text-secondary">
+                          1RM kg
+                        </div>
+                      </>
+                    )}
                   </div>
                 </Card>
               ))}
@@ -253,9 +267,7 @@ export default function WorkoutSummary() {
                     </div>
                     <div className="font-mono text-[10px] text-text-secondary mt-0.5">
                       {record.previous
-                        ? `上次 ${record.previous.weight === 0
-                            ? `BW × ${record.previous.reps}`
-                            : `${record.previous.weight}kg × ${record.previous.reps}`}`
+                        ? `上次 ${formatSetWithReps(record.previous)}`
                         : '上次未記錄'}
                     </div>
                   </div>
@@ -271,6 +283,9 @@ export default function WorkoutSummary() {
                           estimated1RM: estimate1RM(record.current.weight, record.current.reps),
                           repPR:
                             record.current.weight === 0 ? record.current.reps : undefined,
+                          ...(record.current.load === 'bw' && record.current.weight > 0
+                            ? { load: 'bw' as const }
+                            : {}),
                         })
                       }
                       className="p-1.5 rounded-full bg-bg-secondary text-text-secondary hover:text-accent transition-colors"
@@ -279,9 +294,7 @@ export default function WorkoutSummary() {
                       <Share2 size={14} />
                     </button>
                     <div className="font-mono text-lg font-bold text-accent">
-                      {record.current.weight === 0
-                        ? `BW × ${record.current.reps}`
-                        : `${record.current.weight}kg × ${record.current.reps}`}
+                      {formatSetWithReps(record.current)}
                     </div>
                     <div className="text-[9px] uppercase tracking-widest text-text-secondary">
                       {record.progress === 'weight' ? '重量進步' : '次數進步'}
@@ -320,13 +333,14 @@ export default function WorkoutSummary() {
                 completed[0] ?? { weight: 0, reps: 0 }
               );
               const volume = completed.reduce((s, set) => s + setLoadKg(set), 0);
+              const peakLabel = completed.length > 0 ? formatSetLoadLabel(max) : '0kg';
               return (
                 <div key={ex.id} className="p-3 flex items-center gap-3">
                   <Trophy size={14} className="text-text-secondary flex-shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-text-primary truncate">{ex.name}</div>
                     <div className="font-mono text-[10px] text-text-secondary">
-                      {completed.length} 組 · 最高 {max.weight}kg
+                      {completed.length} 組 · 最高 {peakLabel}
                     </div>
                   </div>
                   <div className="font-mono text-xs text-accent">

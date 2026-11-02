@@ -27,7 +27,7 @@ import { proposeSession, type TaxonomyEntry } from '@/domain/coach/proposeSessio
 import { TodayDecisionCard } from '@/components/dashboard/TodayDecisionCard';
 import { useTrialStore } from '@/store/trialStore';
 import { usePlansStore } from '@/store/plansStore';
-import { formatDate } from '@/utils/workout';
+import { formatDate, formatSetLoadLabel, formatSetWithReps } from '@/utils/workout';
 import { cn } from '@/lib/utils';
 import { usePartnerStore } from '@/features/partner/stores/partnerStore';
 import { useFeatureFlags } from '@/features/partner/stores/featureFlags';
@@ -555,8 +555,14 @@ export default function Dashboard() {
                   {pr.exerciseName}
                 </div>
                 <div className="font-mono text-2xl font-bold text-text-primary">
-                  {pr.weight}
-                  <span className="text-xs text-text-secondary ml-1">kg</span>
+                  {pr.load === 'bw' ? (
+                    formatSetLoadLabel(pr)
+                  ) : (
+                    <>
+                      {pr.weight}
+                      <span className="text-xs text-text-secondary ml-1">kg</span>
+                    </>
+                  )}
                 </div>
                 <div className="font-mono text-xs text-text-secondary mt-1">
                   × {pr.reps} reps
@@ -635,7 +641,7 @@ export default function Dashboard() {
                             key={s.id}
                             className="font-mono text-[11px] text-text-secondary bg-bg-card px-2 py-1 rounded-button border border-border/30"
                           >
-                            {s.weight}kg × {s.reps}
+                            {formatSetWithReps(s)}
                           </span>
                         ))}
                       </div>

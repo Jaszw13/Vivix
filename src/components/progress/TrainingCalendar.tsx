@@ -18,7 +18,7 @@ import { Card, StatTile } from '@/components/ui/Card';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { useCardioStore } from '@/store/cardioStore';
 import { useRestDayStore, ACTIVITY_LABEL } from '@/store/restDayStore';
-import { calculateTotalVolume, getSessionPRs, formatDateFull } from '@/utils/workout';
+import { calculateTotalVolume, formatSetCompact, getSessionPRs, formatDateFull } from '@/utils/workout';
 import { dayKey, sessionDayKey } from '@/utils/time';
 import { OVERLAY_SCRIM } from '@/data/theme';
 import { settleAll } from '@/features/stats/settleAll';
@@ -289,9 +289,9 @@ export function TrainingCalendar({ year, month }: TrainingCalendarProps) {
                           </div>
                           <div className="font-mono text-xs text-text-secondary flex-shrink-0 ml-2">
                             {completedSets.map((s) => {
-                              const main = s.weight > 0 ? `${s.weight}×${s.reps}` : `BW×${s.reps}`;
+                              const main = formatSetCompact(s);
                               const drops = (s.drops ?? []).map((d) =>
-                                d.weight > 0 ? `${d.weight}×${d.reps}` : `BW×${d.reps}`,
+                                formatSetCompact({ weight: d.weight, reps: d.reps, load: s.load }),
                               ).join('→');
                               return drops ? `${main}→${drops}` : main;
                             }).join(' · ')}

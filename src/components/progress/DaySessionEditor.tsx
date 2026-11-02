@@ -26,6 +26,7 @@ import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { useProfileStore } from '@/store/profileStore';
 import { getEquipmentTypesForIds } from '@/data/equipment';
 import { generateId, createEmptySet, formatDateFull } from '@/utils/workout';
+import { WeightLoadField } from '@/components/workout/WeightLoadField';
 import { OVERLAY_SCRIM } from '@/data/theme';
 import {
   MUSCLE_GROUP_LABELS,
@@ -133,13 +134,22 @@ export function DaySessionEditor({ date, existingSession, onClose, onSaved }: Da
     setDraft((prev) => prev.filter((d) => d.id !== logId));
   };
 
-  const addSet = (logId: string) => {
+  const addSet = (logId: string, mode: 'kg' | 'bw' = 'kg') => {
     setDraft((prev) =>
-      prev.map((d) =>
-        d.id === logId
-          ? { ...d, sets: [...d.sets, { ...createEmptySet(d.sets.length + 1), completed: true }] }
-          : d,
-      ),
+      prev.map((d) => {
+        if (d.id !== logId) return d;
+        const last = d.sets[d.sets.length - 1];
+        const reps = last?.reps ?? 0;
+        const weight = mode === 'bw'
+          ? ([...d.sets].reverse().find((s) => s.load === 'bw')?.weight ?? 0)
+          : ([...d.sets].reverse().find((s) => s.load !== 'bw')?.weight ?? 0);
+        const next: SetLog = {
+          ...createEmptySet(d.sets.length + 1, { weight, reps }),
+          completed: true,
+          ...(mode === 'bw' ? { load: 'bw' as const } : {}),
+        };
+        return { ...d, sets: [...d.sets, next] };
+      }),
     );
   };
 
@@ -434,16 +444,16 @@ export function DaySessionEditor({ date, existingSession, onClose, onSaved }: Da
                       <div key={set.id}>
                         <div className="grid grid-cols-[1.5rem_1fr_1fr_1.5rem] gap-2 items-center">
                           <div className="font-mono text-xs text-text-secondary text-center">{set.setNumber}</div>
-                          <NumberInput
-                            value={set.weight}
-                            step={2.5}
-                            onDecrease={() => updateSet(log.id, set.id, { weight: Math.max(0, set.weight - 2.5) })}
-                            onIncrease={() => updateSet(log.id, set.id, { weight: set.weight + 2.5 })}
-                            onChange={(v) => updateSet(log.id, set.id, { weight: v })}
+                          <WeightLoadField
+                            size="sm"
+                            weight={set.weight}
+                            load={set.load}
+                            onWeight={(weight) => updateSet(log.id, set.id, { weight })}
                           />
                           <NumberInput
                             value={set.reps}
                             step={1}
+                            inputLabel="次數"
                             onDecrease={() => updateSet(log.id, set.id, { reps: Math.max(0, set.reps - 1) })}
                             onIncrease={() => updateSet(log.id, set.id, { reps: set.reps + 1 })}
                             onChange={(v) => updateSet(log.id, set.id, { reps: v })}
@@ -456,10 +466,12 @@ export function DaySessionEditor({ date, existingSession, onClose, onSaved }: Da
                             <Minus size={12} />
                           </button>
                         </div>
-                        {/* R6：遞減組 */}
+                        {/* R6：遞減組。跟母組同一個負荷模式。 */}
                         {(set.drops ?? []).length > 0 && (
                           <div className="mt-1 ml-[1.5rem] flex flex-wrap items-center gap-1.5">
-                            <span className="text-[10px] text-text-secondary font-mono">→</span>
+                            <span className="text-[10px] text-text-secondary font-mono">
+                              {set.load === 'bw' ? '遞減 · 額外' : '→'}
+                            </span>
                             {(set.drops ?? []).map((drop, di) => (
                               <div key={di} className="flex items-center gap-1">
                                 <input
@@ -501,12 +513,22 @@ export function DaySessionEditor({ date, existingSession, onClose, onSaved }: Da
                     ))}
                   </div>
 
-                  <button
-                    onClick={() => addSet(log.id)}
-                    className="w-full mt-2 py-1.5 text-[10px] uppercase tracking-wider text-text-secondary hover:text-accent border border-dashed border-border rounded-button transition-colors"
-                  >
-                    + 新增組
-                  </button>
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => addSet(log.id, 'bw')}
+                      className="py-1.5 text-[10px] uppercase tracking-wider text-text-secondary hover:text-accent border border-dashed border-border rounded-button transition-colors"
+                    >
+                      + 新增自重組
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => addSet(log.id, 'kg')}
+                      className="py-1.5 text-[10px] uppercase tracking-wider text-text-secondary hover:text-accent border border-dashed border-border rounded-button transition-colors"
+                    >
+                      + 新增組
+                    </button>
+                  </div>
                 </Card>
               ))
             )}
@@ -675,12 +697,13 @@ export function DaySessionEditor({ date, existingSession, onClose, onSaved }: Da
 interface NumberInputProps {
   value: number;
   step?: number;
+  inputLabel?: string;
   onChange: (v: number) => void;
   onIncrease: () => void;
   onDecrease: () => void;
 }
 
-function NumberInput({ value, onChange, onIncrease, onDecrease }: NumberInputProps) {
+function NumberInput({ value, onChange, onIncrease, onDecrease, inputLabel }: NumberInputProps) {
   return (
     <div className="flex items-center bg-bg-secondary rounded-button overflow-hidden">
       <button
@@ -698,6 +721,7 @@ function NumberInput({ value, onChange, onIncrease, onDecrease }: NumberInputPro
         }}
         className="w-full h-9 bg-transparent text-center font-mono text-xs text-text-primary tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         inputMode="decimal"
+        aria-label={inputLabel}
       />
       <button
         onClick={onIncrease}

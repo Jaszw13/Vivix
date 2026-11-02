@@ -15,7 +15,7 @@ import { useCardioStore } from '@/store/cardioStore';
 import { useAchievementsStore } from '@/store/achievementsStore';
 import { useRestDayStore } from '@/store/restDayStore';
 import { computeWeeklyReport, type AchievementUnlockRecord } from '@/features/stats/weeklyReport';
-import { formatDateFull } from '@/utils/workout';
+import { formatDateFull, formatRecordLoad } from '@/utils/workout';
 import { OVERLAY_SCRIM } from '@/data/theme';
 import { getMotionForPack, toFramerTransition } from '@/data/packMotion';
 import { useThemeStore } from '@/store/themeStore';
@@ -172,9 +172,7 @@ export function WeeklyReportModal({ open, onClose, weekOffset }: WeeklyReportMod
                           {pr.exerciseName}
                         </div>
                         <div className="font-mono text-sm font-bold text-accent flex-shrink-0 ml-2">
-                          {pr.repPR !== undefined
-                            ? `BW × ${pr.repPR}`
-                            : `${pr.weight}kg × ${pr.reps}`}
+                          {formatRecordLoad(pr)}
                         </div>
                       </div>
                     ))}

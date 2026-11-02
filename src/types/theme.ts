@@ -77,7 +77,7 @@ export interface StylePack {
     numbers: string;
   };
   deco: PackDeco[];
-  /** true 時卡片走玻璃材質。目前沒有 core pack 打開。 */
+  /** aurora-glass 為 true：backdrop-filter + 半透明背景 */
   glass?: boolean;
   /** personal-only 可愛版圖片資產（路徑相對於 src/）；core pack 不填 */
   assets?: Partial<PackAssets>;

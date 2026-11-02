@@ -27,7 +27,7 @@ import { useWorkoutStore, getAllExercises } from '@/store/workoutStore';
 import { useProfileStore } from '@/store/profileStore';
 import { useCardioStore } from '@/store/cardioStore';
 import { useBodyMetricsStore } from '@/store/bodyMetricsStore';
-import { formatDate, formatDateFull } from '@/utils/workout';
+import { formatDate, formatDateFull, formatRecordLoad } from '@/utils/workout';
 import { sharePRCard } from '@/features/sharing/sharePR';
 import {
   MUSCLE_GROUP_LABELS,
@@ -608,8 +608,8 @@ export default function Progress() {
                         <div className="font-mono text-[10px] text-text-secondary flex items-center gap-2 flex-wrap">
                           <span>
                             {pr.repPR !== undefined
-                              ? `BW × ${pr.repPR} reps`
-                              : `${pr.weight}kg × ${pr.reps}`}
+                              ? `${formatRecordLoad(pr)} reps`
+                              : formatRecordLoad(pr)}
                             {' · '}{formatDate(pr.date)}
                           </span>
                           {mg && (

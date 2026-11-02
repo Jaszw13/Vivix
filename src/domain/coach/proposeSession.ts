@@ -199,7 +199,8 @@ function latestPositive(sessions: WorkoutSession[], exerciseId: string): number 
   for (let i = sessions.length - 1; i >= 0; i -= 1) {
     const exercise = sessions[i].exercises?.find((item) => item.exerciseId === exerciseId);
     if (!exercise) continue;
-    const done = exercise.sets.filter((set) => set.completed && set.weight > 0);
+    // 自重組的 weight 是額外公斤，不能當成下次的絕對槓重。autoFill 仍永遠是 false。
+    const done = exercise.sets.filter((set) => set.completed && set.weight > 0 && set.load !== 'bw');
     if (done.length === 0) continue;
     return done.reduce((best, set) => (set.weight > best ? set.weight : best), done[0].weight);
   }

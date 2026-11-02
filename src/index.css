@@ -180,6 +180,26 @@ select:focus {
   border-color: var(--border-color);
 }
 
+/* neobrutal-pop：零圓角 + 硬陰影偏移 */
+[data-pack='neobrutal-pop'] .btn {
+  border-radius: 0;
+  box-shadow: 4px 4px 0 var(--text-primary);
+}
+[data-pack='neobrutal-pop'] .btn:active {
+  box-shadow: 0 0 0 var(--text-primary);
+  transform: translate(4px, 4px);
+}
+
+/* retro-card：厚黑邊 + 硬陰影 */
+[data-pack='retro-card'] .btn {
+  border-radius: 2px;
+  box-shadow: 3px 3px 0 var(--text-primary);
+}
+[data-pack='retro-card'] .btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--text-primary);
+}
+
 /* industrial-power：直角 + 2px 邊 */
 [data-pack='industrial-power'] .btn {
   border-radius: 4px;
@@ -195,32 +215,48 @@ select:focus {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
 }
 
-/* plain-paper：素紙，輕陰影 */
-[data-pack='plain-paper'] .btn {
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-
-/* dawn-shore：水岸，無陰影，hover 只淡一點 */
-[data-pack='dawn-shore'] .btn {
-  border-radius: 12px;
+/* muji-calm：hairline 極細邊，無陰影 */
+[data-pack='muji-calm'] .btn {
+  border-radius: 4px;
   box-shadow: none;
+  opacity: 0.95;
+}
+[data-pack='muji-calm'] .btn:hover {
+  opacity: 1;
 }
 
-/* iron-hall：鐵館，直角偏方，無戲服陰影 */
-[data-pack='iron-hall'] .btn {
-  border-radius: 6px;
-  box-shadow: none;
+/* y2k-chrome：pill + glossy */
+[data-pack='y2k-chrome'] .btn {
+  border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(110, 193, 255, 0.35);
+}
+[data-pack='y2k-chrome'] .btn:hover {
+  transform: scale(1.04);
 }
 
-/* night-copper：銅燈，細暖光，不是螢光 */
-[data-pack='night-copper'] .btn {
-  border-radius: 12px;
-  box-shadow: 0 0 0 1px var(--accent-soft);
+/* wpa-trail：拱形 + 雙線邊感 */
+[data-pack='wpa-trail'] .btn {
+  border-radius: 8px;
+  box-shadow: 0 2px 0 var(--border-color), 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+[data-pack='wpa-trail'] .btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 var(--border-color);
 }
 
-/* glass 旗標仍保留，目前沒有 core pack 打開它 */
-[data-glass='true'] .glass {
+/* aurora-glass：玻璃按鈕 */
+[data-pack='aurora-glass'] .btn {
+  border-radius: 16px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+[data-pack='aurora-glass'] .btn:hover {
+  transform: scale(1.03);
+}
+
+/* ============ Glass 材質（aurora-glass） ============ */
+[data-glass='true'] .glass,
+[data-pack='aurora-glass'] .bg-bg-card {
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
 }
@@ -309,7 +345,7 @@ select:focus {
   box-shadow: 0 0 6px var(--accent);
 }
 
-/* holo：箔片旋轉 */
+/* holo：箔片旋轉（retro-card） */
 .vivix-fx-holo span {
   border-radius: 1px;
   background: var(--auxiliary);
@@ -322,7 +358,7 @@ select:focus {
   100% { transform: translate(var(--fx-dx, 0), var(--fx-dy, 0)) rotate(240deg) scale(0); opacity: 0; }
 }
 
-/* stamp：方形印章壓印 */
+/* stamp：方形印章壓印（wpa-trail） */
 .vivix-fx-stamp span {
   width: 14px;
   height: 14px;
@@ -405,25 +441,36 @@ select:focus {
   box-shadow: 0 0 20px var(--accent-soft), 0 0 0 1px var(--accent);
 }
 
-/* plain-paper：輕抬 */
-[data-pack='plain-paper'] .btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+/* retro-card：emboss */
+[data-pack='retro-card'] .btn:hover {
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.25), 3px 3px 0 var(--text-primary);
 }
 
-/* dawn-shore：只改透明度 */
-[data-pack='dawn-shore'] .btn:hover {
-  opacity: 0.88;
+/* aurora-glass：scale */
+[data-pack='aurora-glass'] .btn:hover {
+  transform: scale(1.03);
 }
 
-/* iron-hall：短抬 */
-[data-pack='iron-hall'] .btn:hover {
-  transform: translateY(-1px);
+/* neobrutal-pop：shadow-collapse */
+[data-pack='neobrutal-pop'] .btn:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 var(--text-primary);
 }
 
-/* night-copper：暖光，不描螢光邊 */
-[data-pack='night-copper'] .btn:hover {
-  box-shadow: 0 0 16px var(--accent-soft);
+/* muji-calm：opacity */
+[data-pack='muji-calm'] .btn:hover {
+  opacity: 0.8;
+}
+
+/* y2k-chrome：inflation */
+[data-pack='y2k-chrome'] .btn:hover {
+  transform: scale(1.04);
+  filter: brightness(1.06);
+}
+
+/* wpa-trail：stamp-press（hover 抬升，press 由既有 :active 處理） */
+[data-pack='wpa-trail'] .btn:hover {
+  box-shadow: 0 4px 0 var(--border-color), 0 6px 12px rgba(0, 0, 0, 0.14);
 }
 
 /* motion 關閉時停用所有 hover 位移／縮放（保留顏色類回饋） */
@@ -443,9 +490,21 @@ select:focus {
     border-color var(--pack-duration, 0.18s) var(--pack-ease, ease-out);
 }
 
-/* dawn-shore：卡片不變形 */
-[data-pack='dawn-shore'] .rounded-card:hover {
-  opacity: 0.96;
+/* aurora-glass：彈性回饋 */
+[data-pack='aurora-glass'] .rounded-card:hover {
+  transform: scale(1.02);
+  box-shadow: 0 8px 28px -8px var(--accent-soft);
+}
+
+/* neobrutal-pop：硬陰影塌陷 */
+[data-pack='neobrutal-pop'] .rounded-card:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 var(--text-primary);
+}
+
+/* muji-calm：僅微透明度，不變形 */
+[data-pack='muji-calm'] .rounded-card:hover {
+  opacity: 0.94;
 }
 
 /* motion 關閉時停用卡片 hover 變形 */

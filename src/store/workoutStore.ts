@@ -18,6 +18,7 @@ import {
   generateId,
   calculateTotalVolume,
   setLoadKg,
+  sanitizeSessionLoads,
   createExerciseLog as _createExerciseLog,
 } from '@/utils/workout';
 import { dayKey, localNoonISO } from '@/utils/time';
@@ -152,7 +153,7 @@ interface WorkoutState {
 
   toggleWarmupCompleted: (warmupId: string) => void;
   updateSet: (exerciseLogId: string, setId: string, patch: Partial<SetLog>) => void;
-  addSet: (exerciseLogId: string) => void;
+  addSet: (exerciseLogId: string, mode?: 'kg' | 'bw') => void;
   removeSet: (exerciseLogId: string, setId: string) => void;
   /** R6：遞減組操作 */
   addDropSet: (exerciseLogId: string, setId: string) => void;
@@ -412,20 +413,23 @@ export const useWorkoutStore = create<WorkoutState>()(
         set({ activeSession: { ...active, lastActivityAt: new Date().toISOString(), exercises } });
       },
 
-      addSet: (exerciseLogId) => {
+      addSet: (exerciseLogId, mode = 'kg') => {
         const active = get().activeSession;
         if (!active) return;
         const exercises = active.exercises.map((ex) => {
           if (ex.id !== exerciseLogId) return ex;
-          // 新增組繼承「剛才輸入/完成的那一組」；若最後一列是空白則往前找有值的組
-          const withValues = [...ex.sets].reverse().find((s) => s.weight > 0 || s.reps > 0);
-          const source = withValues ?? ex.sets[ex.sets.length - 1];
+          const last = ex.sets[ex.sets.length - 1];
+          const reps = last?.reps ?? 0;
+          const weight = mode === 'bw'
+            ? ([...ex.sets].reverse().find((s) => s.load === 'bw')?.weight ?? 0)
+            : ([...ex.sets].reverse().find((s) => s.load !== 'bw')?.weight ?? 0);
           const newSet: SetLog = {
             id: generateId('set'),
             setNumber: ex.sets.length + 1,
-            weight: source?.weight ?? 0,
-            reps: source?.reps ?? 0,
+            weight,
+            reps,
             completed: false,
+            ...(mode === 'bw' ? { load: 'bw' } : {}),
           };
           return { ...ex, sets: [...ex.sets, newSet] };
         });
@@ -706,7 +710,7 @@ export const useWorkoutStore = create<WorkoutState>()(
     }),
     {
       name: 'ironpulse-workouts',
-      version: 11,
+      version: 12,
       partialize: (state) => ({
         sessions: state.sessions,
         customExercises: state.customExercises,
@@ -743,13 +747,15 @@ export const useWorkoutStore = create<WorkoutState>()(
             : version < 10
               ? `${dayKey(new Date(oldDate))}T12:00:00`
               : oldDate; // v10+ 已是正午格式
-          return {
+          // v12：load 只接受 'kg' | 'bw'。缺欄維持缺欄（讀取時當絕對公斤），
+          // 不把舊的 weight 改寫成自重，也不把看不懂的值留在紀錄裡。
+          return sanitizeSessionLoads({
             ...s,
             date: normalizedDate,
             startedAt: typeof s.startedAt === 'string' ? s.startedAt : null,
             finishedAt: typeof s.finishedAt === 'string' ? s.finishedAt : null,
             planSnapshot: s.planSnapshot ?? null,
-          };
+          });
         });
 
         // v5：CustomExercise 升級為強制分類結構
@@ -801,11 +807,11 @@ export const useWorkoutStore = create<WorkoutState>()(
           const lastActivityAt =
             typeof lastActivityAtRaw === 'string' ? lastActivityAtRaw : startedAt;
           // 確保 exercise log 結構完整（補 lastActivityAt 等）
-          const migratedActive = {
+          const migratedActive = sanitizeSessionLoads({
             ...(rawActive as WorkoutSession),
             startedAt,
             lastActivityAt,
-          };
+          });
           activeSession = migratedActive;
         }
 

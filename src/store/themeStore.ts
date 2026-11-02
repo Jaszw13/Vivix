@@ -177,7 +177,7 @@ function getInitialPackId(): { theme: Theme; activePackId: string } {
       const theme: Theme = pack.mode === 'dark' ? 'dark' : 'light';
       return { theme, activePackId: saved };
     }
-    // 已刪的 pack、或 personal 在 production 不存在 → 落回高雅米白
+    // activePackId 為 personal 但 production 下不存在 → fallback 預設
     return { theme: 'light', activePackId: DEFAULT_PACK_LIGHT };
   }
   // 預設

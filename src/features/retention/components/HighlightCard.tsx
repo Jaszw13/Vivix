@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Camera, Share2, X } from 'lucide-react';
 import type { SessionHighlight } from '@/features/retention/highlight';
+import { formatSetWithReps } from '@/utils/workout';
 import { shareHighlightCard } from '@/features/sharing/shareHighlight';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { Card } from '@/components/ui/Card';
@@ -70,11 +71,7 @@ export function HighlightCard({ highlight }: Props) {
             {highlight.dayName}
           </div>
           <div className="font-mono text-2xl font-bold text-accent mt-1">
-            {highlight.bestSet
-              ? highlight.bestSet.weight === 0
-                ? `BW × ${highlight.bestSet.reps}`
-                : `${highlight.bestSet.weight}kg × ${highlight.bestSet.reps}`
-              : '—'}
+            {highlight.bestSet ? formatSetWithReps(highlight.bestSet) : '—'}
           </div>
           <div className="text-[11px] text-text-secondary mt-0.5">
             {highlight.bestSet?.exerciseName ?? '今日最佳組'}

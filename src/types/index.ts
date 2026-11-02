@@ -358,6 +358,15 @@ export interface TrainingPlan {
 
 // ============ 訓練記錄 ============
 
+/**
+ * 一組的負荷模式（原始事實，跟 weight 一起存）。
+ * - `kg`：weight 是絕對公斤。
+ * - `bw`：weight 是體重以外的額外公斤。0 = 純自重，10 = BW+10。
+ * 缺省視為 `kg`，所以舊紀錄的數字不會被改讀成自重加鏈。
+ * 任何動作、任何一組都可以是自重，不看動作 id、也不看器材分類。
+ */
+export type SetLoadMode = 'kg' | 'bw';
+
 export interface SetLog {
   id: string;
   setNumber: number;
@@ -365,7 +374,10 @@ export interface SetLog {
   reps: number;
   rpe?: number;
   completed: boolean;
-  /** R6：遞減組（drop sets）；每個 drop 的 weight×reps 計入體積，不計 1RM */
+  /** 負荷模式。缺省 = 絕對公斤。見 SetLoadMode。 */
+  load?: SetLoadMode;
+  /** R6：遞減組（drop sets）；每個 drop 的 weight×reps 計入體積，不計 1RM。
+   *  drop 跟母組同一個 load：母組是 bw 時，drop.weight 也是額外公斤。 */
   drops?: { weight: number; reps: number }[];
 }
 
@@ -446,6 +458,11 @@ export interface PersonalRecord {
   estimated1RM: number;
   /** P-4：weight=0 時的最大次數（bodyweight PR）；weighted PR 不填 */
   repPR?: number;
+  /**
+   * 破這筆紀錄的那一組是自重加額外負荷時為 `bw`。
+   * 此時 weight 是額外公斤，不是體重。衍生欄位，不另存。
+   */
+  load?: SetLoadMode;
 }
 
 // ============ 小工具：中文器械名 → EquipmentType（migrate 用）============

@@ -3,7 +3,8 @@ import { Check, Minus, Plus, Trash2, History, Repeat } from 'lucide-react';
 import type { ExerciseLog, SetLog } from '@/types';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { useProfileStore } from '@/store/profileStore';
-import { bestCompletedSet, getProgressKind, getSetDelta, setLoadKg } from '@/utils/workout';
+import { bestCompletedSet, formatSetWithReps, getProgressKind, getSetDelta, setLoadKg } from '@/utils/workout';
+import { WeightLoadField } from '@/components/workout/WeightLoadField';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { getFatigueSuggestion } from '@/features/retention/fatigue';
 import { Card } from '@/components/ui/Card';
@@ -142,7 +143,7 @@ export function ExerciseSetList({ exercise, onSetCompleted, onSubstitute }: SetR
                 key={s.id}
                 className="font-mono text-[11px] text-text-secondary bg-bg-card px-2 py-1 rounded-button border border-border/30"
               >
-                {s.weight}kg × {s.reps}
+                {formatSetWithReps(s)}
                 {i < lastSets.length - 1 && <span className="text-text-secondary/40 ml-0.5">→</span>}
               </span>
             ))}
@@ -198,27 +199,16 @@ export function ExerciseSetList({ exercise, onSetCompleted, onSubstitute }: SetR
               <div className="font-mono text-sm text-text-secondary text-center">
                 {set.setNumber}
               </div>
-              {/* 重量 */}
-              <NumberInput
-                value={set.weight}
-                onDecrease={() =>
-                  updateSet(exercise.id, set.id, {
-                    weight: Math.max(0, set.weight - 2.5),
-                  })
-                }
-                onIncrease={() =>
-                  updateSet(exercise.id, set.id, {
-                    weight: set.weight + 2.5,
-                  })
-                }
-                onChange={(v) =>
-                  updateSet(exercise.id, set.id, { weight: v })
-                }
+              <WeightLoadField
+                weight={set.weight}
+                load={set.load}
+                onWeight={(weight) => updateSet(exercise.id, set.id, { weight })}
               />
               {/* 次數 */}
               <NumberInput
                 value={set.reps}
                 step={1}
+                inputLabel="次數"
                 onDecrease={() =>
                   updateSet(exercise.id, set.id, {
                     reps: Math.max(0, set.reps - 1),
@@ -299,7 +289,9 @@ export function ExerciseSetList({ exercise, onSetCompleted, onSubstitute }: SetR
             {/* R6：遞減組（drops） */}
             {(set.drops ?? []).length > 0 && (
               <div className="mt-1 ml-[2rem] flex flex-wrap items-center gap-1.5">
-                <span className="text-[10px] text-text-secondary font-mono">→</span>
+                <span className="text-[10px] text-text-secondary font-mono">
+                  {set.load === 'bw' ? '遞減 · 額外' : '→'}
+                </span>
                 {(set.drops ?? []).map((drop, di) => (
                   <div key={di} className="flex items-center gap-1">
                     <input
@@ -335,22 +327,31 @@ export function ExerciseSetList({ exercise, onSetCompleted, onSubstitute }: SetR
         ))}
       </div>
 
-      {/* 新增組 / 新增遞減組（遞減組掛在最後一組底下） */}
-      <div className="grid grid-cols-2 gap-2 mt-3">
+      {/* 自重組在最左。一般組是公斤，遞減組掛在最後一組底下。 */}
+      <div className="grid grid-cols-3 gap-2 mt-3">
+        <button
+          type="button"
+          onClick={() => addSet(exercise.id, 'bw')}
+          className="py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:text-accent border border-dashed border-border rounded-button transition-colors"
+        >
+          + 新增自重組
+        </button>
         <button
           ref={addSetRef}
-          onClick={() => addSet(exercise.id)}
-          className="py-2 text-xs uppercase tracking-wider text-text-secondary hover:text-accent border border-dashed border-border rounded-button transition-colors"
+          type="button"
+          onClick={() => addSet(exercise.id, 'kg')}
+          className="py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:text-accent border border-dashed border-border rounded-button transition-colors"
         >
           + 新增組
         </button>
         <button
+          type="button"
           onClick={() => {
             const lastSet = exercise.sets[exercise.sets.length - 1];
             if (lastSet) addDropSet(exercise.id, lastSet.id);
           }}
           disabled={exercise.sets.length === 0}
-          className="py-2 text-xs uppercase tracking-wider text-text-secondary hover:text-accent border border-dashed border-border rounded-button transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          className="py-2 text-[10px] uppercase tracking-wider text-text-secondary hover:text-accent border border-dashed border-border rounded-button transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           + 新增遞減組
         </button>
@@ -362,12 +363,13 @@ export function ExerciseSetList({ exercise, onSetCompleted, onSubstitute }: SetR
 interface NumberInputProps {
   value: number;
   step?: number;
+  inputLabel?: string;
   onChange: (v: number) => void;
   onIncrease: () => void;
   onDecrease: () => void;
 }
 
-function NumberInput({ value, onChange, onIncrease, onDecrease }: NumberInputProps) {
+function NumberInput({ value, onChange, onIncrease, onDecrease, inputLabel }: NumberInputProps) {
   return (
     <div className="flex items-center bg-bg-secondary rounded-button overflow-hidden">
       <button
@@ -385,6 +387,7 @@ function NumberInput({ value, onChange, onIncrease, onDecrease }: NumberInputPro
         }}
         className="w-full h-10 bg-transparent text-center font-mono text-sm text-text-primary tabular-nums [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         inputMode="decimal"
+        aria-label={inputLabel}
       />
       <button
         onClick={onIncrease}

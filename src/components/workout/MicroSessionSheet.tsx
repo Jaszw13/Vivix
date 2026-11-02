@@ -9,6 +9,8 @@ import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { settleAll } from '@/features/stats/settleAll';
 import { bestCompletedSet } from '@/utils/workout';
 import { Button } from '@/components/ui/Button';
+import { WeightLoadField } from '@/components/workout/WeightLoadField';
+import type { SetLoadMode } from '@/types';
 
 interface Props {
   open: boolean;
@@ -36,6 +38,7 @@ export function MicroSessionSheet({ open, onClose, onCompleted }: Props) {
   } | null>(null);
   const [weight, setWeight] = useState(0);
   const [reps, setReps] = useState(8);
+  const [loadMode, setLoadMode] = useState<SetLoadMode>('kg');
 
   const picks = useMemo<ExercisePick[]>(() => {
     const last = sessions[sessions.length - 1];
@@ -55,6 +58,7 @@ export function MicroSessionSheet({ open, onClose, onCompleted }: Props) {
     setPicked(null);
     setWeight(0);
     setReps(8);
+    setLoadMode('kg');
   };
 
   const handleClose = () => {
@@ -88,6 +92,7 @@ export function MicroSessionSheet({ open, onClose, onCompleted }: Props) {
     const prevBest = bestCompletedSet(lastSets ?? []);
     const w = prevBest?.weight ?? 0;
     const r = prevBest?.reps ?? 8;
+    const mode: SetLoadMode = prevBest?.load === 'bw' ? 'bw' : 'kg';
     const meta = getAllExercises().find((e) => e.id === pick.exerciseId);
 
     ws.startEmptySession('micro');
@@ -108,7 +113,7 @@ export function MicroSessionSheet({ open, onClose, onCompleted }: Props) {
     const ex = active?.exercises[0];
     const set = ex?.sets[0];
     if (!ex || !set) return;
-    ws.updateSet(ex.id, set.id, { weight: w, reps: r });
+    ws.updateSet(ex.id, set.id, { weight: w, reps: r, ...(mode === 'bw' ? { load: 'bw' } : {}) });
     setPicked({
       exerciseLogId: ex.id,
       setId: set.id,
@@ -117,13 +122,14 @@ export function MicroSessionSheet({ open, onClose, onCompleted }: Props) {
     });
     setWeight(w);
     setReps(r);
+    setLoadMode(mode);
     useTelemetryStore.getState().log('micro_started', { exerciseId: pick.exerciseId });
   };
 
   const handleComplete = () => {
     if (!picked) return;
     const ws = useWorkoutStore.getState();
-    ws.updateSet(picked.exerciseLogId, picked.setId, { weight, reps });
+    ws.updateSet(picked.exerciseLogId, picked.setId, { weight, reps, load: loadMode });
     ws.toggleSetCompleted(picked.exerciseLogId, picked.setId);
     const finished = ws.finishSession();
     if (finished) {
@@ -201,20 +207,19 @@ export function MicroSessionSheet({ open, onClose, onCompleted }: Props) {
               <div>
                 <div className="text-sm font-bold text-text-primary mb-3">{picked.name}</div>
                 <div className="grid grid-cols-2 gap-3">
-                  <label className="block">
+                  <div className="block">
                     <span className="text-[10px] uppercase tracking-widest text-text-secondary">
-                      重量 kg
+                      重量
                     </span>
-                    <input
-                      type="number"
-                      inputMode="decimal"
-                      min={0}
-                      step={0.5}
-                      value={weight}
-                      onChange={(e) => setWeight(Number(e.target.value) || 0)}
-                      className="mt-1 w-full h-12 rounded-button bg-bg-secondary border border-border text-center font-mono text-lg font-bold text-text-primary focus:outline-none focus:border-accent"
-                    />
-                  </label>
+                    <div className="mt-1">
+                      <WeightLoadField
+                        size="lg"
+                        weight={weight}
+                        load={loadMode}
+                        onWeight={setWeight}
+                      />
+                    </div>
+                  </div>
                   <label className="block">
                     <span className="text-[10px] uppercase tracking-widest text-text-secondary">
                       次數

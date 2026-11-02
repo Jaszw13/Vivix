@@ -111,15 +111,14 @@ L0_positioning:
 ### StylePack 風格系統律（L2.5）
 
 ```yaml
-S-1: 陣容 7 款＝6 core（release-safe）＋1 personal-only（非商業、release 排除）
-     core: elegant-beige, industrial-power, plain-paper, dawn-shore,
-           iron-hall, night-copper
+S-1: 陣容 9 款＝8 core（release-safe）＋1 personal-only（非商業、release 排除）
+     core: elegant-beige, industrial-power, retro-card, aurora-glass,
+           neobrutal-pop, muji-calm, y2k-chrome, wpa-trail
      personal: kawaii-pastel
-     已移除：retro-card, aurora-glass, neobrutal-pop, muji-calm, y2k-chrome, wpa-trail
-     舊 id 找不到 pack 時落回 elegant-beige
 S-2: 預設雙預設：light→elegant-beige、dark→industrial-power
 S-3: kawaii-pastel 為 light-only（強制亮色）
-S-4: 強調色同時當文字與按鈕底。淺色 pack 用深色強調，深色 pack 用亮色強調。
+S-4: aurora-glass 參考 Apple HIG 玻璃材質：backdrop-filter blur(20px) saturate(180%)、
+     1px rgba(255,255,255,.15) 邊、分層深度陰影
 S-5: 動態人格層＝每 pack 的 motion{transition,hover,clickFx}；
      fxEnabled / motionEnabled 用戶可手動關閉，persist 於 themeStore；
      prefers-reduced-motion 預設關閉兩者

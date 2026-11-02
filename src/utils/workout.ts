@@ -1,4 +1,4 @@
-import type { WorkoutSession, ExerciseLog, SetLog, PersonalRecord } from '@/types';
+import type { WorkoutSession, ExerciseLog, SetLog, PersonalRecord, SetLoadMode } from '@/types';
 
 // ============ 工具函式 ============
 
@@ -13,12 +13,99 @@ export function estimate1RM(weight: number, reps: number): number {
   return Math.round(weight * (1 + reps / 30));
 }
 
-/** R6：單組總負重（kg）= 主組 weight×reps + Σ drops；1RM 仍只用主組 */
-export function setLoadKg(set: { weight: number; reps: number; drops?: { weight: number; reps: number }[] }): number {
+/**
+ * R6：單組計入體積的公斤 = 主組 weight×reps + Σ drops。
+ * 1RM 仍只用主組。
+ *
+ * `load === 'bw'` 時，weight 與每個 drop.weight 都是「體重以外的額外公斤」。
+ * 純自重（額外 0）對體積的貢獻是 0。不要把 profile.bodyWeight 乘進來。
+ */
+export function setLoadKg(set: {
+  weight: number;
+  reps: number;
+  load?: SetLoadMode;
+  drops?: { weight: number; reps: number }[];
+}): number {
   const main = set.weight * set.reps;
   const drops = set.drops ?? [];
   if (drops.length === 0) return main;
   return main + drops.reduce((s, d) => s + d.weight * d.reps, 0);
+}
+
+function finiteKg(weight: number): number {
+  return typeof weight === 'number' && Number.isFinite(weight) ? weight : 0;
+}
+
+function formatKgNumber(weight: number): string {
+  const rounded = Math.round(weight * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : String(rounded);
+}
+
+/**
+ * 一組負荷的顯示文字。
+ * - 自重且額外 > 0 → `BW+10`
+ * - 自重且額外 0，或舊資料重量 0（沿用既有自重顯示）→ `BW`
+ * - 其餘 → `60kg`（絕對公斤，不改寫舊的正重量）
+ */
+export function formatSetLoadLabel(input: { weight: number; load?: unknown }): string {
+  const weight = finiteKg(input.weight);
+  if (input.load === 'bw') {
+    if (weight > 0) return `BW+${formatKgNumber(weight)}`;
+    return 'BW';
+  }
+  if (weight === 0) return 'BW';
+  return `${formatKgNumber(weight)}kg`;
+}
+
+/** `60kg × 5`、`BW × 8`、`BW+10 × 5` */
+export function formatSetWithReps(input: { weight: number; reps: number; load?: unknown }): string {
+  return `${formatSetLoadLabel(input)} × ${input.reps}`;
+}
+
+/**
+ * 月曆那種緊湊寫法：`60×5`、`BW×8`、`BW+10×5`。
+ * 正重量的舊格式不帶 kg，避免把歷史句子改長。
+ */
+export function formatSetCompact(input: { weight: number; reps: number; load?: unknown }): string {
+  const weight = finiteKg(input.weight);
+  if (input.load === 'bw' && weight > 0) return `BW+${formatKgNumber(weight)}×${input.reps}`;
+  if (input.load === 'bw' || weight === 0) return `BW×${input.reps}`;
+  return `${formatKgNumber(weight)}×${input.reps}`;
+}
+
+/** PR 列。純自重仍走 repPR；自重加額外負荷顯示 BW+n，不把體重寫進數字。 */
+export function formatRecordLoad(pr: {
+  weight: number;
+  reps: number;
+  repPR?: number;
+  load?: unknown;
+}): string {
+  if (typeof pr.repPR === 'number') return `BW × ${pr.repPR}`;
+  return formatSetWithReps(pr);
+}
+
+/**
+ * 持久化還原時清掉看不懂的 load。
+ * 缺欄或合法的 `kg` / `bw` 保持原樣，讓舊組的重量數字完全不動。
+ */
+export function sanitizeSetLoad(set: SetLog): SetLog {
+  if (!set || typeof set !== 'object') return set;
+  const raw = (set as { load?: unknown }).load;
+  if (raw === 'kg' || raw === 'bw' || typeof raw === 'undefined') return set;
+  const next: SetLog = { ...set };
+  delete next.load;
+  return next;
+}
+
+export function sanitizeSessionLoads(session: WorkoutSession): WorkoutSession {
+  if (!session || !Array.isArray(session.exercises)) return session;
+  return {
+    ...session,
+    exercises: session.exercises.map((ex) => {
+      if (!ex || !Array.isArray(ex.sets)) return ex;
+      return { ...ex, sets: ex.sets.map((set) => sanitizeSetLoad(set)) };
+    }),
+  };
 }
 
 export function calculateTotalVolume(session: WorkoutSession): number {
@@ -35,7 +122,9 @@ export function getSessionPRs(session: WorkoutSession): PersonalRecord[] {
     const completed = ex.sets.filter((s) => s.completed);
     if (completed.length === 0) return [];
 
-    // P-4：分兩類 — weighted (weight>0) 走 Epley；bodyweight (weight=0) 走 repPR
+    // 純自重（weight 0，含 load:'bw' 且額外 0，以及舊資料的 0 公斤）走 rep PR。
+    // 有數字的組走 Epley。load:'bw' 時這個數字是額外公斤，跟同重量的絕對公斤同一條 1RM，
+    // 但不把 profile 體重加進去。
     const weighted = completed.filter((s) => s.weight > 0);
     const bodyweight = completed.filter((s) => s.weight === 0);
     const prs: PersonalRecord[] = [];
@@ -51,6 +140,7 @@ export function getSessionPRs(session: WorkoutSession): PersonalRecord[] {
         reps: max.reps,
         date: session.date,
         estimated1RM: estimate1RM(max.weight, max.reps),
+        ...(max.load === 'bw' ? { load: 'bw' as const } : {}),
       });
     }
 
@@ -75,6 +165,8 @@ export function getSessionPRs(session: WorkoutSession): PersonalRecord[] {
 export interface BestSet {
   weight: number;
   reps: number;
+  /** 最佳組的負荷模式。缺省表示舊資料／絕對公斤。 */
+  load?: SetLoadMode;
 }
 
 export function bestCompletedSet(sets: SetLog[]): BestSet | null {
@@ -86,7 +178,11 @@ export function bestCompletedSet(sets: SetLog[]): BestSet | null {
       best = s;
     }
   }
-  return { weight: best.weight, reps: best.reps };
+  return {
+    weight: best.weight,
+    reps: best.reps,
+    ...(best.load === 'bw' || best.load === 'kg' ? { load: best.load } : {}),
+  };
 }
 
 /** 取「上一次同動作」的最佳完成組；沒有上次紀錄則回 null */
