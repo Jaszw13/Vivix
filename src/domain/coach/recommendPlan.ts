@@ -1,3 +1,4 @@
+import { WEEK_MS, sessionDayKey } from '@/utils/time';
 import type { ExperienceLane, FreqBucket, TrainingGoal } from './types';
 
 /**
@@ -32,6 +33,48 @@ export function recommendPlanId(input: {
   if (freq === '2') return 'upper-lower';
   if (freq === '5+') return 'upper-lower-4';
   return 'full-body-3';
+}
+
+/**
+ * Errata E5 / Onboarding spec：近 8 週平均訓練日 → 頻率桶。
+ * < 1.5 → 1（舊公式 5×5）；1.5–2.5 → 2（上下）；
+ * 2.5–5 → 3-4（PPL）；≥ 5 → 5+（PPL）。
+ * 目標再由 recommendPlanId 拆開，三個目標不會落到同一個計畫。
+ */
+export function freqBucketFromWeeklyAverage(avg: number): FreqBucket {
+  if (!Number.isFinite(avg) || avg < 1.5) return '1';
+  if (avg < 2.5) return '2';
+  if (avg < 5) return '3-4';
+  return '5+';
+}
+
+/**
+ * 近 8 週訓練日 ÷ min(8, 自第一筆起到現在的週數)。
+ * 沒有可讀日期時回 null，讓使用者自己選 chips。
+ */
+export function freqBucketFromRecentSessions(
+  sessions: { date: string }[],
+  now: Date = new Date(),
+): FreqBucket | null {
+  if (!sessions || sessions.length === 0) return null;
+  const nowMs = now.getTime();
+  const windowStart = nowMs - 8 * WEEK_MS;
+  const trainDays = new Set<string>();
+  let minDateMs = nowMs;
+  let any = false;
+  for (const session of sessions) {
+    const at = new Date(session.date).getTime();
+    if (!Number.isFinite(at)) continue;
+    any = true;
+    if (at < minDateMs) minDateMs = at;
+    if (at >= windowStart) trainDays.add(sessionDayKey(session.date));
+  }
+  if (!any) return null;
+  const rangeStart = Math.max(minDateMs, windowStart);
+  const spanMs = Math.max(0, nowMs - rangeStart);
+  const spanWeeks = Math.max(1, Math.ceil(spanMs / WEEK_MS) || 1);
+  const eligibleWeeks = Math.min(8, spanWeeks);
+  return freqBucketFromWeeklyAverage(trainDays.size / eligibleWeeks);
 }
 
 /** Settings 允許 1–5。3–4 次取 4，5+ 取 5。 */

@@ -25,7 +25,12 @@ import { Card, Badge } from '@/components/ui/Card';
 import { useProfileStore, TRAINING_GOAL_LABELS, type TrainingGoalValue } from '@/store/profileStore';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { trainingPlans, getPlanById, DEFAULT_BEGINNER_PLAN_ID } from '@/data/plans';
-import { explainPlan, recommendPlanId, weeklyDaysForOnboarding } from '@/domain/coach/recommendPlan';
+import {
+  explainPlan,
+  freqBucketFromRecentSessions,
+  recommendPlanId,
+  weeklyDaysForOnboarding,
+} from '@/domain/coach/recommendPlan';
 import type { AvoidEntry, FreqBucket as DomainFreq } from '@/domain/coach/types';
 import { TrainingPreferences } from '@/components/training/TrainingPreferences';
 import type { MuscleGroup } from '@/types';
@@ -35,7 +40,6 @@ import { CAT_DEFAULT_NAMES, DOG_DEFAULT_NAMES } from '@/features/partner/data/pa
 import type { PartnerSpecies } from '@/features/partner/types';
 import type { TrainingPlan } from '@/types';
 import ImportHistoryModal from '@/components/ImportHistoryModal';
-import { WEEK_MS } from '@/utils/time';
 
 // Errata E7：Lane A 以現有序列為準（partner→goal→recommend→tutorial），**僅前置 experience**
 // STEPS 陣列成員對兩 lane 相同，goal 頁內部依 lane 切換「選目標」或「選頻率」
@@ -79,33 +83,13 @@ export default function Onboarding() {
   const isLaneA = experience === null || experience === 'beginner';
   const isLaneB = experience === 'experienced' || experience === 'excel';
 
-  // E5：近 8 週頻率自動推斷（Lane B 已匯入 session 時）
+  // E5：近 8 週平均（Lane B 已有 session 時）。手選 chips 覆寫自動推斷。
   const autoFreq = useMemo<FreqBucket | null>(() => {
     if (isLaneA) return null;
-    if (!existingSessions || existingSessions.length === 0) return null;
-    const now = Date.now();
-    const windowStart = now - 8 * WEEK_MS;
-    const trainDaysInWindow = new Set<string>();
-    let minDateMs = now;
-    for (const s of existingSessions) {
-      const dMs = new Date(s.date).getTime();
-      if (!Number.isFinite(dMs)) continue;
-      if (dMs < minDateMs) minDateMs = dMs;
-      if (dMs >= windowStart) trainDaysInWindow.add(new Date(dMs).toDateString());
-    }
-    const rangeStart = Math.max(minDateMs, windowStart);
-    const spanMs = now - rangeStart;
-    const spanWeeks = Math.max(1, Math.ceil(spanMs / WEEK_MS) || 1);
-    const eligibleWeeks = Math.min(8, spanWeeks);
-    const avg = trainDaysInWindow.size / eligibleWeeks;
-    if (avg >= 2.5) return '5+';
-    if (avg >= 1.5) return '3-4';
-    if (avg >= 1) return '2';
-    return '1';
+    return freqBucketFromRecentSessions(existingSessions, new Date());
   }, [existingSessions, isLaneA]);
 
-  // Lane B：優先自動推斷，否則用戶手選 chips
-  const resolvedFreq: FreqBucket | null = autoFreq ?? freqBucket;
+  const resolvedFreq: FreqBucket | null = isLaneA ? null : (freqBucket ?? autoFreq);
   const goalForPlan: TrainingGoalValue = goal ?? 'health';
   const recommendedPlanId: string = useMemo(() => {
     return recommendPlanId({
@@ -884,7 +868,7 @@ function StepFrequencyLaneB({
       {/* E5：chips 四選；有 auto 時預設高亮 */}
       <div className="mt-5 grid grid-cols-2 gap-3">
         {chipOptions.map((c, i) => {
-          const selected = (autoFreq ?? bucket) === c.id;
+          const selected = (bucket ?? autoFreq) === c.id;
           return (
             <motion.button
               key={c.id}

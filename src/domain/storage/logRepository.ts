@@ -17,7 +17,7 @@ export function createMemoryLogRepository(
 ): LogRepository {
   const data = new Map<string, string>(Object.entries(initial));
   return {
-    read: (key) => (data.has(key) ? data.get(key)! : null),
+    read: (key) => data.get(key) ?? null,
     write: (key, value) => {
       data.set(key, value);
     },

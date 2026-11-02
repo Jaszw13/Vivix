@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Zap } from 'lucide-react';
 import { useWorkoutStore, getAllExercises } from '@/store/workoutStore';
+import { useTrialStore } from '@/store/trialStore';
 import { useEquipmentMemoryStore } from '@/store/equipmentMemoryStore';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { settleAll } from '@/features/stats/settleAll';
@@ -81,6 +82,8 @@ export function MicroSessionSheet({ open, onClose, onCompleted }: Props) {
       }
       return;
     }
+    const { expiresAt } = useTrialStore.getState();
+    if (expiresAt && new Date(expiresAt).getTime() < Date.now()) return;
     const lastSets = ws.getLastSetsForExercise(pick.exerciseId);
     const prevBest = bestCompletedSet(lastSets ?? []);
     const w = prevBest?.weight ?? 0;

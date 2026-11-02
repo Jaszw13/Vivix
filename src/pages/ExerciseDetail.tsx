@@ -7,6 +7,7 @@ import { Card, SectionHeader, Badge } from '@/components/ui/Card';
 import { exercises as builtinExercises, getExerciseById } from '@/data/exercises';
 import { CATEGORY_LABELS, EQUIPMENT_TYPE_LABELS } from '@/types';
 import { useWorkoutStore, getAllExercises } from '@/store/workoutStore';
+import { useTrialStore } from '@/store/trialStore';
 
 export default function ExerciseDetail() {
   const { exerciseId } = useParams();
@@ -15,6 +16,11 @@ export default function ExerciseDetail() {
   const allExercises = getAllExercises();
   const exercise = exerciseId ? allExercises.find((e) => e.id === exerciseId) : undefined;
   const { activeSession, addExerciseToActive, startEmptySession } = useWorkoutStore();
+  const trialExpiresAt = useTrialStore((s) => s.expiresAt);
+  const startLocked =
+    !activeSession &&
+    !!trialExpiresAt &&
+    new Date(trialExpiresAt).getTime() < Date.now();
 
   if (!exercise) {
     return (
@@ -28,6 +34,9 @@ export default function ExerciseDetail() {
 
   const handleAddToWorkout = () => {
     if (!activeSession) {
+      const { expiresAt } = useTrialStore.getState();
+      const expired = !!expiresAt && new Date(expiresAt).getTime() < Date.now();
+      if (expired) return;
       startEmptySession();
     }
     addExerciseToActive({
@@ -86,9 +95,14 @@ export default function ExerciseDetail() {
           </p>
         </div>
 
-        <Button fullWidth size="lg" onClick={handleAddToWorkout}>
-          <Plus size={18} /> 加入訓練
+        <Button fullWidth size="lg" onClick={handleAddToWorkout} disabled={startLocked}>
+          <Plus size={18} /> {startLocked ? '今日點練已鎖' : '加入訓練'}
         </Button>
+        {startLocked && (
+          <p className="text-[12px] text-text-secondary mt-2 leading-snug">
+            今日點練已鎖。進行中的訓練可以繼續；新的一課請先到首頁輸入續用碼。進度與舊紀錄仍然可以看。
+          </p>
+        )}
 
         {/* 執行步驟 */}
         {(exercise.steps ?? exercise.instructions) && (

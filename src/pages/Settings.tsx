@@ -382,6 +382,11 @@ export default function Settings() {
           <p className="text-[11px] text-text-secondary mt-3 leading-snug">
             建議從 3 天開始。一週只練 1 天也可以，先有節奏再往上加。
           </p>
+          {coachLocked && (
+            <p className="text-[11px] text-text-secondary mt-3 leading-snug">
+              今日點練暫時鎖住。下面的時長和少練偏好會留著，不會被清掉。
+            </p>
+          )}
           <TrainingPreferences
             sessionMinutes={sessionMinutes}
             onSessionMinutes={setSessionMinutes}
