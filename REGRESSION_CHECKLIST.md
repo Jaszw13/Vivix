@@ -683,16 +683,16 @@ npx vite build
 
 ## 21. StylePack 風格系統（v1）
 
-### 21.1 9 款切換
+### 21.1 7 款切換
 
-- [ ] dev 可切換 9 款（8 core + 1 personal），每款 CSS vars 即時生效
+- [ ] dev 可切換 7 款（6 core + 1 personal），每款 CSS vars 即時生效
 - [ ] 每款按鈕形狀／圓角／邊框／陰影視覺可區分（attribute-driven）
 - [ ] 每款字體（display/body/numbers）切換正確
 - [ ] 切換 pack 時 favicon/manifest/theme-color 同步更新
 
 ### 21.2 畫廊
 
-- [ ] Core 組顯示 8 款；Personal 組顯示 1 款（dev）
+- [ ] Core 組顯示 6 款；Personal 組顯示 1 款（dev）
 - [ ] Personal 卡有「自用」badge
 - [ ] active 卡有 accent 勾選 ring
 - [ ] 點擊卡即時套用 pack，不刷新頁面
@@ -701,7 +701,7 @@ npx vite build
 
 - [ ] `VITE_RELEASE_MODE=production npm run build` 成功
 - [ ] production build 後 `grep -ri "kawaii\|kitty" dist/` = 0
-- [ ] production build 後 Personal 組不渲染（畫廊只見 Core 8 款）
+- [ ] production build 後 Personal 組不渲染（畫廊只見 Core 6 款）
 - [ ] personal assets 目錄在 `.gitignore`
 
 ### 21.4 fx / motion toggle 矩陣

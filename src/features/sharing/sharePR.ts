@@ -1,4 +1,4 @@
-import { getStylePack, packShadows } from '@/data/stylePacks';
+import { getStylePack } from '@/data/stylePacks';
 import type { PersonalRecord } from '@/types';
 import { formatRecordLoad } from '@/utils/workout';
 import type { StylePack } from '@/types/theme';
@@ -54,8 +54,6 @@ export async function sharePRCard(pr: PersonalRecord, packId?: string): Promise<
  * 建構球員卡 SVG（self-contained，inline 樣式，無外部引用）
  */
 function buildCardSVG(pr: PersonalRecord, pack: StylePack): string {
-  const shadows = packShadows(pack.shape.shadow);
-  const is90s = pack.id === 'retro-card';
   const W = 360;
   const H = 480;
   const value = formatRecordLoad(pr);
@@ -71,14 +69,13 @@ function buildCardSVG(pr: PersonalRecord, pack: StylePack): string {
   </defs>
   <rect x="20" y="20" width="${W - 40}" height="${H - 40}" rx="${radiusNum}"
     fill="${pack.vars['bg-card']}" stroke="${pack.vars['border-color']}"
-    stroke-width="${is90s ? 3 : 2}" filter="url(#cardShadow)"/>
+    stroke-width="2" filter="url(#cardShadow)"/>
   <text x="${W / 2}" y="70" text-anchor="middle"
     font-family="${pack.typo.display}" font-size="22" font-weight="700"
     fill="${pack.vars['text-primary']}">${escapeXml(pr.exerciseName)}</text>
   <text x="${W / 2}" y="250" text-anchor="middle"
     font-family="${pack.typo.numbers}" font-size="56" font-weight="900"
-    fill="${pack.vars['accent']}"
-    ${is90s ? `stroke="${pack.vars['border-color']}" stroke-width="1.5"` : ''}>${value}</text>
+    fill="${pack.vars['accent']}">${value}</text>
   <text x="${W / 2}" y="290" text-anchor="middle"
     font-family="${pack.typo.body}" font-size="12" letter-spacing="3"
     fill="${pack.vars['text-secondary']}">${sub}</text>
