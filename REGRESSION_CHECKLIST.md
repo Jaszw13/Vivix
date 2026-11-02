@@ -718,3 +718,41 @@ npx vite build
 - [ ] 預設雙預設：light→elegant-beige、dark→industrial-power
 - [ ] 舊用戶 localStorage='dark'|'light' → migrate 至對應預設 pack，平滑過渡
 - [ ] production 下 activePackId=kawaii-pastel → fallback elegant-beige（不崩潰）
+
+## 22. 離線教練核心（Coach）
+
+領域邏輯在 `src/domain/coach/`，驗收真相是 `src/domain/coach/coach.fixtures.test.ts`。教練輸出是衍生資料，不寫入新的 persist 欄位；`autoFill` 永遠是 `false`。
+
+### 22.1 自動化
+
+- [ ] `npx vitest run src/domain/coach/coach.fixtures.test.ts` 全綠
+- [ ] `npx tsc --noEmit` → 0
+- [ ] `npx vite build` 成功
+- [ ] `src/domain/` 的 import 不含 React、Zustand、react-dom
+- [ ] `grep "as any" src` = 0
+
+### 22.2 今日處方 `proposeSession`
+
+- [ ] 沒有完成紀錄時，用計畫上的 `targetWeight`（`kind: 'preset'`）；沒有預設重量則 `kind: 'none'`，不發明重量
+- [ ] 重量優先序：非 imported 歷史夠 3 次 → `fatigue-range` 的 min/max 與 `features/retention/fatigue.ts` 一致；否則非 imported 最後完成重量 → `kind: 'last'`；只有匯入紀錄時顯示該次實際重量，不用計畫上更重的預設；再否則 preset / none
+- [ ] 較晚、較重的 imported session 不蓋過較輕的親自記錄
+- [ ] avoid 部位或動作會改走 `alternativeIds`；過濾後零個動作 → `{ status: 'empty', emptyReason: 'no-candidates' }`，不輸出 catalog 沒有的 id
+- [ ] 空的器材清單 = 不過濾；有器材時只留相符 `equipmentType`
+- [ ] `weightHintLabel` 只供文案；開始訓練仍走既有 `workoutStore.startSession`，不把提示寫進組數
+
+### 22.3 Onboarding 雙 lane
+
+- [ ] Lane A：`experience: 'beginner'` 以 5×5 入門為主；增肌 / 減脂 / 健康不會三個都落到同一個 plan id
+- [ ] `explainPlan({ goal: 'muscle', experience: 'beginner' })` 含「三大項」
+- [ ] Lane B chips `1 | 2 | 3-4 | 5+` 各自分開；同一頻率下三個目標不會落到同一個 plan id
+- [ ] 已有 sessions 時，近 8 週平均對齊 Errata E5：`< 1.5 → 1`、`1.5–2.5 → 2`、`2.5–5 → 3-4`、`≥ 5 → 5+`；手選 chips 可覆寫自動推斷
+- [ ] 少練文案是「暫時少練／偏好」，不是傷病診斷
+- [ ] finish 寫入 `goal`、`weeklyGoal`、`sessionMinutes`、`avoidList`，並 `setActivePlan`；persist key 仍是 `ironpulse-profile`
+
+### 22.4 備份與試用鎖
+
+- [ ] `exportSnapshot` / `importSnapshot` 支援 `{ vivixSnapshotVersion, keys }` 與舊版扁平 JSON；`clearFactKeys` 不刪非 `ironpulse-` / `vivix-` 鍵
+- [ ] 到期後 `/`、`/progress`、`/workout/summary`、`/settings` 仍可進；未知路徑維持鎖定
+- [ ] 只鎖「開始新的今日處方」：首頁今日卡、計畫日開始、動作頁新開一課、`/workout` 自動空課、micro 新課
+- [ ] 已在進行的訓練可以做完；進度、歷史、設定裡的時長與少練偏好不刪
+- [ ] 到期時設定的教練偏好區有鎖定提示，`TrainingPreferences` 的資料還在

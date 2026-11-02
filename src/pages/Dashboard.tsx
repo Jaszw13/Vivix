@@ -23,7 +23,7 @@ import { trainingPlans, DEFAULT_BEGINNER_PLAN_ID } from '@/data/plans';
 import { exercises as builtinExercises } from '@/data/exercises';
 import { getEquipmentTypesForIds } from '@/data/equipment';
 import { buildCoachContext } from '@/domain/coach/buildCoachContext';
-import { proposeSession } from '@/domain/coach/proposeSession';
+import { proposeSession, type TaxonomyEntry } from '@/domain/coach/proposeSession';
 import { TodayDecisionCard } from '@/components/dashboard/TodayDecisionCard';
 import { useTrialStore } from '@/store/trialStore';
 import { usePlansStore } from '@/store/plansStore';
@@ -36,7 +36,7 @@ import { getFormForWorkouts } from '@/features/partner/data/forms';
 import { PartnerSetupModal } from '@/features/partner/components/PartnerSetupModal';
 import { useTelemetryStore } from '@/features/partner/stores/telemetryStore';
 import { settleTaxonomyChange } from '@/features/stats/settleAll';
-import { formatWeekdayShort } from '@/utils/format';
+import { formatDateShort, formatWeekdayShort } from '@/utils/format';
 import { MicroSessionSheet } from '@/components/workout/MicroSessionSheet';
 import {
   getDaysSinceLastTraining,
@@ -59,6 +59,7 @@ export default function Dashboard() {
     activePlanId,
     nextDayIndex,
     setActivePlan,
+    customExercises,
   } = useWorkoutStore();
   const {
     profile,
@@ -232,6 +233,20 @@ export default function Dashboard() {
       }),
     [goal, weeklyGoal, sessionMinutes, gymEquipmentIds, avoidList, sessions],
   );
+  const coachTaxonomy = useMemo(() => {
+    const seen = new Set<string>();
+    const entries: TaxonomyEntry[] = [];
+    for (const exercise of [...builtinExercises, ...customExercises]) {
+      if (seen.has(exercise.id)) continue;
+      seen.add(exercise.id);
+      entries.push({
+        id: exercise.id,
+        muscleGroup: exercise.muscleGroup,
+        equipmentType: exercise.equipmentType,
+      });
+    }
+    return entries;
+  }, [customExercises]);
   const proposal = useMemo(
     () =>
       proposeSession({
@@ -240,23 +255,20 @@ export default function Dashboard() {
           targetWeight: exercise.targetWeight,
           alternativeIds: exercise.alternativeIds,
         })),
-        taxonomy: builtinExercises.map((exercise) => ({
-          id: exercise.id,
-          muscleGroup: exercise.muscleGroup,
-          equipmentType: exercise.equipmentType,
-        })),
+        taxonomy: coachTaxonomy,
         allowedEquipmentTypes,
         avoid: avoidList,
         sessions,
       }),
-    [todayWorkout, allowedEquipmentTypes, avoidList, sessions],
+    [todayWorkout, coachTaxonomy, allowedEquipmentTypes, avoidList, sessions],
   );
   const proposalNames = useMemo(() => {
     const names: Record<string, string> = {};
     for (const exercise of builtinExercises) names[exercise.id] = exercise.name;
+    for (const exercise of customExercises) names[exercise.id] = exercise.name;
     for (const exercise of todayWorkout.exercises) names[exercise.exerciseId] = exercise.name;
     return names;
-  }, [todayWorkout]);
+  }, [todayWorkout, customExercises]);
 
   // 開始今日訓練：計畫預設重量仍由既有 startSession 處理。
   // 疲勞區間只顯示，不寫進組數。
@@ -289,7 +301,7 @@ export default function Dashboard() {
         dayName={todayWorkout.dayName}
         exerciseCount={proposal.status === 'ready' ? proposal.exercises.length : todayWorkout.exercises.length}
         setCount={todayWorkout.exercises.reduce((sum, exercise) => sum + exercise.targetSets, 0)}
-        dateLabel={`${today.getMonth() + 1}.${today.getDate()}`}
+        dateLabel={formatDateShort(dayKey(today))}
         weekdayLabel={formatWeekdayShort(today)}
         sessionMinutes={coach.sessionMinutes}
         weeklyDays={coach.weeklyDays}

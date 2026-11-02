@@ -24,6 +24,7 @@ import {
   isComebackWindow,
 } from '@/features/retention/selectors';
 import { useProfileStore } from '@/store/profileStore';
+import { useTrialStore } from '@/store/trialStore';
 import { getEquipmentTypesForIds } from '@/data/equipment';
 import {
   exercises as builtinExercises,
@@ -63,6 +64,11 @@ export default function Workout() {
   const cardioSessions = useCardioStore((s) => s.sessions);
   const [deloadDismissed, setDeloadDismissed] = useState(false);
 
+  const trialExpiresAt = useTrialStore((s) => s.expiresAt);
+  const trialExpired = !!trialExpiresAt && new Date(trialExpiresAt).getTime() < Date.now();
+  const [storesReady, setStoresReady] = useState(
+    () => useWorkoutStore.persist.hasHydrated() && useTrialStore.persist.hasHydrated(),
+  );
   const [elapsed, setElapsed] = useState(0);
   const [showAddExercise, setShowAddExercise] = useState(false);
   // T-04：替換彈窗
@@ -78,13 +84,30 @@ export default function Workout() {
   // T3：rest timer 由 store 持有（dock + mini bar 共享）
   const startRestTimer = useRestTimerStore((s) => s.start);
 
-  // mount-only：僅掛載時判斷是否需建立空 session（deps 不含 activeSession）
-  // 消滅整類競態 — finish/abandon 清除 activeSession 後元件未卸載時 effect 不再重建
   useEffect(() => {
-    if (!useWorkoutStore.getState().activeSession) {
-      startEmptySession();
-    }
-  }, [startEmptySession]);
+    const mark = () => {
+      if (useWorkoutStore.persist.hasHydrated() && useTrialStore.persist.hasHydrated()) {
+        setStoresReady(true);
+      }
+    };
+    mark();
+    const stopWorkout = useWorkoutStore.persist.onFinishHydration(mark);
+    const stopTrial = useTrialStore.persist.onFinishHydration(mark);
+    return () => {
+      stopWorkout();
+      stopTrial();
+    };
+  }, []);
+
+  // 等兩邊的 persist 還原完再決定要不要開新課。
+  // 試用到期不自動開課；已經在練的課留著做完。
+  useEffect(() => {
+    if (!storesReady) return;
+    if (useWorkoutStore.getState().activeSession) return;
+    const { expiresAt } = useTrialStore.getState();
+    if (expiresAt && new Date(expiresAt).getTime() < Date.now()) return;
+    startEmptySession();
+  }, [storesReady, startEmptySession]);
 
   useEffect(() => {
     if (!activeSession) return;
@@ -127,6 +150,31 @@ export default function Workout() {
     !activeSession.deloadApplied;
 
   if (!activeSession) {
+    if (storesReady && trialExpired) {
+      return (
+        <PageShell title="訓練中" showBack showNav={false}>
+          <div className="px-4 py-8">
+            <Card className="p-5">
+              <div className="text-[10px] uppercase tracking-widest text-text-secondary">
+                今日點練
+              </div>
+              <h1 className="font-display text-2xl tracking-wide uppercase text-text-primary mt-1">
+                先看你的紀錄
+              </h1>
+              <p className="text-sm text-text-secondary mt-2 leading-relaxed">
+                今日點練暫時鎖住。進行中的訓練可以繼續完成；新的一課要等續用碼。進度與舊紀錄仍然可以看。
+              </p>
+              <div className="grid grid-cols-2 gap-2 mt-4">
+                <Button variant="secondary" onClick={() => navigate('/progress')}>
+                  查看進度
+                </Button>
+                <Button onClick={() => navigate('/')}>回首頁</Button>
+              </div>
+            </Card>
+          </div>
+        </PageShell>
+      );
+    }
     return (
       <PageShell title="訓練中" showBack showNav={false}>
         <div className="text-center text-text-secondary mt-20">載入中…</div>

@@ -156,7 +156,9 @@ function hintFor(args: {
   sessions: WorkoutSession[];
   synthetic: WorkoutSession;
 }): WeightHint {
-  const fatigue = getFatigueSuggestion(args.sessions, args.synthetic, args.exerciseId);
+  // 疲勞區間只看親自記錄。匯入紀錄可以讀，但不能拿來發明比上次更重的目標。
+  const ownHistory = args.sessions.filter((session) => session.imported !== true);
+  const fatigue = getFatigueSuggestion(ownHistory, args.synthetic, args.exerciseId);
   if (fatigue) return rangeHint(fatigue);
   const last = lastPositiveWeight(args.sessions, args.exerciseId);
   if (last != null) return { autoFill: false, kind: 'last', lastKg: last };
@@ -180,6 +182,20 @@ function rangeHint(fatigue: FatigueSuggestion): WeightHint {
 }
 
 function lastPositiveWeight(sessions: WorkoutSession[], exerciseId: string): number | null {
+  const ordered = [...sessions].sort((a, b) => sessionTime(a) - sessionTime(b));
+  const own = latestPositive(
+    ordered.filter((session) => session.imported !== true),
+    exerciseId,
+  );
+  if (own != null) return own;
+  // 只有匯入紀錄時，顯示那次實際完成的重量，不改用計畫上更重的預設。
+  return latestPositive(
+    ordered.filter((session) => session.imported === true),
+    exerciseId,
+  );
+}
+
+function latestPositive(sessions: WorkoutSession[], exerciseId: string): number | null {
   for (let i = sessions.length - 1; i >= 0; i -= 1) {
     const exercise = sessions[i].exercises?.find((item) => item.exerciseId === exerciseId);
     if (!exercise) continue;
@@ -188,6 +204,11 @@ function lastPositiveWeight(sessions: WorkoutSession[], exerciseId: string): num
     return done.reduce((best, set) => (set.weight > best ? set.weight : best), done[0].weight);
   }
   return null;
+}
+
+function sessionTime(session: WorkoutSession): number {
+  const at = new Date(session.date).getTime();
+  return Number.isFinite(at) ? at : 0;
 }
 
 function syntheticSession(exerciseIds: string[]): WorkoutSession {

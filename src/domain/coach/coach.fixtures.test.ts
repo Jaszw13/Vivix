@@ -8,7 +8,13 @@ import { trainingPlans } from '@/data/plans';
 import { getFatigueSuggestion } from '@/features/retention/fatigue';
 import { buildCoachContext } from './buildCoachContext';
 import { loadCoachContext } from './loadCoachContext';
-import { explainPlan, recommendPlanId } from './recommendPlan';
+import {
+  explainPlan,
+  freqBucketFromRecentSessions,
+  freqBucketFromWeeklyAverage,
+  recommendPlanId,
+} from './recommendPlan';
+import { DAY_MS, WEEK_MS } from '@/utils/time';
 import { proposeSession, type TaxonomyEntry } from './proposeSession';
 import { FACT_KEYS, isFactKey } from '@/domain/storage/factKeys';
 import {
@@ -231,6 +237,46 @@ describe('proposeSession fixtures', () => {
     expect(hint.presetKg).toBeUndefined();
     expect(hint.lastKg).toBeUndefined();
   });
+
+  it('does not let imported history invent a heavier target', () => {
+    const importedOnly = [1, 2, 3].map((index) =>
+      session({
+        id: `imp-${index}`,
+        date: `2026-01-0${index}T12:00:00`,
+        imported: true,
+        exercises: [exerciseLog('squat', [oneSet(80, 5)])],
+      }),
+    );
+    const fromImports = proposeSession({
+      planned: [{ exerciseId: 'squat', targetWeight: 200 }],
+      taxonomy,
+      sessions: importedOnly,
+    });
+    expect(fromImports.exercises[0].weight).toEqual({
+      autoFill: false,
+      kind: 'last',
+      lastKg: 80,
+    });
+
+    const mixed = proposeSession({
+      planned: [{ exerciseId: 'squat', targetWeight: 200 }],
+      taxonomy,
+      sessions: [
+        session({
+          id: 'own',
+          date: '2026-10-01T12:00:00',
+          exercises: [exerciseLog('squat', [oneSet(60, 5)])],
+        }),
+        session({
+          id: 'imported-later',
+          date: '2026-10-28T12:00:00',
+          imported: true,
+          exercises: [exerciseLog('squat', [oneSet(150, 5)])],
+        }),
+      ],
+    });
+    expect(mixed.exercises[0].weight).toEqual({ autoFill: false, kind: 'last', lastKg: 60 });
+  });
 });
 
 describe('onboarding goal mapping', () => {
@@ -241,6 +287,28 @@ describe('onboarding goal mapping', () => {
     expect(new Set(beginner).size).toBeGreaterThanOrEqual(2);
     expect(explainPlan({ goal: 'muscle', experience: 'beginner' })).toContain('三大項');
     expect(explainPlan({ goal: 'muscle', experience: 'experienced', freq: '1' })).toContain('每週 1 次');
+    expect(freqBucketFromWeeklyAverage(1.4)).toBe('1');
+    expect(freqBucketFromWeeklyAverage(1.5)).toBe('2');
+    expect(freqBucketFromWeeklyAverage(2.4)).toBe('2');
+    expect(freqBucketFromWeeklyAverage(2.5)).toBe('3-4');
+    expect(freqBucketFromWeeklyAverage(3.2)).toBe('3-4');
+    expect(freqBucketFromWeeklyAverage(5)).toBe('5+');
+    const now = new Date('2026-11-02T12:00:00.000Z');
+    const windowStart = now.getTime() - 8 * WEEK_MS;
+    const dense = Array.from({ length: 25 }, (_, index) =>
+      session({
+        id: `dense-${index}`,
+        date: new Date(windowStart + index * DAY_MS).toISOString(),
+      }),
+    );
+    expect(freqBucketFromRecentSessions(dense, now)).toBe('3-4');
+    expect(
+      freqBucketFromRecentSessions(
+        [session({ id: 'once', date: new Date(now.getTime() - 3 * WEEK_MS).toISOString() })],
+        now,
+      ),
+    ).toBe('1');
+    expect(freqBucketFromRecentSessions([], now)).toBeNull();
     for (const freq of ['1', '2', '3-4', '5+'] as const) {
       const ids = (['muscle', 'fatloss', 'health'] as const).map((goal) =>
         recommendPlanId({ goal, experience: 'experienced', freq }),
