@@ -1,0 +1,13 @@
+{
+  // Vite writes the production SPA to ./dist. Workers Git deploy uses this
+  // file as the entry point, so `wrangler versions upload` can publish assets
+  // without a Worker script.
+  "name": "vivix",
+  "compatibility_date": "2026-11-02",
+  "assets": {
+    "directory": "./dist",
+    // Client routes (react-router) have no files of their own. Serve index.html
+    // for those paths, matching the SPA rewrite in vercel.json.
+    "not_found_handling": "single-page-application"
+  }
+}
